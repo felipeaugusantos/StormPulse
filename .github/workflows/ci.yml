@@ -66,6 +66,25 @@ jobs:
       - run: npm run build
 
   # -----------------------------------------------------------------------
+  # Mobile app (Expo / React Native): type-check.
+  # -----------------------------------------------------------------------
+  mobile:
+    name: Mobile app (typecheck)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+
+  # -----------------------------------------------------------------------
   # Docker: build the image, boot the full stack and smoke-test the API
   # health/readiness endpoints against real Postgres+PostGIS and Redis.
   # -----------------------------------------------------------------------

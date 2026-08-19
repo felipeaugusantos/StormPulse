@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "StormPulse",
+    "slug": "stormpulse",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "stormpulse",
+    "splash": {
+      "backgroundColor": "#0b1120"
+    },
+    "extra": {
+      "apiUrl": "http://localhost:8000"
+    },
+    "android": {
+      "package": "com.stormpulse.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.stormpulse.app"
+    }
+  }
+}

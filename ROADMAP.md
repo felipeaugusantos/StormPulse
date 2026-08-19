@@ -17,7 +17,7 @@ automaticamente para a próxima.
 | **9** | Alert Engine | Eventos, níveis GREEN→RED, idempotência (dedup_key) e antispam por política central | ✅ Concluída |
 | **10** | Workers | Celery + Beat, pipeline provider→engine→risco→alerta→notificação (persistido) | ✅ Concluída |
 | **11** | Dashboard básico | Web admin (React+Vite+MapLibre): mapa, células, alertas, locais, status | ✅ Concluída |
-| **12** | Aplicativo mobile | Expo (React Native): locais, alertas, mapa MapLibre | ⬜ Pendente |
+| **12** | Aplicativo mobile | Expo (React Native): login, locais com risco, alertas (mapa MapLibre + FCM: próximo incremento) | ✅ Concluída |
 | **13** | Integração meteorológica real | INMET / INPE-CPTEC / CEMADEN / radares regionais | ⬜ Pendente |
 | **14** | Hardening | Testes ampliados, observabilidade (OTel), rate limiting, segurança | ⬜ Pendente |
 
