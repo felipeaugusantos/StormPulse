@@ -1,8 +1,9 @@
 # StormPulse — Arquitetura
 
-> **Status:** FASES 0–9 concluídas (arquitetura, fundação, banco/modelos, auth,
-> localizações+PostGIS, mock provider, detecção, tracking+trajetória, risco, alertas).
-> Falta a FASE 10 (workers) para materializar/persistir e agendar o pipeline.
+> **Status:** FASES 0–11 concluídas (arquitetura, fundação, banco/modelos, auth,
+> localizações+PostGIS, mock provider, detecção, tracking+trajetória, risco,
+> alertas, workers Celery, dashboard web). MVP ponta-a-ponta com fonte simulada.
+> Próximo: FASE 12 (app mobile) e FASE 13 (integração meteorológica real).
 > Este documento descreve a visão arquitetural do produto e o estado atual da
 > implementação. Seções marcadas com 🔭 descrevem intenção futura ainda **não**
 > implementada.

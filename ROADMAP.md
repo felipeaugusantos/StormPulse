@@ -15,8 +15,8 @@ automaticamente para a próxima.
 | **7** | Tracking e trajetória | Associação por vizinho, deslocamento/direção/velocidade/tendência, ETA por velocidade de aproximação | ✅ Concluída |
 | **8** | Risk Engine | `StormRiskEngine` por regras documentadas (hazards + score→nível), experimental/mock explícito | ✅ Concluída |
 | **9** | Alert Engine | Eventos, níveis GREEN→RED, idempotência (dedup_key) e antispam por política central | ✅ Concluída |
-| **10** | Workers | Celery + Beat, pipeline de ingestão→alerta agendado | ⬜ Pendente |
-| **11** | Dashboard básico | Web admin (React+Vite): mapa, células, trajetórias, alertas, fontes | ⬜ Pendente |
+| **10** | Workers | Celery + Beat, pipeline provider→engine→risco→alerta→notificação (persistido) | ✅ Concluída |
+| **11** | Dashboard básico | Web admin (React+Vite+MapLibre): mapa, células, alertas, locais, status | ✅ Concluída |
 | **12** | Aplicativo mobile | Expo (React Native): locais, alertas, mapa MapLibre | ⬜ Pendente |
 | **13** | Integração meteorológica real | INMET / INPE-CPTEC / CEMADEN / radares regionais | ⬜ Pendente |
 | **14** | Hardening | Testes ampliados, observabilidade (OTel), rate limiting, segurança | ⬜ Pendente |

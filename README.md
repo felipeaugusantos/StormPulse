@@ -47,6 +47,7 @@ O que já funciona nesta fase:
 | GET | `/api/v1/storms` | Células recentes (vazio até a FASE 6) |
 | GET | `/api/v1/storms/nearby` | Células próximas via PostGIS `ST_DWithin` |
 | GET | `/api/v1/storms/{id}` | Detalhar célula |
+| GET | `/api/v1/alerts` | Alertas do usuário |
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
 > engine não existe) — nunca dados fictícios. O provider de dados é `mock`
@@ -88,6 +89,23 @@ uvicorn app.main:app --reload
 ```
 
 ---
+
+## Pipeline (workers) e dashboard
+
+Com o Docker de pé (`docker compose up`), os serviços `worker` (Celery) e
+`beat` executam o pipeline `provider → engine → risco → alerta → notificação`
+a cada 5 minutos. Para rodar **um ciclo sob demanda**:
+
+```bash
+docker compose run --rm api python -m workers.run_once
+# -> {"frames": 6, "cells": N, "risks": M, "alerts": K}
+```
+
+Depois, `GET /api/v1/storms` e `GET /api/v1/locations/{id}/risk` passam a
+retornar dados materializados (marcados `is_mock`/`experimental`).
+
+**Dashboard admin** ([`web/`](web/)): `cd web && npm install && npm run dev`
+(aponte para a API com `VITE_API_URL`). Login com um usuário registrado.
 
 ## Como testar
 

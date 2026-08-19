@@ -41,10 +41,29 @@ jobs:
         run: ruff format --check .
 
       - name: Mypy (strict)
-        run: mypy app engine tests
+        run: mypy app engine workers tests
 
       - name: Pytest
         run: pytest
+
+  # -----------------------------------------------------------------------
+  # Web admin dashboard: type-check and production build.
+  # -----------------------------------------------------------------------
+  web:
+    name: Web admin (typecheck · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build
 
   # -----------------------------------------------------------------------
   # Docker: build the image, boot the full stack and smoke-test the API
@@ -156,6 +175,36 @@ jobs:
           code="$(curl -s -o /dev/null -w '%{http_code}' "$base/locations/$loc_id/risk" -H "$auth")"
           test "$code" = "404"
           echo "locations + PostGIS OK"
+
+      - name: Integration — worker pipeline materializes storms + risk (FASE 10)
+        run: |
+          set -e
+          base=http://localhost:8000/api/v1
+          email="ci-pipe-$RANDOM@example.com"
+          curl -fsS -X POST "$base/auth/register" -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" > /dev/null
+          access="$(curl -fsS -X POST "$base/auth/login" -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" \
+            | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')"
+          auth="Authorization: Bearer $access"
+          # location under the mock storm footprint (~ -23.5,-46.6)
+          curl -fsS -X POST "$base/locations" -H "$auth" -H 'Content-Type: application/json' \
+            -d '{"name":"Casa","kind":"home","latitude":-23.5,"longitude":-46.6,"radius_km":80}' \
+            | tee /tmp/ploc.json
+          loc_id="$(python3 -c 'import json;print(json.load(open("/tmp/ploc.json"))["id"])')"
+          # run ONE ingestion cycle (provider→engine→risk→alert) in a one-off container
+          docker compose run --rm api python -m workers.run_once | tee /tmp/cycle.json
+          python3 -c 'import json; s=json.load(open("/tmp/cycle.json")); assert s["cells"]>=1, s; assert s["risks"]>=1, s'
+          # storms are now materialized and queryable
+          curl -fsS "$base/storms" -H "$auth" | tee /tmp/storms.json
+          python3 -c 'import json; assert len(json.load(open("/tmp/storms.json")))>=1'
+          # nearby query returns the cell
+          curl -fsS "$base/storms/nearby?lat=-23.5&lon=-46.6&radius_km=80" -H "$auth" | tee /tmp/pnear.json
+          python3 -c 'import json; assert len(json.load(open("/tmp/pnear.json")))>=1'
+          # the location now has a risk assessment (was 404 before the cycle)
+          curl -fsS "$base/locations/$loc_id/risk" -H "$auth" | tee /tmp/prisk.json
+          python3 -c 'import json; r=json.load(open("/tmp/prisk.json")); assert r["is_mock"] is True and r["experimental"] is True, r'
+          echo "worker pipeline OK"
 
       - name: Dump logs on failure
         if: failure()
