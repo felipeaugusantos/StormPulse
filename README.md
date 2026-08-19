@@ -123,26 +123,49 @@ retornar dados materializados (marcados `is_mock`/`experimental`).
 
 ```bash
 cd backend
-pytest                       # testes (não exigem Postgres/Redis)
+pytest                       # unitários (não exigem Postgres/Redis)
 ruff check . && ruff format --check .
-mypy app tests
+mypy app engine workers tests
+pip-audit                    # vulnerabilidades de dependências (FASE 14)
 ```
 
 Os testes de health cobrem liveness, readiness (deps ok e falha → 503),
 propagação de `X-Request-ID` / `X-Correlation-ID` e o OpenAPI.
+
+**Testes de integração** (`@pytest.mark.integration`, FASE 14) cobrem a
+camada HTTP dos routers (auth, locations, storms, ciclo do pipeline) contra
+Postgres+PostGIS e Redis reais — são pulados automaticamente se essas
+dependências não estiverem acessíveis. Para rodá-los:
+
+```bash
+docker compose up -d db redis
+cd backend && alembic upgrade head
+pytest --cov --cov-report=term-missing   # cobertura medida: 91%
+```
+
+### Observabilidade (OpenTelemetry, FASE 14)
+
+Tracing (FastAPI/SQLAlchemy/httpx) exporta para o console por padrão;
+defina `OTEL_EXPORTER_OTLP_ENDPOINT` para exportar também via OTLP/HTTP a um
+coletor. Ver [ADR-0007](docs/adr/0007-hardening-v1.md) — não há
+Jaeger/Prometheus no `docker-compose.yml` ainda.
 
 ### CI (GitHub Actions)
 
 O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda a cada
 push/PR:
 
-- **backend** — `ruff check`, `ruff format --check`, `mypy` (strict) e `pytest`.
+- **backend** — `ruff check`, `ruff format --check`, `mypy` (strict),
+  `pip-audit`, migrations e `pytest` (unitários + integração, com
+  Postgres+PostGIS e Redis reais como `services`, cobertura mínima 85%).
 - **docker** — `docker compose build`, sobe a stack completa
   (Postgres+PostGIS, Redis, API) e faz *smoke test* real dos endpoints
   `/health` e `/ready`.
 
 Assim o build/execução Docker é validado de verdade no CI, sem depender do
-ambiente local.
+ambiente local. Dependências (`pip`/`npm`/GitHub Actions) são atualizadas
+automaticamente via [Dependabot](.github/dependabot.yml). Política de
+segurança: [SECURITY.md](SECURITY.md).
 
 ---
 

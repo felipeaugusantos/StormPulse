@@ -62,6 +62,15 @@ class Settings(BaseSettings):
     auth_rate_limit_max: int = Field(default=10, gt=0)
     auth_rate_limit_window_seconds: int = Field(default=60, gt=0)
 
+    # --- Rate limiting (all versioned API endpoints, FASE 14) ---
+    default_rate_limit_max: int = Field(default=120, gt=0)
+    default_rate_limit_window_seconds: int = Field(default=60, gt=0)
+
+    # --- Observability / tracing (FASE 14) ---
+    otel_enabled: bool = True
+    otel_service_name: str = "stormpulse-backend"
+    otel_exporter_otlp_endpoint: str | None = None
+
     # --- CORS (dashboard web / app mobile) ---
     cors_allowed_origins: str = "http://localhost:5173"
 

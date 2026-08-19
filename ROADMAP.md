@@ -19,7 +19,7 @@ automaticamente para a próxima.
 | **11** | Dashboard básico | Web admin (React+Vite+MapLibre): mapa, células, alertas, locais, status | ✅ Concluída |
 | **12** | Aplicativo mobile | Expo (React Native): login, locais com risco, alertas (mapa MapLibre + FCM: próximo incremento) | ✅ Concluída |
 | **13** | Integração meteorológica real | `InmetWeatherProvider` real (estações automáticas); células aproximadas por chuva→dBZ (Marshall–Palmer); avisos por UF; sem CEMADEN/radar real; previsão pendente (ver [ADR-0006](docs/adr/0006-integracao-real-inmet.md)) | ✅ Concluída |
-| **14** | Hardening | Testes ampliados, observabilidade (OTel), rate limiting, segurança | ⬜ Pendente |
+| **14** | Hardening | Headers de segurança, rate limiting geral, OTel (console/OTLP), pip-audit+dependabot+SECURITY.md, testes de integração dos routers (91% cobertura) — ver [ADR-0007](docs/adr/0007-hardening-v1.md) | ✅ Concluída |
 
 ## Escopo do MVP (fases 1–10)
 
