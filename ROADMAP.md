@@ -13,8 +13,8 @@ automaticamente para a próxima.
 | **5** | Mock Weather Provider | Interface `WeatherProvider` + `MockWeatherProvider` (dados MOCK explícitos) | ✅ Concluída |
 | **6** | Storm Engine inicial | Detecção de células + severidade determinística (experimental), geometria WKT | ✅ Concluída |
 | **7** | Tracking e trajetória | Associação por vizinho, deslocamento/direção/velocidade/tendência, ETA por velocidade de aproximação | ✅ Concluída |
-| **8** | Risk Engine | `StormRiskEngine` baseado em regras documentadas/configuráveis | ⬜ Pendente |
-| **9** | Alert Engine | Eventos, níveis GREEN/YELLOW/ORANGE/RED, idempotência, antispam | ⬜ Pendente |
+| **8** | Risk Engine | `StormRiskEngine` por regras documentadas (hazards + score→nível), experimental/mock explícito | ✅ Concluída |
+| **9** | Alert Engine | Eventos, níveis GREEN→RED, idempotência (dedup_key) e antispam por política central | ✅ Concluída |
 | **10** | Workers | Celery + Beat, pipeline de ingestão→alerta agendado | ⬜ Pendente |
 | **11** | Dashboard básico | Web admin (React+Vite): mapa, células, trajetórias, alertas, fontes | ⬜ Pendente |
 | **12** | Aplicativo mobile | Expo (React Native): locais, alertas, mapa MapLibre | ⬜ Pendente |

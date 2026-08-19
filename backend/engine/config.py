@@ -47,6 +47,34 @@ class TrajectoryConfig:
     min_speed_kmh: float = 1.0
 
 
+@dataclass(frozen=True)
+class RiskConfig:
+    """Parameters for the rule-based risk engine (FASE 8).
+
+    ⚠️ EXPERIMENTAL: documented heuristics over possibly-simulated data. Not a
+    validated meteorological model (ADR-0005). All shaping constants live here.
+    """
+
+    # Base intensity contributed by each severity bucket (0..1).
+    intensity_weak: float = 0.20
+    intensity_moderate: float = 0.50
+    intensity_strong: float = 0.75
+    intensity_severe: float = 1.00
+    # Distance (km) at/above which proximity contributes nothing.
+    reference_range_km: float = 120.0
+    # ETA (min) horizon within which imminence ramps up.
+    eta_horizon_min: float = 60.0
+    # Wind reference (km/h) that saturates the wind hazard.
+    wind_speed_ref_kmh: float = 80.0
+    # Peak reflectivity (dBZ) at/above which hail becomes likely.
+    hail_reflectivity_dbz: float = 55.0
+    # Aggregate score weights (should sum to 1.0).
+    weight_hazard: float = 0.60
+    weight_proximity: float = 0.20
+    weight_imminence: float = 0.20
+
+
 DEFAULT_DETECTION = DetectionConfig()
 DEFAULT_TRACKING = TrackingConfig()
 DEFAULT_TRAJECTORY = TrajectoryConfig()
+DEFAULT_RISK = RiskConfig()

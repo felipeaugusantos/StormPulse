@@ -1,7 +1,8 @@
 # StormPulse — Arquitetura
 
-> **Status:** FASES 0–7 concluídas (arquitetura, fundação, banco/modelos,
-> autenticação, localizações+PostGIS, mock provider, detecção, tracking+trajetória).
+> **Status:** FASES 0–9 concluídas (arquitetura, fundação, banco/modelos, auth,
+> localizações+PostGIS, mock provider, detecção, tracking+trajetória, risco, alertas).
+> Falta a FASE 10 (workers) para materializar/persistir e agendar o pipeline.
 > Este documento descreve a visão arquitetural do produto e o estado atual da
 > implementação. Seções marcadas com 🔭 descrevem intenção futura ainda **não**
 > implementada.
