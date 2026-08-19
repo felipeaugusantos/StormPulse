@@ -1,18 +1,19 @@
-# Storm Engine 🔭
+# Storm Engine
 
-Motor meteorológico **determinístico**. Placeholder de FASE 0/1 — implementado a
-partir da FASE 6.
+Motor meteorológico **determinístico** e desacoplado de qualquer fonte.
 
-Submódulos planejados (cada um com interface + implementação inicial simples,
-substituível):
+Submódulos:
 
-- `ingestion/` — normaliza dados de `WeatherProvider` para o formato interno.
-- `radar/` — processamento de frames de radar.
-- `detection/` — detecção de `StormCell` em um frame.
-- `tracking/` — associação temporal de células → `StormTrack`.
-- `trajectory/` — deslocamento, direção, velocidade, ETA, projeção.
-- `risk/` — `StormRiskEngine` (regras documentadas; ver ADR-0005).
-- `forecasting/` — projeção de curto prazo.
+- `geo.py` — geometria great-circle (haversine, bearing, projeção). ✅
+- `config.py` — thresholds centralizados (sem números mágicos). ✅
+- `provider_types.py` — entradas desacopladas (`FrameInput`/`RawCellInput`). ✅
+- `detection/` — detecção de células + severidade determinística. ✅ (FASE 6)
+- `tracking/` — associação temporal por vizinho mais próximo. ✅ (FASE 7)
+- `trajectory/` — deslocamento, direção, velocidade, tendência, ETA. ✅ (FASE 7)
+- `pipeline.py` — fachada detecção→tracking→trajetória. ✅
+- `risk/` 🔭 — `StormRiskEngine` (regras documentadas; ADR-0005) — FASE 8.
+- `ingestion/` 🔭 — normalização de fontes — FASE 13.
+- `forecasting/` 🔭 — projeção de curto prazo.
 
 > Regra: LLMs **não** classificam severidade. Algoritmos experimentais e dados
 > simulados devem ser marcados explicitamente (`experimental` / `MOCK`).

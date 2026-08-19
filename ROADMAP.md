@@ -11,8 +11,8 @@ automaticamente para a próxima.
 | **3** | Autenticação | JWT + refresh (pyjwt), hash Argon2, RBAC (ADMIN/USER), rate limiting Redis | ✅ Concluída |
 | **4** | Localizações + PostGIS | CRUD de `Location`, raio, `AlertPreference`, `/storms/nearby` via `ST_DWithin` | ✅ Concluída |
 | **5** | Mock Weather Provider | Interface `WeatherProvider` + `MockWeatherProvider` (dados MOCK explícitos) | ✅ Concluída |
-| **6** | Storm Engine inicial | Detecção de células a partir de frames simulados | ⬜ Pendente |
-| **7** | Tracking e trajetória | Associação temporal, deslocamento, direção, velocidade, ETA | ⬜ Pendente |
+| **6** | Storm Engine inicial | Detecção de células + severidade determinística (experimental), geometria WKT | ✅ Concluída |
+| **7** | Tracking e trajetória | Associação por vizinho, deslocamento/direção/velocidade/tendência, ETA por velocidade de aproximação | ✅ Concluída |
 | **8** | Risk Engine | `StormRiskEngine` baseado em regras documentadas/configuráveis | ⬜ Pendente |
 | **9** | Alert Engine | Eventos, níveis GREEN/YELLOW/ORANGE/RED, idempotência, antispam | ⬜ Pendente |
 | **10** | Workers | Celery + Beat, pipeline de ingestão→alerta agendado | ⬜ Pendente |

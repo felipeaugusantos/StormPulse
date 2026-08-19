@@ -41,7 +41,7 @@ jobs:
         run: ruff format --check .
 
       - name: Mypy (strict)
-        run: mypy app tests
+        run: mypy app engine tests
 
       - name: Pytest
         run: pytest
@@ -112,7 +112,7 @@ jobs:
         run: |
           set -e
           base=http://localhost:8000/api/v1
-          email="ci-$RANDOM@stormpulse.test"
+          email="ci-$RANDOM@example.com"
           # register
           curl -fsS -X POST "$base/auth/register" -H 'Content-Type: application/json' \
             -d "{\"email\":\"$email\",\"password\":\"supersecret123\",\"full_name\":\"CI\"}" \
@@ -135,7 +135,7 @@ jobs:
         run: |
           set -e
           base=http://localhost:8000/api/v1
-          email="ci-loc-$RANDOM@stormpulse.test"
+          email="ci-loc-$RANDOM@example.com"
           curl -fsS -X POST "$base/auth/register" -H 'Content-Type: application/json' \
             -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" > /dev/null
           access="$(curl -fsS -X POST "$base/auth/login" -H 'Content-Type: application/json' \
