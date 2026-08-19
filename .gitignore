@@ -1,3 +1,4 @@
+# --- Node (web/mobile — fases futuras) ---
 node_modules
 dist
 dist-ssr
@@ -11,3 +12,22 @@ yarn-error.log*
 
 # TypeScript build info
 *.tsbuildinfo
+
+# --- Python (backend) ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
