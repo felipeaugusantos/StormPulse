@@ -192,8 +192,11 @@ jobs:
             -d '{"name":"Casa","kind":"home","latitude":-23.5,"longitude":-46.6,"radius_km":80}' \
             | tee /tmp/ploc.json
           loc_id="$(python3 -c 'import json;print(json.load(open("/tmp/ploc.json"))["id"])')"
-          # run ONE ingestion cycle (provider→engine→risk→alert) in a one-off container
-          docker compose run --rm api python -m workers.run_once | tee /tmp/cycle.json
+          # run ONE ingestion cycle (provider→engine→risk→alert) in a one-off
+          # container (-T: no TTY in CI). Fail loudly with stderr on error.
+          docker compose run --rm -T api python -m workers.run_once > /tmp/cycle.json 2> /tmp/cycle.err \
+            || { echo "run_once failed:"; cat /tmp/cycle.err; exit 1; }
+          cat /tmp/cycle.json
           python3 -c 'import json; s=json.load(open("/tmp/cycle.json")); assert s["cells"]>=1, s; assert s["risks"]>=1, s'
           # storms are now materialized and queryable
           curl -fsS "$base/storms" -H "$auth" | tee /tmp/storms.json

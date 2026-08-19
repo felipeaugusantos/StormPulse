@@ -89,7 +89,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: ["celery", "-A", "workers.celery_app", "beat", "--loglevel=info"]
+    # --schedule points at a writable path (the app dir is owned by root; the
+    # container runs as a non-root user).
+    command:
+      ["celery", "-A", "workers.celery_app", "beat", "--schedule",
+       "/tmp/celerybeat-schedule", "--loglevel=info"]
     environment: *worker_env
     depends_on:
       db:

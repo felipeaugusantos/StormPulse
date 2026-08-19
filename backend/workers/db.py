@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app import models  # noqa: F401  # register ALL models so FKs resolve in workers
 from app.core.config import Settings, get_settings
 
 _engine = create_engine(get_settings().sync_database_url, pool_pre_ping=True, future=True)
