@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     auth_rate_limit_max: int = Field(default=10, gt=0)
     auth_rate_limit_window_seconds: int = Field(default=60, gt=0)
 
+    # --- CORS (dashboard web / app mobile) ---
+    cors_allowed_origins: str = "http://localhost:5173"
+
     # --- Weather source (FASE 5) ---
     weather_provider: str = "mock"
 
@@ -111,6 +114,12 @@ class Settings(BaseSettings):
             path=self.postgres_db,
         )
         return str(dsn)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        """Parsed from a comma-separated env var (12-factor friendly)."""
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
     @computed_field  # type: ignore[prop-decorator]
     @property
