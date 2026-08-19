@@ -53,6 +53,7 @@ jobs:
       REDIS_HOST: localhost
       AUTH_RATE_LIMIT_MAX: "100000"
       DEFAULT_RATE_LIMIT_MAX: "100000"
+      PUBLIC_RATE_LIMIT_MAX: "100000"
       POSTGRES_USER: stormpulse
       POSTGRES_PASSWORD: stormpulse
       POSTGRES_DB: stormpulse

@@ -16,6 +16,12 @@ class User(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Stable Google account id ("sub" claim) for Google-only or linked
+    # accounts. NULL for accounts that never used Google sign-in. Kept
+    # separate from email (which can change) as the link key.
+    google_sub: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", native_enum=True),
         nullable=False,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, clearToken, readiness } from '../api'
-import type { AlertItem, LocationItem, Me, ReadyStatus, StormCell } from '../types'
+import type { AlertItem, ForecastPoint, LocationItem, Me, ReadyStatus, StormCell } from '../types'
 import { StormMap } from './StormMap'
 
 interface Props {
@@ -144,7 +144,15 @@ function AlertsPanel({ alerts }: { alerts: AlertItem[] }) {
   )
 }
 
+const STORMS_PAGE_SIZE = 8
+
 function StormsPanel({ storms }: { storms: StormCell[] }) {
+  const [page, setPage] = useState(0)
+  const pageCount = Math.max(1, Math.ceil(storms.length / STORMS_PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const start = safePage * STORMS_PAGE_SIZE
+  const pageItems = storms.slice(start, start + STORMS_PAGE_SIZE)
+
   return (
     <section className="panel">
       <h2>
@@ -154,7 +162,7 @@ function StormsPanel({ storms }: { storms: StormCell[] }) {
         {storms.length === 0 && (
           <p className="empty">Nenhuma célula. Rode o worker (pipeline) para materializar dados.</p>
         )}
-        {storms.slice(0, 12).map((s) => (
+        {pageItems.map((s) => (
           <div className="row" key={s.id}>
             <span className="badge sev">{s.severity}</span>
             <div className="grow">
@@ -170,11 +178,54 @@ function StormsPanel({ storms }: { storms: StormCell[] }) {
           </div>
         ))}
       </div>
+      {storms.length > STORMS_PAGE_SIZE && (
+        <div className="pager">
+          <button
+            className="btn ghost small"
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            disabled={safePage === 0}
+          >
+            ‹ Anterior
+          </button>
+          <span className="sub">
+            {start + 1}–{Math.min(start + STORMS_PAGE_SIZE, storms.length)} de {storms.length}
+          </span>
+          <button
+            className="btn ghost small"
+            onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            disabled={safePage >= pageCount - 1}
+          >
+            Próxima ›
+          </button>
+        </div>
+      )}
     </section>
   )
 }
 
 function LocationsPanel({ locations }: { locations: LocationItem[] }) {
+  const [selected, setSelected] = useState<string | null>(null)
+  const [forecast, setForecast] = useState<ForecastPoint[] | null>(null)
+  const [forecastError, setForecastError] = useState<string | null>(null)
+
+  async function toggle(id: string) {
+    if (selected === id) {
+      setSelected(null)
+      setForecast(null)
+      setForecastError(null)
+      return
+    }
+    setSelected(id)
+    setForecast(null)
+    setForecastError(null)
+    try {
+      const data = await api.forecast(id)
+      setForecast(data.points)
+    } catch (err) {
+      setForecastError(err instanceof ApiError ? err.message : 'Previsão indisponível')
+    }
+  }
+
   return (
     <section className="panel">
       <h2>
@@ -183,14 +234,40 @@ function LocationsPanel({ locations }: { locations: LocationItem[] }) {
       <div className="list">
         {locations.length === 0 && <p className="empty">Nenhum local cadastrado.</p>}
         {locations.map((l) => (
-          <div className="row" key={l.id}>
-            <div className="grow">
-              <div>{l.name}</div>
-              <div className="sub">
-                {l.kind} · raio {l.radius_km} km
+          <div key={l.id}>
+            <div
+              className={`row clickable ${selected === l.id ? 'selected' : ''}`}
+              onClick={() => toggle(l.id)}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                <div className="sub">
+                  {l.kind} · raio {l.radius_km} km
+                </div>
               </div>
+              <span className="count">{l.alert_preferences.filter((p) => p.enabled).length}⚑</span>
             </div>
-            <span className="count">{l.alert_preferences.filter((p) => p.enabled).length}⚑</span>
+            {selected === l.id && (
+              <div className="forecast">
+                {forecastError && <span className="sub">⚠️ {forecastError}</span>}
+                {forecast &&
+                  forecast.map((p, i) => (
+                    <div className={`forecast-row ${i === 0 ? 'past' : ''}`} key={i}>
+                      <span className="sub">
+                        {new Date(p.time).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                        })}
+                        {i === 0 ? ' (ontem)' : ''}
+                      </span>
+                      <span>{p.temperature_c != null ? `${p.temperature_c.toFixed(0)}°C` : '—'}</span>
+                    </div>
+                  ))}
+                {forecast && forecast.length === 0 && (
+                  <span className="sub">Sem pontos de previsão.</span>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>

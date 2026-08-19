@@ -24,6 +24,7 @@ dependencies = [
     "opentelemetry-instrumentation-sqlalchemy>=0.48b0",
     "opentelemetry-instrumentation-httpx>=0.48b0",
     "opentelemetry-exporter-otlp-proto-http>=1.27",
+    "google-auth>=2.35",
 ]
 
 [project.optional-dependencies]
@@ -85,6 +86,11 @@ exclude = ["alembic/"]
 
 [[tool.mypy.overrides]]
 module = ["asyncpg.*", "geoalchemy2.*", "celery.*", "opentelemetry.instrumentation.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# google-auth ships without inline types/py.typed for these submodules.
+module = ["google.oauth2.*", "google.auth.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

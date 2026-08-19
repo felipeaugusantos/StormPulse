@@ -20,6 +20,7 @@ automaticamente para a próxima.
 | **12** | Aplicativo mobile | Expo (React Native): login, locais com risco, alertas (mapa MapLibre + FCM: próximo incremento) | ✅ Concluída |
 | **13** | Integração meteorológica real | `InmetWeatherProvider` real (estações automáticas); células aproximadas por chuva→dBZ (Marshall–Palmer); avisos por UF; sem CEMADEN/radar real; previsão pendente (ver [ADR-0006](docs/adr/0006-integracao-real-inmet.md)) | ✅ Concluída |
 | **14** | Hardening | Headers de segurança, rate limiting geral, OTel (console/OTLP), pip-audit+dependabot+SECURITY.md, testes de integração dos routers (91% cobertura) — ver [ADR-0007](docs/adr/0007-hardening-v1.md) | ✅ Concluída |
+| **15** | Login Google + modo visitante + previsão real | `POST /auth/google` (vínculo por `google_sub`), `/api/v1/public/*` (células+avisos sem conta), `GET /locations/{id}/forecast` (5 dias reais do INMET + 1 histórico) — ver [ADR-0008](docs/adr/0008-login-google-visitante-previsao-inmet.md) | ✅ Concluída |
 
 ## Escopo do MVP (fases 1–10)
 

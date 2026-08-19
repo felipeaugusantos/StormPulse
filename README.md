@@ -48,22 +48,40 @@ O que já funciona nesta fase:
 | GET | `/api/v1/storms/nearby` | Células próximas via PostGIS `ST_DWithin` |
 | GET | `/api/v1/storms/{id}` | Detalhar célula |
 | GET | `/api/v1/alerts` | Alertas do usuário |
+| POST | `/api/v1/auth/google` | Login com Google (ID token) — FASE 15 |
+| GET | `/api/v1/locations/{id}/forecast` | Previsão (5 dias reais do INMET + 1 histórico) — FASE 15 |
+| GET | `/api/v1/public/storms`, `/public/storms/nearby` | Células recentes, sem login — FASE 15 |
+| GET | `/api/v1/public/warnings` | Avisos oficiais ao vivo por ponto, sem login — FASE 15 |
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
 > engine não existe) — nunca dados fictícios. O provider de dados é escolhido
 > por `WEATHER_PROVIDER`: `mock` (SIMULADO, marcado explicitamente) ou
 > `inmet` (real, FASE 13 — ver [ADR-0006](docs/adr/0006-integracao-real-inmet.md)).
 
-## Provedor meteorológico real (INMET, FASE 13)
+## Provedor meteorológico real (INMET, FASE 13/15)
 
 Defina `WEATHER_PROVIDER=inmet` no `.env` para usar a API pública do INMET
 (estações automáticas) em vez do mock. Não exige token para o que o pipeline
-consome hoje (leituras horárias). Limitações documentadas no ADR-0006:
+consome hoje (leituras horárias). Limitações documentadas no ADR-0006/0008:
 células de tempestade são aproximadas a partir da taxa de chuva (relação de
 Marshall–Palmer, não refletividade de radar real), avisos são casados por
-estado (UF) e não por polígono exato, e `forecast` ainda retorna vazio
-(pendente resolução de geocódigo IBGE). CEMADEN e radar real ficam para uma
-fase futura.
+estado (UF) e não por polígono exato, e a previsão (`GET
+/locations/{id}/forecast`) traz **5 dias reais do INMET + 1 dia histórico**
+(não 7 — limite confirmado da API pública do INMET) via resolução de
+geocódigo IBGE pelo nome da estação mais próxima. CEMADEN e radar real
+ficam para uma fase futura.
+
+## Login com Google e modo visitante (FASE 15)
+
+- **Login com Google**: defina `GOOGLE_CLIENT_ID` (backend, `.env`) e
+  `VITE_GOOGLE_CLIENT_ID` (`web/.env.local`) com o mesmo client ID criado em
+  https://console.cloud.google.com/apis/credentials (tipo "Web
+  application"). Sem essas variáveis, o botão "Sign in with Google"
+  simplesmente não aparece — não é um erro.
+- **Modo visitante**: botão "Ver sem login" na tela de login — mostra
+  células de tempestade e avisos oficiais via `/api/v1/public/*`, sem
+  precisar de conta. Locais monitorados e risco personalizado continuam
+  exigindo login.
 
 ## Documentação
 

@@ -25,14 +25,34 @@ _STATIONS = [
         "VL_LATITUDE": "-23.5",
         "VL_LONGITUDE": "-46.6",
         "UF": "SP",
+        "DC_NOME": "São Paulo",
     },
     {
         "CD_ESTACAO": "A999",
         "VL_LATITUDE": "0.0",
         "VL_LONGITUDE": "0.0",
         "UF": "XX",
+        "DC_NOME": "Nowhereland",
     },
 ]
+
+_MUNICIPIOS_SP = [
+    {"id": "3550308", "nome": "São Paulo"},
+    {"id": "3509502", "nome": "Campinas"},
+]
+
+_PREVISAO_3550308 = {
+    "3550308": {
+        "20/08/2026": {
+            "manha": {"temp_max": 25, "temp_min": 14, "resumo": "Poucas nuvens"},
+            "tarde": {"temp_max": 27, "temp_min": 14, "resumo": "Poucas nuvens"},
+            "noite": {"temp_max": 20, "temp_min": 14, "resumo": "Céu limpo"},
+        },
+        "21/08/2026": {
+            "tarde": {"temp_max": 22, "temp_min": 13, "resumo": "Muitas nuvens"},
+        },
+    }
+}
 
 _TODAY = datetime.now(UTC).date().isoformat()
 _HOUR = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
@@ -77,6 +97,12 @@ def _handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=[])
     if path == "/avisos/ativos":
         return httpx.Response(200, json=_AVISOS)
+    if path == "/ibge/estados/SP/municipios":
+        return httpx.Response(200, json=_MUNICIPIOS_SP)
+    if path == "/ibge/estados/XX/municipios":
+        return httpx.Response(200, json=[])
+    if path == "/previsao/3550308":
+        return httpx.Response(200, json=_PREVISAO_3550308)
     return httpx.Response(404, json={"detail": "not found"})
 
 
@@ -86,6 +112,8 @@ def provider() -> InmetWeatherProvider:
     return InmetWeatherProvider(
         base_url="http://test",
         avisos_url="http://test",
+        previsao_url="http://test",
+        ibge_localidades_url="http://test/ibge",
         min_rain_rate_mm_h=4.0,
         max_station_distance_km=100.0,
         client=client,
@@ -142,10 +170,26 @@ async def test_warnings_are_matched_by_nearest_station_state(
     assert warnings[0].provenance.is_mock is False
 
 
-async def test_forecast_has_no_fabricated_points(provider: InmetWeatherProvider) -> None:
+async def test_forecast_includes_real_inmet_days_plus_yesterday(
+    provider: InmetWeatherProvider,
+) -> None:
     forecast = await provider.get_forecast(-23.5, -46.6)
     assert forecast.provenance.is_mock is False
-    assert forecast.points == []
+    # 1 historical (yesterday, from the station) + 2 real forecast days.
+    assert len(forecast.points) == 3
+    # The forecast-derived points use the "tarde" period's temp_max.
+    forecast_temps = {p.temperature_c for p in forecast.points[1:]}
+    assert forecast_temps == {27.0, 22.0}
+    # No fabricated precipitation numbers from INMET's free-text summary.
+    assert all(p.precipitation_probability is None for p in forecast.points[1:])
+    assert all(p.precipitation_mm is None for p in forecast.points[1:])
+
+
+async def test_forecast_raises_when_municipality_not_found_in_ibge(
+    provider: InmetWeatherProvider,
+) -> None:
+    with pytest.raises(WeatherProviderUnavailableError):
+        await provider.get_forecast(0.0, 0.0)  # nearest station has UF "XX", no IBGE match
 
 
 def test_marshall_palmer_dbz_is_zero_for_no_rain() -> None:

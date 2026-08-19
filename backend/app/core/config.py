@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     default_rate_limit_max: int = Field(default=120, gt=0)
     default_rate_limit_window_seconds: int = Field(default=60, gt=0)
 
+    # --- Rate limiting (public/visitor endpoints, FASE 15 — stricter: anonymous) ---
+    public_rate_limit_max: int = Field(default=30, gt=0)
+    public_rate_limit_window_seconds: int = Field(default=60, gt=0)
+
     # --- Observability / tracing (FASE 14) ---
     otel_enabled: bool = True
     otel_service_name: str = "stormpulse-backend"
@@ -74,12 +78,20 @@ class Settings(BaseSettings):
     # --- CORS (dashboard web / app mobile) ---
     cors_allowed_origins: str = "http://localhost:5173"
 
+    # --- Google OAuth (login social) ---
+    # Only the client_id is needed: verifying an ID token's signature +
+    # audience doesn't require the client secret (that's only for the
+    # server-side authorization-code exchange flow, which we don't use).
+    google_client_id: str | None = None
+
     # --- Weather source (FASE 5) ---
     weather_provider: str = "mock"
 
     # --- INMET real provider (FASE 13) ---
     inmet_base_url: str = "https://apitempo.inmet.gov.br"
     inmet_avisos_url: str = "https://apiprevmet3.inmet.gov.br"
+    inmet_previsao_url: str = "https://apiprevmet3.inmet.gov.br"
+    ibge_localidades_url: str = "https://servicodados.ibge.gov.br/api/v1/localidades"
     inmet_api_token: SecretStr | None = None
     inmet_http_timeout_seconds: float = Field(default=10.0, gt=0)
     inmet_min_rain_rate_mm_h: float = Field(default=4.0, gt=0)

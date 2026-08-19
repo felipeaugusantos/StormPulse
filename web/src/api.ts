@@ -1,4 +1,12 @@
-import type { AlertItem, LocationItem, Me, ReadyStatus, StormCell } from './types'
+import type {
+  AlertItem,
+  Forecast,
+  LocationItem,
+  Me,
+  ReadyStatus,
+  StormCell,
+  WarningItem,
+} from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 const V1 = `${BASE}/api/v1`
@@ -52,11 +60,28 @@ export async function login(email: string, password: string): Promise<string> {
   return data.access_token
 }
 
+export async function loginWithGoogle(idToken: string): Promise<string> {
+  const data = await request<{ access_token: string }>('/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({ id_token: idToken }),
+  })
+  return data.access_token
+}
+
 export const api = {
   me: () => request<Me>('/users/me'),
   storms: () => request<StormCell[]>('/storms?limit=200'),
   locations: () => request<LocationItem[]>('/locations'),
   alerts: () => request<AlertItem[]>('/alerts'),
+  forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
+}
+
+// No token required (visitor mode) — same request() helper, it just won't
+// attach an Authorization header when there isn't one.
+export const publicApi = {
+  storms: () => request<StormCell[]>('/public/storms?limit=200'),
+  warnings: (lat: number, lon: number) =>
+    request<WarningItem[]>(`/public/warnings?lat=${lat}&lon=${lon}`),
 }
 
 // Health/readiness live at the API root, not under /api/v1.

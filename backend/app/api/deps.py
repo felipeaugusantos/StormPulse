@@ -17,6 +17,20 @@ from app.users.models import User
 _bearer = HTTPBearer(auto_error=False)
 
 
+def get_request_settings(request: Request) -> Settings:
+    """The ``Settings`` instance this app was actually built with.
+
+    Unlike ``Depends(get_settings)`` (process-wide ``lru_cache``, frozen at
+    first call), this reflects whatever ``Settings`` was passed to
+    ``create_app()`` for *this* app instance — needed wherever a value must
+    vary per-app-instance within the same process (e.g. tests exercising two
+    different configs). See ADR-0007/0008 for the ``get_settings()`` caching
+    gotcha this works around.
+    """
+    settings: Settings = request.app.state.settings
+    return settings
+
+
 async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
     """Yield an async DB session from the app's session factory."""
     session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory

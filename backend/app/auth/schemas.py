@@ -27,6 +27,12 @@ class RefreshIn(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
+class GoogleAuthIn(BaseModel):
+    # A Google Identity Services ID token (JWT), verified server-side
+    # against Google's public keys before any claim is trusted.
+    id_token: str = Field(min_length=1)
+
+
 class TokenPair(BaseModel):
     access_token: str
     refresh_token: str

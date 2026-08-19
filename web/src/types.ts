@@ -50,3 +50,23 @@ export interface ReadyStatus {
   status: 'ready' | 'not_ready'
   checks: Record<string, 'ok' | 'error' | 'skipped'>
 }
+
+export interface ForecastPoint {
+  time: string
+  temperature_c: number | null
+  precipitation_probability: number | null
+  precipitation_mm: number | null
+}
+
+export interface Forecast {
+  latitude: number
+  longitude: number
+  points: ForecastPoint[]
+}
+
+export interface WarningItem {
+  issued_at: string
+  kind: string
+  severity: string
+  description: string
+}

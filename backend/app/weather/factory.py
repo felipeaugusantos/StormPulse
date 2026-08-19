@@ -20,6 +20,8 @@ def get_weather_provider(settings: Settings) -> WeatherProvider:
         return InmetWeatherProvider(
             base_url=settings.inmet_base_url,
             avisos_url=settings.inmet_avisos_url,
+            previsao_url=settings.inmet_previsao_url,
+            ibge_localidades_url=settings.ibge_localidades_url,
             http_timeout_seconds=settings.inmet_http_timeout_seconds,
             min_rain_rate_mm_h=settings.inmet_min_rain_rate_mm_h,
             max_station_distance_km=settings.inmet_max_station_distance_km,

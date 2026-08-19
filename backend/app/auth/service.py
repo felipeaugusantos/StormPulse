@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 import uuid
 
 from sqlalchemy import select
@@ -29,20 +30,24 @@ async def _email_exists(session: AsyncSession, email: str) -> bool:
     return result.first() is not None
 
 
-async def register_user(session: AsyncSession, data: RegisterIn) -> User:
+async def _create_tenant_and_user(
+    session: AsyncSession,
+    *,
+    email: str,
+    full_name: str | None,
+    hashed_password: str,
+    google_sub: str | None,
+    tenant_name: str | None,
+) -> User:
     """Create a personal tenant and its first (USER) account.
 
     The first user of a freshly-created tenant is a plain USER; elevating to
     ADMIN is an explicit administrative action (later phase), never something a
-    self-registration can grant.
+    self-registration (password or Google) can grant.
     """
-    email = data.email.lower()
-    if await _email_exists(session, email):
-        raise EmailAlreadyRegistered(email)
-
-    base = data.tenant_name or email.split("@", 1)[0]
+    base = tenant_name or email.split("@", 1)[0]
     tenant = Tenant(
-        name=data.tenant_name or f"{base} (pessoal)",
+        name=tenant_name or f"{base} (pessoal)",
         slug=f"{_slugify(base)}-{uuid.uuid4().hex[:8]}",
     )
     session.add(tenant)
@@ -51,8 +56,9 @@ async def register_user(session: AsyncSession, data: RegisterIn) -> User:
     user = User(
         tenant_id=tenant.id,
         email=email,
-        full_name=data.full_name,
-        hashed_password=hash_password(data.password),
+        full_name=full_name,
+        hashed_password=hashed_password,
+        google_sub=google_sub,
         role=UserRole.USER,
         is_active=True,
     )
@@ -60,6 +66,62 @@ async def register_user(session: AsyncSession, data: RegisterIn) -> User:
     await session.commit()
     await session.refresh(user)
     return user
+
+
+async def register_user(session: AsyncSession, data: RegisterIn) -> User:
+    email = data.email.lower()
+    if await _email_exists(session, email):
+        raise EmailAlreadyRegistered(email)
+    return await _create_tenant_and_user(
+        session,
+        email=email,
+        full_name=data.full_name,
+        hashed_password=hash_password(data.password),
+        google_sub=None,
+        tenant_name=data.tenant_name,
+    )
+
+
+async def authenticate_google(
+    session: AsyncSession, *, google_sub: str, email: str, full_name: str | None
+) -> User | None:
+    """Return the user for a verified Google sign-in, creating/linking as needed.
+
+    Lookup order: existing ``google_sub`` first (stable across e-mail
+    changes), then existing e-mail (links the Google account to a password
+    account created earlier with the same address), then a brand-new
+    tenant+account. Password-less (Google-only) accounts get a random,
+    unusable hash — ``hashed_password`` stays ``NOT NULL`` without
+    special-casing ``None`` through the auth code (see ADR-0008).
+
+    Returns ``None`` for a deactivated existing account (mirrors
+    ``authenticate``) — a disabled account can't come back via Google either.
+    """
+    email = email.lower()
+
+    result = await session.execute(select(User).where(User.google_sub == google_sub))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        return user if user.is_active else None
+
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user is not None:
+        if not user.is_active:
+            return None
+        user.google_sub = google_sub
+        await session.commit()
+        await session.refresh(user)
+        return user
+
+    return await _create_tenant_and_user(
+        session,
+        email=email,
+        full_name=full_name,
+        hashed_password=hash_password(secrets.token_urlsafe(32)),
+        google_sub=google_sub,
+        tenant_name=None,
+    )
 
 
 async def authenticate(session: AsyncSession, email: str, password: str) -> User | None:

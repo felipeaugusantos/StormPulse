@@ -34,6 +34,7 @@ def settings() -> Settings:
         log_level="WARNING",
         auth_rate_limit_max=10_000,
         default_rate_limit_max=10_000,
+        public_rate_limit_max=10_000,
     )
 
 

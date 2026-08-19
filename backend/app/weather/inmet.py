@@ -17,14 +17,20 @@ Two honest approximations are made here, both documented in
   nearest station, not a precise polygon — INMET's warning feed is keyed by
   IBGE municipality geocode, which we do not resolve from lat/lon here.
 
-``get_forecast`` returns an empty point list: INMET's forecast API also
-requires an IBGE geocode we do not resolve yet — a known follow-up, not a
-fabricated result.
+``get_forecast`` resolves the nearest station's municipality to an IBGE
+geocode (by matching the station's own name against IBGE's public
+municipality list for its UF — no third-party geocoder involved) and calls
+INMET's real municipal forecast endpoint. That endpoint caps out at **5
+days** (today + 4) — verified live, extra path/query parameters are
+ignored — so "7 days" isn't honest to promise; a 6th point (yesterday) is
+added from the station's own real hourly readings to give a bit of
+before/after context. See ADR-0008.
 """
 
 from __future__ import annotations
 
 import math
+import unicodedata
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -34,6 +40,7 @@ from app.core.enums import WeatherSourceKind
 from app.weather.provider import (
     CurrentConditions,
     Forecast,
+    ForecastPoint,
     Provenance,
     RadarFrameData,
     RawCell,
@@ -50,12 +57,20 @@ _LAT_KEYS = ("VL_LATITUDE", "LATITUDE", "vl_latitude")
 _LON_KEYS = ("VL_LONGITUDE", "LONGITUDE", "vl_longitude")
 _CODE_KEYS = ("CD_ESTACAO", "CD_STATION", "cd_estacao")
 _UF_KEYS = ("UF", "SG_ESTADO", "uf")
+_NAME_KEYS = ("DC_NOME", "NOME", "dc_nome")
 _TEMP_KEYS = ("TEM_INS", "TEMPERATURA", "tem_ins")
 _WIND_KEYS = ("VEN_VEL", "VENTO_VELOCIDADE", "ven_vel")
 _GUST_KEYS = ("VEN_RAJ", "VENTO_RAJADA", "ven_raj")
 _RAIN_KEYS = ("CHUVA", "PRECIPITACAO", "chuva")
 _DATE_KEYS = ("DT_MEDICAO", "dt_medicao")
 _HOUR_KEYS = ("HR_MEDICAO", "hr_medicao")
+
+
+def _normalize_name(value: str) -> str:
+    """Uppercase, accent-stripped comparison key for municipality names."""
+    decomposed = unicodedata.normalize("NFKD", value)
+    stripped = "".join(c for c in decomposed if not unicodedata.combining(c))
+    return stripped.strip().upper()
 
 
 class WeatherProviderUnavailableError(RuntimeError):
@@ -105,6 +120,8 @@ class InmetWeatherProvider(WeatherProvider):
         *,
         base_url: str,
         avisos_url: str,
+        previsao_url: str = "https://apiprevmet3.inmet.gov.br",
+        ibge_localidades_url: str = "https://servicodados.ibge.gov.br/api/v1/localidades",
         http_timeout_seconds: float = 10.0,
         min_rain_rate_mm_h: float = 4.0,
         max_station_distance_km: float = 100.0,
@@ -112,6 +129,8 @@ class InmetWeatherProvider(WeatherProvider):
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._avisos_url = avisos_url.rstrip("/")
+        self._previsao_url = previsao_url.rstrip("/")
+        self._ibge_localidades_url = ibge_localidades_url.rstrip("/")
         self._min_rain_rate_mm_h = min_rain_rate_mm_h
         self._max_station_distance_km = max_station_distance_km
         self._client = client or httpx.AsyncClient(timeout=http_timeout_seconds)
@@ -299,12 +318,109 @@ class InmetWeatherProvider(WeatherProvider):
             )
         return warnings
 
+    async def _resolve_ibge_geocode(self, uf: str, station_name: str) -> str:
+        response = await self._client.get(f"{self._ibge_localidades_url}/estados/{uf}/municipios")
+        response.raise_for_status()
+        municipios = response.json()
+        if not isinstance(municipios, list):
+            raise WeatherProviderUnavailableError("Unexpected IBGE municipios response shape.")
+        target = _normalize_name(station_name)
+        for item in municipios:
+            if not isinstance(item, dict):
+                continue
+            nome = item.get("nome")
+            geocode = item.get("id")
+            if nome is None or geocode is None:
+                continue
+            if _normalize_name(str(nome)) == target:
+                return str(geocode)
+        raise WeatherProviderUnavailableError(
+            f"No IBGE municipality named {station_name!r} found for UF {uf!r}."
+        )
+
+    async def _fetch_previsao(self, geocode: str) -> dict[str, Any]:
+        response = await self._client.get(f"{self._previsao_url}/previsao/{geocode}")
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict) or geocode not in data:
+            raise WeatherProviderUnavailableError(
+                f"Unexpected INMET previsao response shape for geocode {geocode!r}."
+            )
+        days = data[geocode]
+        if not isinstance(days, dict):
+            raise WeatherProviderUnavailableError(
+                f"Unexpected INMET previsao days shape for geocode {geocode!r}."
+            )
+        return days
+
     async def get_forecast(self, latitude: float, longitude: float) -> Forecast:
-        # INMET's forecast API keys by IBGE municipality geocode, which we do
-        # not resolve from lat/lon yet — returning no points is honest;
-        # fabricating a forecast would not be.
+        stations = await self._fetch_stations()
+        station = self._nearest_station(latitude, longitude, stations)
+        uf = _first(station, _UF_KEYS)
+        name = _first(station, _NAME_KEYS)
+        code = _first(station, _CODE_KEYS)
+        if uf is None or name is None:
+            raise WeatherProviderUnavailableError(
+                "Nearest INMET station is missing UF/name for geocode resolution."
+            )
+        geocode = await self._resolve_ibge_geocode(str(uf), str(name))
+        days = await self._fetch_previsao(geocode)
+
+        points: list[ForecastPoint] = []
+
+        # Yesterday: a real measurement (not a forecast), for a bit of
+        # before/after context — honest about what it is via its position.
+        if code is not None:
+            yesterday = datetime.now(UTC).date() - timedelta(days=1)
+            try:
+                readings = await self._fetch_station_readings(str(code), yesterday)
+                latest_yesterday = self._latest_reading(readings)
+            except (httpx.HTTPError, WeatherProviderUnavailableError):
+                latest_yesterday = None
+            if latest_yesterday is not None:
+                ts = self._reading_timestamp(latest_yesterday) or datetime.combine(
+                    yesterday, datetime.min.time(), tzinfo=UTC
+                )
+                points.append(
+                    ForecastPoint(
+                        time=ts,
+                        temperature_c=_as_float(latest_yesterday, _TEMP_KEYS),
+                        precipitation_probability=None,
+                        precipitation_mm=_as_float(latest_yesterday, _RAIN_KEYS),
+                    )
+                )
+
+        # Today onward: real forecast from INMET (capped at 5 days by the
+        # API itself — confirmed live, not a limit we impose).
+        for date_str, periods in days.items():
+            try:
+                day = datetime.strptime(date_str, "%d/%m/%Y").replace(tzinfo=UTC)
+            except ValueError:
+                continue
+            period = (
+                periods.get("tarde") or periods.get("manha") or periods.get("noite")
+                if isinstance(periods, dict)
+                else None
+            )
+            if not isinstance(period, dict):
+                continue
+            points.append(
+                ForecastPoint(
+                    time=day,
+                    temperature_c=_as_float(period, ("temp_max",)),
+                    # INMET gives a free-text summary ("Poucas nuvens"), not a
+                    # numeric probability or mm — left unset rather than
+                    # invented from text.
+                    precipitation_probability=None,
+                    precipitation_mm=None,
+                )
+            )
+
         return Forecast(
-            provenance=self._provenance(), latitude=latitude, longitude=longitude, points=[]
+            provenance=self._provenance(),
+            latitude=latitude,
+            longitude=longitude,
+            points=points,
         )
 
     async def aclose(self) -> None:

@@ -10,9 +10,12 @@ Consome a API (FASES 1–10) e mostra:
 - **Alertas** recentes (nível GREEN→RED, tipo de evento);
 - **Células detectadas** (severidade, refletividade, horário) — marcadas `MOCK`
   quando simuladas;
-- **Locais monitorados** (raio, tipos de alerta habilitados);
+- **Locais monitorados** (raio, tipos de alerta habilitados) — clique num
+  local para ver a previsão (FASE 15);
 - **Status** de Postgres/Redis (via `/ready`) e usuário autenticado;
-- **Atualização automática** a cada 30s.
+- **Atualização automática** a cada 30s;
+- **Login com Google** (opcional, via `VITE_GOOGLE_CLIENT_ID`) e **modo
+  visitante** ("Ver sem login" — células + avisos sem conta, FASE 15).
 
 > A aparência é deliberadamente enxuta (a arquitetura tem prioridade nesta fase).
 > Dados simulados são sempre rotulados `MOCK` — nunca apresentados como reais.
@@ -32,7 +35,9 @@ Aponte para a API com a variável de ambiente `VITE_API_URL`
 VITE_API_URL=http://localhost:8000 npm run dev
 ```
 
-Faça login com um usuário criado via `POST /api/v1/auth/register`.
+Faça login com um usuário criado via `POST /api/v1/auth/register`, com
+Google (se `VITE_GOOGLE_CLIENT_ID` estiver setado) ou clique em
+"Ver sem login" para o modo visitante.
 
 ## Estrutura
 
@@ -40,9 +45,10 @@ Faça login com um usuário criado via `POST /api/v1/auth/register`.
 src/
 ├── api.ts                # cliente da API + token (localStorage)
 ├── types.ts              # tipos das respostas
-├── App.tsx               # gate de autenticação
+├── App.tsx               # login | visitante | autenticado
 └── components/
-    ├── Login.tsx
+    ├── Login.tsx         # e-mail/senha + Google + link de visitante
     ├── Dashboard.tsx     # topbar + painéis + auto-refresh
+    ├── VisitorView.tsx   # modo visitante (sem login) — FASE 15
     └── StormMap.tsx      # mapa MapLibre (células + locais)
 ```

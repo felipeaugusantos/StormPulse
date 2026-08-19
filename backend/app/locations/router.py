@@ -4,16 +4,21 @@ from __future__ import annotations
 
 import uuid
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
+from app.core.config import Settings, get_settings
 from app.locations import service
 from app.locations.models import Location
 from app.locations.schemas import LocationCreate, LocationOut, LocationUpdate
 from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
+from app.weather.factory import get_weather_provider
+from app.weather.inmet import WeatherProviderUnavailableError
+from app.weather.provider import Forecast
 
 router = APIRouter(tags=["locations"])
 
@@ -100,3 +105,29 @@ async def get_location_risk(
             detail="Nenhuma avaliação de risco disponível para este local ainda",
         )
     return risk
+
+
+@router.get(
+    "/{location_id}/forecast",
+    response_model=Forecast,
+    summary="Previsão do tempo para o local (fonte real, quando configurada)",
+)
+async def get_location_forecast(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> Forecast:
+    location = await _get_owned_or_404(session, user, location_id)
+    provider = get_weather_provider(settings)
+    try:
+        return await provider.get_forecast(location.latitude, location.longitude)
+    except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
+        # Honest 404: no fabricated forecast when the real source can't
+        # produce one (no nearby station, IBGE geocode unresolved, or the
+        # upstream API itself is down/unreachable — INMET's public API has
+        # real-world downtime, confirmed during development).
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Previsão indisponível para este local no momento",
+        ) from exc
