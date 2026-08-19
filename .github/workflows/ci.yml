@@ -99,6 +99,64 @@ jobs:
           grep -q '"database":"ok"' /tmp/ready.json
           grep -q '"redis":"ok"' /tmp/ready.json
 
+      - name: Run migrations (Alembic + PostGIS)
+        run: docker compose exec -T api alembic upgrade head
+
+      - name: Verify PostGIS and schema
+        run: |
+          docker compose exec -T db psql -U stormpulse -d stormpulse -c "SELECT postgis_version();"
+          docker compose exec -T db psql -U stormpulse -d stormpulse -c "\dt" | grep -q storm_cells
+          docker compose exec -T db psql -U stormpulse -d stormpulse -c "\dt" | grep -q locations
+
+      - name: Integration — register, login, /users/me (FASE 3)
+        run: |
+          set -e
+          base=http://localhost:8000/api/v1
+          email="ci-$RANDOM@stormpulse.test"
+          # register
+          curl -fsS -X POST "$base/auth/register" -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$email\",\"password\":\"supersecret123\",\"full_name\":\"CI\"}" \
+            | tee /tmp/reg.json
+          grep -q "\"email\":\"$email\"" /tmp/reg.json
+          # login
+          curl -fsS -X POST "$base/auth/login" -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" | tee /tmp/tok.json
+          access="$(python3 -c 'import json;print(json.load(open("/tmp/tok.json"))["access_token"])')"
+          test -n "$access"
+          # /users/me with the token
+          curl -fsS "$base/users/me" -H "Authorization: Bearer $access" | tee /tmp/me.json
+          grep -q "\"email\":\"$email\"" /tmp/me.json
+          # unauthenticated /users/me must be 401
+          code="$(curl -s -o /dev/null -w '%{http_code}' "$base/users/me")"
+          test "$code" = "401"
+          echo "auth flow OK"
+
+      - name: Integration — location CRUD + PostGIS nearby (FASE 4)
+        run: |
+          set -e
+          base=http://localhost:8000/api/v1
+          email="ci-loc-$RANDOM@stormpulse.test"
+          curl -fsS -X POST "$base/auth/register" -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" > /dev/null
+          access="$(curl -fsS -X POST "$base/auth/login" -H 'Content-Type: application/json' \
+            -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" \
+            | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')"
+          auth="Authorization: Bearer $access"
+          # create a monitored location (Casa) with geom populated from lat/lon
+          curl -fsS -X POST "$base/locations" -H "$auth" -H 'Content-Type: application/json' \
+            -d '{"name":"Casa","kind":"home","latitude":-23.55,"longitude":-46.63,"radius_km":50,
+                 "alert_preferences":[{"alert_type":"hail","enabled":true}]}' | tee /tmp/loc.json
+          loc_id="$(python3 -c 'import json;print(json.load(open("/tmp/loc.json"))["id"])')"
+          # list + fetch
+          curl -fsS "$base/locations" -H "$auth" | grep -q "$loc_id"
+          # PostGIS proximity query runs (empty until FASE 6 populates cells)
+          curl -fsS "$base/storms/nearby?lat=-23.55&lon=-46.63&radius_km=50" -H "$auth" | tee /tmp/near.json
+          test "$(cat /tmp/near.json)" = "[]"
+          # no risk yet → 404 (honest: engine not built)
+          code="$(curl -s -o /dev/null -w '%{http_code}' "$base/locations/$loc_id/risk" -H "$auth")"
+          test "$code" = "404"
+          echo "locations + PostGIS OK"
+
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs --no-color

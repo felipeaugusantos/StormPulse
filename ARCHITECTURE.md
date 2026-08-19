@@ -1,6 +1,7 @@
 # StormPulse — Arquitetura
 
-> **Status:** FASE 0 (análise) + FASE 1 (fundação) concluídas.
+> **Status:** FASES 0–5 concluídas (arquitetura, fundação, banco/modelos,
+> autenticação, localizações+PostGIS, mock weather provider).
 > Este documento descreve a visão arquitetural do produto e o estado atual da
 > implementação. Seções marcadas com 🔭 descrevem intenção futura ainda **não**
 > implementada.

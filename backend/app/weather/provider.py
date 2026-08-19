@@ -1,0 +1,96 @@
+"""WeatherProvider abstraction and its data-transfer objects.
+
+No concrete source (INMET, INPE/CPTEC, CEMADEN, radars, commercial APIs) is
+ever coupled to the storm engine — everything flows through this interface.
+Every DTO carries provenance so simulated data can never masquerade as real.
+"""
+
+from __future__ import annotations
+
+import abc
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+from app.core.enums import WeatherSourceKind
+
+
+class Provenance(BaseModel):
+    """Where a piece of data came from — always explicit."""
+
+    source_name: str
+    source_kind: WeatherSourceKind
+    is_mock: bool
+
+
+class CurrentConditions(BaseModel):
+    provenance: Provenance
+    observed_at: datetime
+    latitude: float
+    longitude: float
+    temperature_c: float | None = None
+    wind_kmh: float | None = None
+    wind_gusts_kmh: float | None = None
+    precipitation_mm: float | None = None
+
+
+class RawCell(BaseModel):
+    """A raw cell candidate as reported by a source (pre-detection)."""
+
+    latitude: float
+    longitude: float
+    max_reflectivity: float | None = None
+    average_reflectivity: float | None = None
+    area_km2: float | None = None
+
+
+class RadarFrameData(BaseModel):
+    provenance: Provenance
+    captured_at: datetime
+    cells: list[RawCell] = Field(default_factory=list)
+
+
+class Warning(BaseModel):
+    provenance: Provenance
+    issued_at: datetime
+    kind: str
+    severity: str
+    description: str
+
+
+class ForecastPoint(BaseModel):
+    time: datetime
+    temperature_c: float | None = None
+    precipitation_probability: int | None = None
+    precipitation_mm: float | None = None
+
+
+class Forecast(BaseModel):
+    provenance: Provenance
+    latitude: float
+    longitude: float
+    points: list[ForecastPoint] = Field(default_factory=list)
+
+
+class WeatherProvider(abc.ABC):
+    """Interface every weather source must implement."""
+
+    @property
+    @abc.abstractmethod
+    def name(self) -> str: ...
+
+    @property
+    @abc.abstractmethod
+    def kind(self) -> WeatherSourceKind: ...
+
+    @abc.abstractmethod
+    async def get_current_data(self, latitude: float, longitude: float) -> CurrentConditions: ...
+
+    @abc.abstractmethod
+    async def get_radar_frames(self, *, limit: int = 1) -> list[RadarFrameData]: ...
+
+    @abc.abstractmethod
+    async def get_warnings(self, latitude: float, longitude: float) -> list[Warning]: ...
+
+    @abc.abstractmethod
+    async def get_forecast(self, latitude: float, longitude: float) -> Forecast: ...

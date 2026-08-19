@@ -32,6 +32,26 @@ O que já funciona nesta fase:
 - **Docker/Compose** com Postgres+PostGIS e Redis.
 - **pytest** (9 testes), **ruff** (lint+format) e **mypy strict** verdes.
 
+## Endpoints (FASES 1–5)
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/health`, `/ready` | Liveness / readiness |
+| POST | `/api/v1/auth/register` | Cadastro (cria tenant pessoal + usuário) |
+| POST | `/api/v1/auth/login` | Login → access + refresh token |
+| POST | `/api/v1/auth/refresh` | Renovar tokens |
+| GET | `/api/v1/users/me` | Perfil autenticado |
+| POST/GET | `/api/v1/locations` | Criar / listar locais monitorados |
+| GET/PUT/DELETE | `/api/v1/locations/{id}` | Detalhar / atualizar / remover |
+| GET | `/api/v1/locations/{id}/risk` | Última avaliação de risco (404 até a FASE 8) |
+| GET | `/api/v1/storms` | Células recentes (vazio até a FASE 6) |
+| GET | `/api/v1/storms/nearby` | Células próximas via PostGIS `ST_DWithin` |
+| GET | `/api/v1/storms/{id}` | Detalhar célula |
+
+> Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
+> engine não existe) — nunca dados fictícios. O provider de dados é `mock`
+> (SIMULADO, marcado explicitamente) até a FASE 13.
+
 ## Documentação
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — visão, estilo, estrutura, riscos, execução.

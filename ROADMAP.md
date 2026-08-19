@@ -7,10 +7,10 @@ automaticamente para a próxima.
 |-----:|------|------------------------|:------:|
 | **0** | Análise da arquitetura | ARCHITECTURE.md, ADRs, riscos, estrutura, dependências, plano | ✅ Concluída |
 | **1** | Fundação do projeto | Estrutura do repo, FastAPI, config, Docker/Compose, Postgres+PostGIS, Redis, health/ready, pytest, lint, typing, .env.example, README | ✅ Concluída |
-| **2** | Banco e modelos | Modelos SQLAlchemy multitenant, Alembic migrations, GeoAlchemy2/PostGIS, seeds | ⬜ Pendente |
-| **3** | Autenticação | JWT + refresh, hash de senha, RBAC (ADMIN/USER), rate limiting | ⬜ Pendente |
-| **4** | Localizações + PostGIS | CRUD de `Location`, raio, `AlertPreference`, consultas `ST_DWithin` | ⬜ Pendente |
-| **5** | Mock Weather Provider | Interface `WeatherProvider` + `MockWeatherProvider` (dados MOCK explícitos) | ⬜ Pendente |
+| **2** | Banco e modelos | 13 modelos SQLAlchemy multitenant, migration bootstrap (PostGIS), GeoAlchemy2 | ✅ Concluída |
+| **3** | Autenticação | JWT + refresh (pyjwt), hash Argon2, RBAC (ADMIN/USER), rate limiting Redis | ✅ Concluída |
+| **4** | Localizações + PostGIS | CRUD de `Location`, raio, `AlertPreference`, `/storms/nearby` via `ST_DWithin` | ✅ Concluída |
+| **5** | Mock Weather Provider | Interface `WeatherProvider` + `MockWeatherProvider` (dados MOCK explícitos) | ✅ Concluída |
 | **6** | Storm Engine inicial | Detecção de células a partir de frames simulados | ⬜ Pendente |
 | **7** | Tracking e trajetória | Associação temporal, deslocamento, direção, velocidade, ETA | ⬜ Pendente |
 | **8** | Risk Engine | `StormRiskEngine` baseado em regras documentadas/configuráveis | ⬜ Pendente |

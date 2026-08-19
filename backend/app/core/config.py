@@ -5,10 +5,13 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, computed_field
+from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "test", "staging", "production"]
+
+# Sentinel dev secret. Refused in production (see the validator below).
+_DEV_JWT_SECRET = "dev-insecure-change-me"
 
 
 class Settings(BaseSettings):
@@ -48,6 +51,30 @@ class Settings(BaseSettings):
 
     # --- Readiness probe ---
     readiness_timeout_seconds: float = Field(default=2.0, gt=0)
+
+    # --- Security / JWT (FASE 3) ---
+    jwt_secret_key: SecretStr = Field(default=SecretStr(_DEV_JWT_SECRET))
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = Field(default=15, gt=0)
+    refresh_token_expire_days: int = Field(default=7, gt=0)
+
+    # --- Rate limiting (auth endpoints) ---
+    auth_rate_limit_max: int = Field(default=10, gt=0)
+    auth_rate_limit_window_seconds: int = Field(default=60, gt=0)
+
+    # --- Weather source (FASE 5) ---
+    weather_provider: str = "mock"
+
+    @model_validator(mode="after")
+    def _forbid_dev_secret_in_production(self) -> Settings:
+        if self.environment == "production" and (
+            self.jwt_secret_key.get_secret_value() == _DEV_JWT_SECRET
+        ):
+            raise ValueError(
+                "JWT_SECRET_KEY must be set to a strong secret in production "
+                "(the built-in development secret is refused)."
+            )
+        return self
 
     @computed_field  # type: ignore[prop-decorator]
     @property

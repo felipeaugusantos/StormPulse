@@ -8,10 +8,15 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
+    "email-validator>=2.2",
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30",
+    "psycopg2-binary>=2.9",
+    "geoalchemy2>=0.15",
     "alembic>=1.14",
     "redis>=5.2",
+    "pyjwt>=2.9",
+    "pwdlib[argon2]>=0.2",
 ]
 
 [project.optional-dependencies]
@@ -71,7 +76,7 @@ disallow_untyped_defs = true
 exclude = ["alembic/"]
 
 [[tool.mypy.overrides]]
-module = ["asyncpg.*"]
+module = ["asyncpg.*", "geoalchemy2.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
