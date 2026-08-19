@@ -50,8 +50,20 @@ O que já funciona nesta fase:
 | GET | `/api/v1/alerts` | Alertas do usuário |
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
-> engine não existe) — nunca dados fictícios. O provider de dados é `mock`
-> (SIMULADO, marcado explicitamente) até a FASE 13.
+> engine não existe) — nunca dados fictícios. O provider de dados é escolhido
+> por `WEATHER_PROVIDER`: `mock` (SIMULADO, marcado explicitamente) ou
+> `inmet` (real, FASE 13 — ver [ADR-0006](docs/adr/0006-integracao-real-inmet.md)).
+
+## Provedor meteorológico real (INMET, FASE 13)
+
+Defina `WEATHER_PROVIDER=inmet` no `.env` para usar a API pública do INMET
+(estações automáticas) em vez do mock. Não exige token para o que o pipeline
+consome hoje (leituras horárias). Limitações documentadas no ADR-0006:
+células de tempestade são aproximadas a partir da taxa de chuva (relação de
+Marshall–Palmer, não refletividade de radar real), avisos são casados por
+estado (UF) e não por polígono exato, e `forecast` ainda retorna vazio
+(pendente resolução de geocódigo IBGE). CEMADEN e radar real ficam para uma
+fase futura.
 
 ## Documentação
 

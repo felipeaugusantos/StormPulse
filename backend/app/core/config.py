@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     # --- Weather source (FASE 5) ---
     weather_provider: str = "mock"
 
+    # --- INMET real provider (FASE 13) ---
+    inmet_base_url: str = "https://apitempo.inmet.gov.br"
+    inmet_avisos_url: str = "https://apiprevmet3.inmet.gov.br"
+    inmet_api_token: SecretStr | None = None
+    inmet_http_timeout_seconds: float = Field(default=10.0, gt=0)
+    inmet_min_rain_rate_mm_h: float = Field(default=4.0, gt=0)
+    inmet_max_station_distance_km: float = Field(default=100.0, gt=0)
+
     @model_validator(mode="after")
     def _forbid_dev_secret_in_production(self) -> Settings:
         if self.environment == "production" and (

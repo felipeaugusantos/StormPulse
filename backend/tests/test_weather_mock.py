@@ -43,4 +43,4 @@ def test_factory_returns_mock_by_default() -> None:
 
 def test_factory_rejects_unknown_provider() -> None:
     with pytest.raises(ValueError, match="Unknown weather provider"):
-        get_weather_provider(Settings(environment="test", weather_provider="inmet"))
+        get_weather_provider(Settings(environment="test", weather_provider="nao_existe"))

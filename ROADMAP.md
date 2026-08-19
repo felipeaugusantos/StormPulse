@@ -18,7 +18,7 @@ automaticamente para a próxima.
 | **10** | Workers | Celery + Beat, pipeline provider→engine→risco→alerta→notificação (persistido) | ✅ Concluída |
 | **11** | Dashboard básico | Web admin (React+Vite+MapLibre): mapa, células, alertas, locais, status | ✅ Concluída |
 | **12** | Aplicativo mobile | Expo (React Native): login, locais com risco, alertas (mapa MapLibre + FCM: próximo incremento) | ✅ Concluída |
-| **13** | Integração meteorológica real | INMET / INPE-CPTEC / CEMADEN / radares regionais | ⬜ Pendente |
+| **13** | Integração meteorológica real | `InmetWeatherProvider` real (estações automáticas); células aproximadas por chuva→dBZ (Marshall–Palmer); avisos por UF; sem CEMADEN/radar real; previsão pendente (ver [ADR-0006](docs/adr/0006-integracao-real-inmet.md)) | ✅ Concluída |
 | **14** | Hardening | Testes ampliados, observabilidade (OTel), rate limiting, segurança | ⬜ Pendente |
 
 ## Escopo do MVP (fases 1–10)
