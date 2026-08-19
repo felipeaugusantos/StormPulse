@@ -81,6 +81,19 @@ mypy app tests
 Os testes de health cobrem liveness, readiness (deps ok e falha → 503),
 propagação de `X-Request-ID` / `X-Correlation-ID` e o OpenAPI.
 
+### CI (GitHub Actions)
+
+O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda a cada
+push/PR:
+
+- **backend** — `ruff check`, `ruff format --check`, `mypy` (strict) e `pytest`.
+- **docker** — `docker compose build`, sobe a stack completa
+  (Postgres+PostGIS, Redis, API) e faz *smoke test* real dos endpoints
+  `/health` e `/ready`.
+
+Assim o build/execução Docker é validado de verdade no CI, sem depender do
+ambiente local.
+
 ---
 
 ## Como criar migrations (Alembic)
