@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.alerts.models import Alert
 from app.core.config import Settings
-from app.core.enums import AlertEventType, WeatherSourceKind
+from app.core.enums import AlertEventType, RiskLevel, WeatherSourceKind
 from app.locations.models import Location
 from app.tenants.models import Tenant
 from app.users.models import User
@@ -35,7 +35,7 @@ from app.weather.provider import (
     Warning,
     WeatherProvider,
 )
-from workers.agro_pipeline import dry_streak_days, run_agro_advisory_cycle
+from workers.agro_pipeline import classify_frost_days, dry_streak_days, run_agro_advisory_cycle
 from workers.db import session_scope
 
 pytestmark = pytest.mark.integration
@@ -71,6 +71,35 @@ def test_dry_streak_wet_first_day_is_zero() -> None:
     today = date(2026, 8, 20)
     daily = [DailyRainfall(date=today, total_mm=10.0)]
     assert dry_streak_days(daily, threshold_mm=1.0) == 0
+
+
+def test_classify_frost_days_splits_severe_and_light() -> None:
+    day1 = datetime(2026, 8, 21, 6, 0, tzinfo=UTC)
+    day2 = datetime(2026, 8, 22, 6, 0, tzinfo=UTC)
+    day3 = datetime(2026, 8, 23, 6, 0, tzinfo=UTC)
+    points = [
+        ForecastPoint(time=day1, temperature_min_c=1.5),  # severe
+        ForecastPoint(time=day2, temperature_min_c=5.5),  # light
+        ForecastPoint(time=day3, temperature_min_c=12.0),  # neither
+    ]
+    severe, light = classify_frost_days(points, severe_threshold_c=3.0, light_threshold_c=6.0)
+    assert [p.time for p in severe] == [day1]
+    assert [p.time for p in light] == [day2]
+
+
+def test_classify_frost_days_ignores_points_without_min_temp() -> None:
+    points = [ForecastPoint(time=datetime.now(UTC), temperature_min_c=None)]
+    severe, light = classify_frost_days(points, severe_threshold_c=3.0, light_threshold_c=6.0)
+    assert severe == []
+    assert light == []
+
+
+def test_classify_frost_days_boundary_is_severe_not_light() -> None:
+    """Exactly at the severe threshold counts as severe, not light."""
+    point = ForecastPoint(time=datetime.now(UTC), temperature_min_c=3.0)
+    severe, light = classify_frost_days([point], severe_threshold_c=3.0, light_threshold_c=6.0)
+    assert len(severe) == 1
+    assert light == []
 
 
 class _FakeProvider(WeatherProvider):
@@ -183,6 +212,28 @@ def test_frost_alert_emitted_when_forecast_min_at_or_below_threshold() -> None:
             )
         ).one()
         assert "2.0" in alert.message
+        session.rollback()
+
+
+def test_light_frost_alert_uses_yellow_level_and_says_leve() -> None:
+    with session_scope() as session:
+        location = _make_location(session)
+        settings = Settings(
+            environment="test", agro_frost_threshold_c=3.0, agro_frost_light_threshold_c=6.0
+        )
+        provider = _FakeProvider(frost_temp_c=5.5, dry_days=0)
+
+        run_agro_advisory_cycle(session, settings=settings, provider=provider)
+
+        alert = session.scalars(
+            select(Alert).where(
+                Alert.event_type == AlertEventType.FROST_WARNING,
+                Alert.location_id == location.id,
+            )
+        ).one()
+        assert alert.level == RiskLevel.YELLOW
+        assert "leve" in alert.message.lower()
+        assert "forte" not in alert.message.lower()
         session.rollback()
 
 

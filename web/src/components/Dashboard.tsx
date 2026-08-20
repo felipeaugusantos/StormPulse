@@ -3,6 +3,8 @@ import { ApiError, api, clearToken, publicApi, readiness } from '../api'
 import type {
   AlertItem,
   ConvectiveWatch,
+  ForecastPoint,
+  LightningStrike,
   LocationItem,
   Me,
   ReadyStatus,
@@ -10,6 +12,12 @@ import type {
   SprayWindow,
   StormCell,
 } from '../types'
+import {
+  classifyFrostDays,
+  evaluateTrafficability,
+  formatFrostDays,
+  type Trafficability,
+} from '../agro'
 import { timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { LocationSearchCard } from './LocationSearchCard'
@@ -31,6 +39,7 @@ export function Dashboard({ onLogout }: Props) {
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
   const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
+  const [lightning, setLightning] = useState<LightningStrike[]>([])
   const [showSatelliteImage, setShowSatelliteImage] = useState(true)
   const [ready, setReady] = useState<ReadyStatus | null>(null)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
@@ -42,7 +51,7 @@ export function Dashboard({ onLogout }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [meRes, stormsRes, locsRes, alertsRes, satelliteRes, satelliteImageRes] =
+      const [meRes, stormsRes, locsRes, alertsRes, satelliteRes, satelliteImageRes, lightningRes] =
         await Promise.all([
           api.me(),
           api.storms(),
@@ -50,6 +59,7 @@ export function Dashboard({ onLogout }: Props) {
           api.alerts(),
           api.satelliteWatches(),
           publicApi.satelliteImage(),
+          api.lightning(),
         ])
       setMe(meRes)
       setStorms(stormsRes)
@@ -57,6 +67,7 @@ export function Dashboard({ onLogout }: Props) {
       setAlerts(alertsRes)
       setSatelliteWatches(satelliteRes)
       setSatelliteImage(satelliteImageRes)
+      setLightning(lightningRes)
       setUpdatedAt(new Date())
       setError(null)
     } catch (err) {
@@ -172,6 +183,9 @@ export function Dashboard({ onLogout }: Props) {
 
       <div className="dashboard-body">
         {error && <div className="panel error">⚠️ {error}</div>}
+        {pushStatus === 'error' && pushError && (
+          <div className="panel error">🔔 {pushError}</div>
+        )}
 
         <div className="top-cards">
           <LocationSearchCard
@@ -208,6 +222,7 @@ export function Dashboard({ onLogout }: Props) {
             locations={locations}
             satelliteWatches={satelliteWatches}
             satelliteImage={showSatelliteImage ? satelliteImage : null}
+            lightning={lightning}
           />
           <div className="map-legend">
             <span className="legend-item">
@@ -228,6 +243,12 @@ export function Dashboard({ onLogout }: Props) {
             <span className="legend-item">
               <span className="swatch" style={{ background: '#a78bfa' }} /> satélite
             </span>
+            {lightning.length > 0 && (
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#fde047' }} /> raios (
+                {lightning.length})
+              </span>
+            )}
             {satelliteImage && (
               <label className="legend-item satellite-image-toggle">
                 <input
@@ -364,17 +385,24 @@ function SatelliteWatchesPanel({
   )
 }
 
-// Mirrors the backend default (AGRO_FROST_THRESHOLD_C) for the client-side
-// derivation below — a generic agronomic reference, not crop-specific;
-// see ADR-0014. Not fetched dynamically: same reasoning as other
-// thresholds already baked into this dashboard.
+// Mirrors the backend defaults (AGRO_FROST_THRESHOLD_C/
+// AGRO_FROST_LIGHT_THRESHOLD_C) for the client-side derivation below —
+// generic agronomic references, not crop-specific; see ADR-0014/ADR-0018.
+// Not fetched dynamically: same reasoning as other thresholds already
+// baked into this dashboard.
 const FROST_THRESHOLD_C = 3
+const FROST_LIGHT_THRESHOLD_C = 6
+const TRAFFICABILITY_DRY_DAYS = 2
+const TRAFFICABILITY_RAIN_THRESHOLD_MM = 1
+const TRAFFICABILITY_LOOKAHEAD_DAYS = 2
 
 interface AgroEntry {
-  frostRisk: boolean
+  severeFrostDays: ForecastPoint[]
+  lightFrostDays: ForecastPoint[]
   sprayWindow: SprayWindow | null
   rainfallTotalMm: number | null
   rainfallDays: number
+  trafficability: Trafficability | null
   error: string | null
 }
 
@@ -404,18 +432,29 @@ function AgroPanel({
               api.sprayWindow(l.id).catch(() => null),
               api.rainfall(l.id).catch(() => null),
             ])
+            const { severe, light } = classifyFrostDays(
+              forecast?.points ?? [],
+              FROST_THRESHOLD_C,
+              FROST_LIGHT_THRESHOLD_C,
+            )
             return [
               l.id,
               {
-                frostRisk:
-                  forecast?.points.some(
-                    (p) => p.temperature_min_c != null && p.temperature_min_c <= FROST_THRESHOLD_C,
-                  ) ?? false,
+                severeFrostDays: severe,
+                lightFrostDays: light,
                 sprayWindow,
                 rainfallTotalMm: rainfall
                   ? rainfall.daily.reduce((sum, d) => sum + d.total_mm, 0)
                   : null,
                 rainfallDays: rainfall?.daily.length ?? 0,
+                trafficability:
+                  rainfall && forecast
+                    ? evaluateTrafficability(rainfall.daily, forecast.points, {
+                        requiredDryDays: TRAFFICABILITY_DRY_DAYS,
+                        rainThresholdMm: TRAFFICABILITY_RAIN_THRESHOLD_MM,
+                        lookaheadDays: TRAFFICABILITY_LOOKAHEAD_DAYS,
+                      })
+                    : null,
                 error:
                   forecast == null && sprayWindow == null && rainfall == null
                     ? 'Dados agro indisponíveis no momento'
@@ -426,10 +465,12 @@ function AgroPanel({
             return [
               l.id,
               {
-                frostRisk: false,
+                severeFrostDays: [],
+                lightFrostDays: [],
                 sprayWindow: null,
                 rainfallTotalMm: null,
                 rainfallDays: 0,
+                trafficability: null,
                 error: 'Dados agro indisponíveis no momento',
               },
             ]
@@ -479,9 +520,15 @@ function AgroPanel({
                 {entry?.error && <div className="sub">⚠️ {entry.error}</div>}
                 {entry && !entry.error && (
                   <div className="agro-section">
-                    {entry.frostRisk && (
+                    {entry.severeFrostDays.length > 0 && (
                       <div className="agro-row warn">
-                        ❄️ Risco de geada nos próximos dias (mínima ≤ {FROST_THRESHOLD_C}°C)
+                        ❄️ Geada forte (≤{FROST_THRESHOLD_C}°C): {formatFrostDays(entry.severeFrostDays)}
+                      </div>
+                    )}
+                    {entry.lightFrostDays.length > 0 && (
+                      <div className="agro-row warn">
+                        🌡️ Risco leve de geada (≤{FROST_LIGHT_THRESHOLD_C}°C):{' '}
+                        {formatFrostDays(entry.lightFrostDays)}
                       </div>
                     )}
                     {entry.sprayWindow && (
@@ -498,11 +545,13 @@ function AgroPanel({
                           ? 'não avaliável'
                           : entry.sprayWindow.safe
                             ? 'janela segura pra pulverizar'
-                            : entry.sprayWindow.rain_probability_percent != null &&
-                                entry.sprayWindow.rain_probability_percent >=
-                                  entry.sprayWindow.max_rain_probability_percent
-                              ? `chuva provável (${entry.sprayWindow.rain_probability_percent}%)`
-                              : `vento acima do limite de ${entry.sprayWindow.max_wind_kmh.toFixed(0)} km/h`}
+                            : entry.sprayWindow.inversion_risk
+                              ? 'risco de inversão térmica (vento calmo + umidade alta)'
+                              : entry.sprayWindow.rain_probability_percent != null &&
+                                  entry.sprayWindow.rain_probability_percent >=
+                                    entry.sprayWindow.max_rain_probability_percent
+                                ? `chuva provável (${entry.sprayWindow.rain_probability_percent}%)`
+                                : `vento acima do limite de ${entry.sprayWindow.max_wind_kmh.toFixed(0)} km/h`}
                       </div>
                     )}
                     {entry.rainfallTotalMm != null && (
@@ -511,9 +560,22 @@ function AgroPanel({
                         dias)
                       </div>
                     )}
-                    {!entry.frostRisk && !entry.sprayWindow && entry.rainfallTotalMm == null && (
-                      <div className="agro-row sub">Sem sinais no momento.</div>
+                    {entry.trafficability && entry.trafficability !== 'unknown' && (
+                      <div
+                        className={`agro-row ${entry.trafficability === 'not_trafficable' ? 'warn' : ''}`}
+                      >
+                        🚜{' '}
+                        {entry.trafficability === 'trafficable'
+                          ? 'solo seco — favorável para manejo/colheita'
+                          : 'solo úmido/chuva prevista — evitar manejo pesado'}
+                      </div>
                     )}
+                    {entry.severeFrostDays.length === 0 &&
+                      entry.lightFrostDays.length === 0 &&
+                      !entry.sprayWindow &&
+                      entry.rainfallTotalMm == null && (
+                        <div className="agro-row sub">Sem sinais no momento.</div>
+                      )}
                   </div>
                 )}
               </div>

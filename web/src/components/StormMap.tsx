@@ -7,13 +7,20 @@ import type {
   StyleSpecification,
 } from 'maplibre-gl'
 import { satelliteImagePngUrl } from '../api'
-import type { ConvectiveWatch, LocationItem, SatelliteImageMeta, StormCell } from '../types'
+import type {
+  ConvectiveWatch,
+  LightningStrike,
+  LocationItem,
+  SatelliteImageMeta,
+  StormCell,
+} from '../types'
 
 interface Props {
   storms: StormCell[]
   locations: LocationItem[]
   satelliteWatches?: ConvectiveWatch[]
   satelliteImage?: SatelliteImageMeta | null
+  lightning?: LightningStrike[]
 }
 
 export interface StormMapHandle {
@@ -22,6 +29,7 @@ export interface StormMapHandle {
 }
 
 const SATELLITE_WATCH_COLOR = '#a78bfa'
+const LIGHTNING_COLOR = '#fde047'
 
 const SEVERITY_COLOR: Record<string, string> = {
   weak: '#37d39b',
@@ -76,6 +84,17 @@ function satelliteWatchesGeoJSON(watches: ConvectiveWatch[]) {
   }
 }
 
+function lightningGeoJSON(strikes: LightningStrike[]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: strikes.map((s) => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [s.longitude, s.latitude] },
+      properties: { id: s.id },
+    })),
+  }
+}
+
 function imageCoordinates(
   bbox: [number, number, number, number],
 ): [[number, number], [number, number], [number, number], [number, number]] {
@@ -90,7 +109,7 @@ function imageCoordinates(
 }
 
 export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
-  { storms, locations, satelliteWatches = [], satelliteImage = null },
+  { storms, locations, satelliteWatches = [], satelliteImage = null, lightning = [] },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -157,6 +176,20 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
           'circle-stroke-color': '#0b1120',
         },
       })
+      map.addSource('lightning', { type: 'geojson', data: lightningGeoJSON([]) })
+      // On top of everything — the most immediate, time-sensitive signal
+      // on the map (API-REDEMET STSC, FASE 23).
+      map.addLayer({
+        id: 'lightning',
+        type: 'circle',
+        source: 'lightning',
+        paint: {
+          'circle-radius': 3,
+          'circle-color': LIGHTNING_COLOR,
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#78350f',
+        },
+      })
       readyRef.current = true
     })
 
@@ -176,10 +209,12 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
       const cells = map.getSource('cells') as GeoJSONSource | undefined
       const locs = map.getSource('locations') as GeoJSONSource | undefined
       const watches = map.getSource('satellite-watches') as GeoJSONSource | undefined
-      if (!cells || !locs || !watches) return
+      const strikes = map.getSource('lightning') as GeoJSONSource | undefined
+      if (!cells || !locs || !watches || !strikes) return
       cells.setData(cellsGeoJSON(storms))
       locs.setData(locationsGeoJSON(locations))
       watches.setData(satelliteWatchesGeoJSON(satelliteWatches))
+      strikes.setData(lightningGeoJSON(lightning))
 
       if (satelliteImage) {
         const url = satelliteImagePngUrl(satelliteImage.captured_at)
@@ -223,7 +258,7 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
 
     if (readyRef.current) apply()
     else map.once('load', apply)
-  }, [storms, locations, satelliteWatches, satelliteImage])
+  }, [storms, locations, satelliteWatches, satelliteImage, lightning])
 
   return <div className="map" ref={containerRef} />
 })

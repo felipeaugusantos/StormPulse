@@ -59,6 +59,9 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@stormpulse.example}
+      LIGHTNING_ENABLED: ${LIGHTNING_ENABLED:-false}
+      REDEMET_API_KEY: ${REDEMET_API_KEY:-}
+      REDEMET_BASE_URL: ${REDEMET_BASE_URL:-https://api-redemet.decea.mil.br}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -89,6 +92,9 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@stormpulse.example}
+      LIGHTNING_ENABLED: ${LIGHTNING_ENABLED:-false}
+      REDEMET_API_KEY: ${REDEMET_API_KEY:-}
+      REDEMET_BASE_URL: ${REDEMET_BASE_URL:-https://api-redemet.decea.mil.br}
     depends_on:
       db:
         condition: service_healthy

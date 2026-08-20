@@ -59,6 +59,7 @@ class MockWeatherProvider(WeatherProvider):
             wind_kmh=round(5 + 30 * w, 1),
             wind_gusts_kmh=round(10 + 60 * w, 1),
             precipitation_mm=round(20 * self._wave(latitude, longitude, 1.5), 1),
+            relative_humidity_percent=round(50 + 40 * self._wave(latitude, longitude, 3.0), 1),
         )
 
     async def get_radar_frames(self, *, limit: int = 1) -> list[RadarFrameData]:

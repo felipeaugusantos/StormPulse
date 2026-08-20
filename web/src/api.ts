@@ -3,6 +3,7 @@ import type {
   ConvectiveWatch,
   CurrentConditions,
   Forecast,
+  LightningStrike,
   LocationItem,
   Me,
   PushSubscriptionInput,
@@ -162,6 +163,7 @@ export const api = {
   currentConditions: (locationId: string) =>
     request<CurrentConditions>(`/locations/${locationId}/current`),
   satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),
+  lightning: () => request<LightningStrike[]>('/lightning'),
   sprayWindow: (locationId: string) =>
     request<SprayWindow>(`/locations/${locationId}/agro/spray-window`),
   rainfall: (locationId: string, days = 15) =>
@@ -175,6 +177,7 @@ export const publicApi = {
   warnings: (lat: number, lon: number) =>
     request<WarningItem[]>(`/public/warnings?lat=${lat}&lon=${lon}`),
   satelliteWatches: () => request<ConvectiveWatch[]>('/public/satellite/watches'),
+  lightning: () => request<LightningStrike[]>('/public/lightning'),
   // No cycle has run yet (or SATELLITE_ENABLED=false) is a normal, common
   // state — treated as "no image", not an error, same spirit as an empty
   // watches list.

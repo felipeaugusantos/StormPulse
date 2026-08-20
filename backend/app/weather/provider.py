@@ -32,6 +32,7 @@ class CurrentConditions(BaseModel):
     wind_kmh: float | None = None
     wind_gusts_kmh: float | None = None
     precipitation_mm: float | None = None
+    relative_humidity_percent: float | None = None
 
 
 class RawCell(BaseModel):

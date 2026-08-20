@@ -18,6 +18,7 @@ from typing import Any
 
 import workers.tasks as tasks_module
 from workers.agro_pipeline import AgroCycleSummary
+from workers.lightning_pipeline import LightningCycleSummary
 from workers.notification_pipeline import NotificationDeliverySummary
 from workers.pipeline_service import CycleSummary
 from workers.satellite_pipeline import SatelliteCycleSummary
@@ -147,3 +148,30 @@ def test_run_notification_delivery_task_reports_unconfigured(monkeypatch: Any) -
 
     assert result["configured"] is False
     assert result["attempted"] == 0
+
+
+def test_run_lightning_detection_task_returns_summary_dict(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "run_lightning_detection_cycle",
+        lambda session: LightningCycleSummary(enabled=True, points_fetched=12, points_active=40),
+    )
+
+    result = tasks_module.run_lightning_detection_task()
+
+    assert result == {"enabled": True, "points_fetched": 12, "points_active": 40}
+
+
+def test_run_lightning_detection_task_reports_disabled(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "run_lightning_detection_cycle",
+        lambda session: LightningCycleSummary(enabled=False),
+    )
+
+    result = tasks_module.run_lightning_detection_task()
+
+    assert result["enabled"] is False
+    assert result["points_fetched"] == 0

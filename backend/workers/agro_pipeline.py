@@ -6,10 +6,14 @@ Two discrete, notification-worthy events, evaluated per monitored
 like storms, and running less often is kinder to INMET, which the rainfall
 history check calls once per day requested per location):
 
-- **Frost** (``FROST_WARNING``): any forecast point with ``temperature_min_c``
-  at or below ``settings.agro_frost_threshold_c`` (default 3.0°C — a common
-  generic agronomic reference for radiative-frost risk onset, not tuned to
-  any specific crop; see ADR-0014).
+- **Frost** (``FROST_WARNING``): every forecast day is classified into one
+  of two tiers — severe (``temperature_min_c`` at/below
+  ``settings.agro_frost_threshold_c``, default 3.0°C) or light (at/below
+  ``settings.agro_frost_light_threshold_c``, default 6.0°C) — same
+  two-threshold idea as Agritempo's frost forecast (ADR-0018). One alert
+  per location per day lists every affected date and its tier, rather than
+  a single yes/no for "any day". Thresholds are generic agronomic
+  references, not tuned to any specific crop; see ADR-0014.
 - **Dry spell** (``DRY_SPELL_WARNING``): N consecutive most-recent days with
   measured rainfall below ``settings.agro_dry_spell_rain_threshold_mm`` at
   the nearest station. Deliberately called a "dry spell" (sequência sem
@@ -41,11 +45,17 @@ from app.core.enums import AlertEventType, NotificationChannel, NotificationStat
 from app.locations.models import Location
 from app.notifications.models import Notification
 from app.weather.factory import get_weather_provider
-from app.weather.provider import DailyRainfall, WeatherProvider, WeatherProviderUnavailableError
+from app.weather.provider import (
+    DailyRainfall,
+    ForecastPoint,
+    WeatherProvider,
+    WeatherProviderUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
 
 _FROST_LEVEL = RiskLevel.RED
+_FROST_LIGHT_LEVEL = RiskLevel.YELLOW
 _DRY_SPELL_LEVEL = RiskLevel.ORANGE
 _RECOVERABLE = (WeatherProviderUnavailableError, httpx.HTTPError)
 
@@ -125,8 +135,39 @@ def dry_streak_days(daily: list[DailyRainfall], threshold_mm: float) -> int:
     return streak
 
 
+def classify_frost_days(
+    points: list[ForecastPoint], *, severe_threshold_c: float, light_threshold_c: float
+) -> tuple[list[ForecastPoint], list[ForecastPoint]]:
+    """Split forecast points into (severe, light) frost-risk tiers.
+
+    Severe: ``temperature_min_c <= severe_threshold_c`` (default 3°C —
+    established radiative-frost onset reference). Light: at or below
+    ``light_threshold_c`` (default 6°C) but above the severe one — an
+    earlier warning tier, same idea as Agritempo's two-threshold frost
+    forecast. Pure function, no I/O — unit-tested directly. Ordered by
+    date, earliest first.
+    """
+    with_min = [p for p in points if p.temperature_min_c is not None]
+    ordered = sorted(with_min, key=lambda p: p.time)
+    severe = [p for p in ordered if p.temperature_min_c <= severe_threshold_c]  # type: ignore[operator]
+    light = [
+        p
+        for p in ordered
+        if severe_threshold_c < p.temperature_min_c <= light_threshold_c  # type: ignore[operator]
+    ]
+    return severe, light
+
+
+def _format_frost_days(points: list[ForecastPoint]) -> str:
+    return ", ".join(f"{p.time.strftime('%d/%m')} ({p.temperature_min_c:.1f}°C)" for p in points)
+
+
 async def _check_frost(
-    session: Session, location: Location, provider: WeatherProvider, settings: Settings
+    session: Session,
+    location: Location,
+    provider: WeatherProvider,
+    settings: Settings,
+    now: datetime,
 ) -> bool:
     try:
         forecast = await provider.get_forecast(location.latitude, location.longitude)
@@ -134,31 +175,35 @@ async def _check_frost(
         logger.warning("agro: forecast unavailable for location %s (%s)", location.id, exc)
         return False
 
-    frost_point = next(
-        (
-            p
-            for p in forecast.points
-            if p.temperature_min_c is not None
-            and p.temperature_min_c <= settings.agro_frost_threshold_c
-        ),
-        None,
+    severe, light = classify_frost_days(
+        forecast.points,
+        severe_threshold_c=settings.agro_frost_threshold_c,
+        light_threshold_c=settings.agro_frost_light_threshold_c,
     )
-    if frost_point is None:
+    if not severe and not light:
         return False
 
-    day_str = frost_point.time.date().isoformat()
+    parts = []
+    if severe:
+        parts.append(
+            f"Geada forte prevista (≤{settings.agro_frost_threshold_c:.1f}°C): "
+            f"{_format_frost_days(severe)}"
+        )
+    if light:
+        parts.append(
+            f"Risco leve de geada (≤{settings.agro_frost_light_threshold_c:.1f}°C): "
+            f"{_format_frost_days(light)}"
+        )
+
+    today_str = now.date().isoformat()
     return _emit_alert(
         session,
         location=location,
         event=AlertEventType.FROST_WARNING,
-        level=_FROST_LEVEL,
+        level=_FROST_LEVEL if severe else _FROST_LIGHT_LEVEL,
         title=f"Risco de geada em {location.name}",
-        message=(
-            f"Previsão de mínima de {frost_point.temperature_min_c:.1f}°C em "
-            f"{frost_point.time.strftime('%d/%m')} — abaixo do limiar de "
-            f"{settings.agro_frost_threshold_c:.1f}°C usado para risco de geada."
-        ),
-        dedup_key=_dedup_key(AlertEventType.FROST_WARNING, location.id, day_str),
+        message=" · ".join(parts) + ".",
+        dedup_key=_dedup_key(AlertEventType.FROST_WARNING, location.id, today_str),
     )
 
 
@@ -209,7 +254,7 @@ async def _run_all_locations(
     frost_count = 0
     dry_spell_count = 0
     for location in locations:
-        if await _check_frost(session, location, provider, settings):
+        if await _check_frost(session, location, provider, settings, now):
             frost_count += 1
         if await _check_dry_spell(session, location, provider, settings, now):
             dry_spell_count += 1

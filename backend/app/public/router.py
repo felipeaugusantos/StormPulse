@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.core.config import Settings, get_settings
+from app.lightning import service as lightning_service
+from app.lightning.schemas import LightningStrikeOut
 from app.satellite import service as satellite_service
 from app.satellite.schemas import ConvectiveWatchOut, SatelliteImageMetaOut
 from app.storms import service as storm_service
@@ -110,6 +112,18 @@ async def public_satellite_image_png(
         media_type="image/png",
         headers={"Cache-Control": "no-cache"},
     )
+
+
+@router.get(
+    "/lightning",
+    response_model=list[LightningStrikeOut],
+    summary="Raios recentes (público)",
+)
+async def public_lightning(
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(default=1000, ge=1, le=5000),
+) -> object:
+    return await lightning_service.list_recent_strikes(session, limit=limit)
 
 
 @router.get(

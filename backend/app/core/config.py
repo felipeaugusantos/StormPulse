@@ -111,6 +111,20 @@ class Settings(BaseSettings):
     satellite_grid_resolution_km: float = Field(default=4.0, gt=0)
     satellite_max_watch_age_hours: float = Field(default=3.0, gt=0)
 
+    # --- Raios / descargas atmosféricas (API-REDEMET STSC, FASE 23) ---
+    # Off by default — precisa de cadastro/chave (ver ADR-0019). Sinal mais
+    # direto de convecção ativa que temos: diferente de StormCell (taxa de
+    # chuva) e ConvectiveWatch (topo de nuvem fria via satélite), é detecção
+    # real de descarga, não uma proxy indireta.
+    lightning_enabled: bool = False
+    redemet_api_key: SecretStr | None = None
+    redemet_base_url: str = "https://api-redemet.decea.mil.br"
+    lightning_http_timeout_seconds: float = Field(default=15.0, gt=0)
+    # Quanto tempo um raio detectado continua aparecendo no mapa antes de
+    # ser considerado obsoleto e removido — é um instantâneo do "agora", não
+    # um histórico permanente (mesmo espírito do SatelliteImage).
+    lightning_retention_minutes: float = Field(default=30.0, gt=0)
+
     # --- INPE/CPTEC forecast (redundância, FASE 17) ---
     # Serviço XML público do CPTEC — sem chave, sem geocódigo (aceita
     # lat/lon direto). Usado como fallback automático de `get_current_data`
@@ -140,6 +154,10 @@ class Settings(BaseSettings):
     # específicas por cultura — ver ADR-0014.
     agro_enabled: bool = True
     agro_frost_threshold_c: float = 3.0
+    # Lighter, earlier-warning tier — see ADR-0018 (Agritempo comparison).
+    # Any day at/below this (but above the severe threshold) is reported as
+    # "risco leve", never silently merged into the severe warning.
+    agro_frost_light_threshold_c: float = 6.0
     agro_dry_spell_window_days: int = Field(default=15, gt=0)
     agro_dry_spell_min_days: int = Field(default=7, gt=0)
     agro_dry_spell_rain_threshold_mm: float = Field(default=1.0, ge=0)
@@ -148,6 +166,12 @@ class Settings(BaseSettings):
     # available (Open-Meteo, FASE 20) — INMET/CPTEC leave it unset, so this
     # simply doesn't disqualify the window when the source can't say.
     agro_spray_max_rain_probability_percent: int = Field(default=30, ge=0, le=100)
+    # Thermal-inversion signature (ADR-0018): calm wind + high humidity,
+    # classic at dawn — spray drifts instead of settling on the crop. Only
+    # weighed in when the active source reports humidity (Open-Meteo/INMET;
+    # CPTEC never gives current conditions at all).
+    agro_spray_inversion_max_wind_kmh: float = Field(default=3.0, ge=0)
+    agro_spray_inversion_min_humidity_percent: float = Field(default=90.0, ge=0, le=100)
 
     # --- Notificação push real (Web Push / VAPID, FASE 22) ---
     # Sem serviço externo (FCM/APNs) — o navegador é o próprio serviço de

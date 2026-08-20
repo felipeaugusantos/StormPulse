@@ -87,6 +87,14 @@ export interface ConvectiveWatch {
   experimental: boolean
 }
 
+export interface LightningStrike {
+  id: string
+  detected_at: string
+  latitude: number
+  longitude: number
+  is_mock: boolean
+}
+
 export interface SatelliteImageMeta {
   captured_at: string
   bbox: [number, number, number, number]
@@ -102,6 +110,8 @@ export interface SprayWindow {
   rain_probability_percent: number | null
   rain_expected_mm: number | null
   max_rain_probability_percent: number
+  humidity_percent: number | null
+  inversion_risk: boolean
   safe: boolean | null
 }
 

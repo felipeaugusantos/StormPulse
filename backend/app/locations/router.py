@@ -202,7 +202,17 @@ async def get_location_spray_window(
         rain_probability is not None
         and rain_probability >= settings.agro_spray_max_rain_probability_percent
     )
-    safe = None if wind_safe is None else (wind_safe and not rain_unsafe)
+    # Thermal inversion (ADR-0018): calm *steady* wind (not gusts — a gust
+    # doesn't mean the air is mixing) plus high humidity is the classic
+    # dawn signature that makes spray drift instead of settling. Only
+    # evaluated when the source actually reports humidity.
+    inversion_risk = (
+        current.wind_kmh is not None
+        and current.relative_humidity_percent is not None
+        and current.wind_kmh <= settings.agro_spray_inversion_max_wind_kmh
+        and current.relative_humidity_percent >= settings.agro_spray_inversion_min_humidity_percent
+    )
+    safe = None if wind_safe is None else (wind_safe and not rain_unsafe and not inversion_risk)
 
     return SprayWindowOut(
         wind_kmh=current.wind_kmh,
@@ -211,6 +221,8 @@ async def get_location_spray_window(
         rain_probability_percent=rain_probability,
         rain_expected_mm=rain_mm,
         max_rain_probability_percent=settings.agro_spray_max_rain_probability_percent,
+        humidity_percent=current.relative_humidity_percent,
+        inversion_risk=inversion_risk,
         safe=safe,
     )
 

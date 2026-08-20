@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, publicApi } from '../api'
 import { timeAgo } from '../format'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
-import type { ConvectiveWatch, SatelliteImageMeta, StormCell, WarningItem } from '../types'
+import type {
+  ConvectiveWatch,
+  LightningStrike,
+  SatelliteImageMeta,
+  StormCell,
+  WarningItem,
+} from '../types'
 import { StormMap, type StormMapHandle } from './LazyStormMap'
 
 interface Props {
@@ -22,20 +28,24 @@ export function VisitorView({ onBack }: Props) {
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
   const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
   const [showSatelliteImage, setShowSatelliteImage] = useState(true)
+  const [lightning, setLightning] = useState<LightningStrike[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const [stormsRes, warningsRes, satelliteRes, satelliteImageRes] = await Promise.all([
-        publicApi.storms(),
-        publicApi.warnings(REFERENCE_POINT.lat, REFERENCE_POINT.lon),
-        publicApi.satelliteWatches(),
-        publicApi.satelliteImage(),
-      ])
+      const [stormsRes, warningsRes, satelliteRes, satelliteImageRes, lightningRes] =
+        await Promise.all([
+          publicApi.storms(),
+          publicApi.warnings(REFERENCE_POINT.lat, REFERENCE_POINT.lon),
+          publicApi.satelliteWatches(),
+          publicApi.satelliteImage(),
+          publicApi.lightning(),
+        ])
       setStorms(stormsRes)
       setWarnings(warningsRes)
       setSatelliteWatches(satelliteRes)
       setSatelliteImage(satelliteImageRes)
+      setLightning(lightningRes)
       setError(null)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao carregar')
@@ -75,17 +85,26 @@ export function VisitorView({ onBack }: Props) {
             locations={[]}
             satelliteWatches={satelliteWatches}
             satelliteImage={showSatelliteImage ? satelliteImage : null}
+            lightning={lightning}
           />
-          {satelliteImage && (
+          {(satelliteImage || lightning.length > 0) && (
             <div className="map-legend">
-              <label className="legend-item satellite-image-toggle standalone">
-                <input
-                  type="checkbox"
-                  checked={showSatelliteImage}
-                  onChange={(e) => setShowSatelliteImage(e.target.checked)}
-                />
-                imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
-              </label>
+              {lightning.length > 0 && (
+                <span className="legend-item">
+                  <span className="swatch" style={{ background: '#fde047' }} /> raios (
+                  {lightning.length})
+                </span>
+              )}
+              {satelliteImage && (
+                <label className="legend-item satellite-image-toggle standalone">
+                  <input
+                    type="checkbox"
+                    checked={showSatelliteImage}
+                    onChange={(e) => setShowSatelliteImage(e.target.checked)}
+                  />
+                  imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
+                </label>
+              )}
             </div>
           )}
         </div>

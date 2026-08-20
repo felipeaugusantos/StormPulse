@@ -67,6 +67,7 @@ _TEMP_KEYS = ("TEM_INS", "TEMPERATURA", "tem_ins")
 _WIND_KEYS = ("VEN_VEL", "VENTO_VELOCIDADE", "ven_vel")
 _GUST_KEYS = ("VEN_RAJ", "VENTO_RAJADA", "ven_raj")
 _RAIN_KEYS = ("CHUVA", "PRECIPITACAO", "chuva")
+_HUMIDITY_KEYS = ("UMD_INS", "UMIDADE", "umd_ins")
 _DATE_KEYS = ("DT_MEDICAO", "dt_medicao")
 _HOUR_KEYS = ("HR_MEDICAO", "hr_medicao")
 
@@ -223,6 +224,7 @@ class InmetWeatherProvider(WeatherProvider):
             wind_kmh=None if wind_ms is None else round(wind_ms * 3.6, 1),
             wind_gusts_kmh=None if gust_ms is None else round(gust_ms * 3.6, 1),
             precipitation_mm=_as_float(latest, _RAIN_KEYS),
+            relative_humidity_percent=_as_float(latest, _HUMIDITY_KEYS),
         )
 
     def _latest_reading(self, readings: list[dict[str, Any]]) -> dict[str, Any] | None:

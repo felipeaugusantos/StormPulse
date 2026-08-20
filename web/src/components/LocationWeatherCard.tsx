@@ -1,11 +1,22 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { CurrentConditions, ForecastPoint, LocationItem, SprayWindow } from '../types'
+import { classifyFrostDays, evaluateTrafficability, formatFrostDays } from '../agro'
+import type {
+  CurrentConditions,
+  DailyRainfall,
+  ForecastPoint,
+  LocationItem,
+  SprayWindow,
+} from '../types'
 
-// Mirrors AGRO_FROST_THRESHOLD_C default — see Dashboard.tsx's own copy of
-// this same constant and ADR-0014.
+// Mirrors the backend's AGRO_FROST_THRESHOLD_C/AGRO_FROST_LIGHT_THRESHOLD_C
+// defaults — see ADR-0014/ADR-0018.
 const FROST_THRESHOLD_C = 3
+const FROST_LIGHT_THRESHOLD_C = 6
 const DAYS_TO_SHOW = 5
+const TRAFFICABILITY_DRY_DAYS = 2
+const TRAFFICABILITY_RAIN_THRESHOLD_MM = 1
+const TRAFFICABILITY_LOOKAHEAD_DAYS = 2
 
 interface Props {
   location: LocationItem | null
@@ -15,6 +26,7 @@ export function LocationWeatherCard({ location }: Props) {
   const [current, setCurrent] = useState<CurrentConditions | null>(null)
   const [forecast, setForecast] = useState<ForecastPoint[] | null>(null)
   const [sprayWindow, setSprayWindow] = useState<SprayWindow | null>(null)
+  const [rainfall, setRainfall] = useState<DailyRainfall[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -23,6 +35,7 @@ export function LocationWeatherCard({ location }: Props) {
       setCurrent(null)
       setForecast(null)
       setSprayWindow(null)
+      setRainfall(null)
       setError(null)
       return
     }
@@ -31,15 +44,17 @@ export function LocationWeatherCard({ location }: Props) {
     setError(null)
 
     async function load() {
-      const [currentRes, forecastRes, sprayRes] = await Promise.all([
+      const [currentRes, forecastRes, sprayRes, rainfallRes] = await Promise.all([
         api.currentConditions(location!.id).catch(() => null),
         api.forecast(location!.id).catch(() => null),
         api.sprayWindow(location!.id).catch(() => null),
+        api.rainfall(location!.id).catch(() => null),
       ])
       if (cancelled) return
       setCurrent(currentRes)
       setForecast(forecastRes?.points ?? null)
       setSprayWindow(sprayRes)
+      setRainfall(rainfallRes?.daily ?? null)
       setLoading(false)
       if (currentRes == null && forecastRes == null) {
         setError('Dados indisponíveis para este local no momento')
@@ -67,9 +82,18 @@ export function LocationWeatherCard({ location }: Props) {
     .filter((p) => new Date(p.time) >= today)
     .slice(0, DAYS_TO_SHOW)
 
-  const frostRisk = upcoming.some(
-    (p) => p.temperature_min_c != null && p.temperature_min_c <= FROST_THRESHOLD_C,
+  const { severe: severeFrostDays, light: lightFrostDays } = classifyFrostDays(
+    upcoming,
+    FROST_THRESHOLD_C,
+    FROST_LIGHT_THRESHOLD_C,
   )
+  const trafficability = rainfall
+    ? evaluateTrafficability(rainfall, upcoming, {
+        requiredDryDays: TRAFFICABILITY_DRY_DAYS,
+        rainThresholdMm: TRAFFICABILITY_RAIN_THRESHOLD_MM,
+        lookaheadDays: TRAFFICABILITY_LOOKAHEAD_DAYS,
+      })
+    : null
 
   return (
     <section className="panel">
@@ -106,24 +130,44 @@ export function LocationWeatherCard({ location }: Props) {
       )}
 
       <div className="agro-section">
-        {frostRisk && (
+        {severeFrostDays.length > 0 && (
           <div className="agro-row warn">
-            ❄️ Risco de geada nos próximos dias (mínima ≤ {FROST_THRESHOLD_C}°C)
+            ❄️ Geada forte prevista (≤{FROST_THRESHOLD_C}°C): {formatFrostDays(severeFrostDays)}
+          </div>
+        )}
+        {lightFrostDays.length > 0 && (
+          <div className="agro-row warn">
+            🌡️ Risco leve de geada (≤{FROST_LIGHT_THRESHOLD_C}°C): {formatFrostDays(lightFrostDays)}
           </div>
         )}
         {sprayWindow && (
           <div className={`agro-row ${sprayWindow.safe === false ? 'warn' : ''}`}>
             🌬️{' '}
-            {sprayWindow.wind_kmh != null ? `vento ${sprayWindow.wind_kmh.toFixed(0)} km/h` : 'vento indisponível'}
+            {sprayWindow.wind_kmh != null
+              ? `vento ${sprayWindow.wind_kmh.toFixed(0)} km/h`
+              : 'vento indisponível'}
             {sprayWindow.wind_gusts_kmh != null
               ? ` (rajada ${sprayWindow.wind_gusts_kmh.toFixed(0)} km/h)`
+              : ''}
+            {sprayWindow.humidity_percent != null
+              ? ` · umidade ${sprayWindow.humidity_percent.toFixed(0)}%`
               : ''}{' '}
             —{' '}
             {sprayWindow.safe == null
               ? 'não avaliável'
               : sprayWindow.safe
                 ? 'janela segura pra pulverizar'
-                : 'condições desfavoráveis'}
+                : sprayWindow.inversion_risk
+                  ? 'risco de inversão térmica (vento calmo + umidade alta) — deriva'
+                  : 'condições desfavoráveis'}
+          </div>
+        )}
+        {trafficability && trafficability !== 'unknown' && (
+          <div className={`agro-row ${trafficability === 'not_trafficable' ? 'warn' : ''}`}>
+            🚜{' '}
+            {trafficability === 'trafficable'
+              ? 'solo seco — condições favoráveis para manejo/colheita'
+              : 'solo úmido ou chuva prevista — evitar manejo pesado/colheita'}
           </div>
         )}
       </div>

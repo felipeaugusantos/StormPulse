@@ -12,10 +12,13 @@ populated here for the first time, not left ``None``.
 Two endpoints confirmed live for Ribeirão Preto (2026-08-20):
 
 - ``GET https://api.open-meteo.com/v1/forecast?latitude=..&longitude=..
-  &current=temperature_2m,wind_speed_10m,wind_gusts_10m,precipitation
+  &current=temperature_2m,wind_speed_10m,wind_gusts_10m,precipitation,
+  relative_humidity_2m
   &daily=temperature_2m_max,temperature_2m_min,precipitation_sum,
   precipitation_probability_max&timezone=UTC`` — current conditions +
-  7-day daily forecast.
+  7-day daily forecast. ``relative_humidity_2m`` feeds the spray-window
+  thermal-inversion check (FASE 22, ADR-0018) — calm wind + high humidity
+  is the classic dawn-inversion signature that causes spray drift.
 - ``GET https://archive-api.open-meteo.com/v1/archive?latitude=..
   &longitude=..&start_date=..&end_date=..&daily=precipitation_sum
   &timezone=UTC`` — historical daily rainfall, any date range (unlike
@@ -88,7 +91,10 @@ class OpenMeteoWeatherProvider(WeatherProvider):
             params={
                 "latitude": latitude,
                 "longitude": longitude,
-                "current": "temperature_2m,wind_speed_10m,wind_gusts_10m,precipitation",
+                "current": (
+                    "temperature_2m,wind_speed_10m,wind_gusts_10m,precipitation,"
+                    "relative_humidity_2m"
+                ),
                 "daily": (
                     "temperature_2m_max,temperature_2m_min,precipitation_sum,"
                     "precipitation_probability_max"
@@ -125,6 +131,7 @@ class OpenMeteoWeatherProvider(WeatherProvider):
             wind_kmh=current.get("wind_speed_10m"),
             wind_gusts_kmh=current.get("wind_gusts_10m"),
             precipitation_mm=current.get("precipitation"),
+            relative_humidity_percent=current.get("relative_humidity_2m"),
         )
 
     async def get_radar_frames(self, *, limit: int = 1) -> list[RadarFrameData]:

@@ -8,6 +8,7 @@ from typing import Any
 from workers.agro_pipeline import run_agro_advisory_cycle
 from workers.celery_app import celery_app
 from workers.db import session_scope
+from workers.lightning_pipeline import run_lightning_detection_cycle
 from workers.notification_pipeline import run_notification_delivery_cycle
 from workers.pipeline_service import run_ingestion_cycle
 from workers.satellite_pipeline import run_satellite_detection_cycle
@@ -84,4 +85,21 @@ def run_notification_delivery_task() -> dict[str, Any]:
         "suppressed": summary.suppressed,
     }
     logger.info("notification delivery cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_lightning_detection_task")
+def run_lightning_detection_task() -> dict[str, Any]:
+    """Run one lightning-strike detection cycle (API-REDEMET STSC — FASE 23).
+
+    No-op (returns immediately) when LIGHTNING_ENABLED=false — the default.
+    """
+    with session_scope() as session:
+        summary = run_lightning_detection_cycle(session)
+    result = {
+        "enabled": summary.enabled,
+        "points_fetched": summary.points_fetched,
+        "points_active": summary.points_active,
+    }
+    logger.info("lightning detection cycle complete", extra=result)
     return result

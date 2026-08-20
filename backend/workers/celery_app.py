@@ -48,5 +48,11 @@ celery_app.conf.update(
             # is empty.
             "schedule": 60.0,  # seconds
         },
+        "lightning-detect-every-5-minutes": {
+            "task": "workers.tasks.run_lightning_detection_task",
+            # Lightning is the fastest-changing signal in the system —
+            # matches the main ingestion cadence, not satellite's slower one.
+            "schedule": 300.0,  # seconds
+        },
     },
 )
