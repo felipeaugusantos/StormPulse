@@ -3,7 +3,6 @@ import { ApiError, api, clearToken, publicApi, readiness } from '../api'
 import type {
   AlertItem,
   ConvectiveWatch,
-  ForecastPoint,
   LocationItem,
   Me,
   ReadyStatus,
@@ -12,6 +11,8 @@ import type {
   StormCell,
 } from '../types'
 import { timeAgo } from '../format'
+import { LocationSearchCard } from './LocationSearchCard'
+import { LocationWeatherCard } from './LocationWeatherCard'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
 import { StormMap, type StormMapHandle } from './StormMap'
 
@@ -33,6 +34,7 @@ export function Dashboard({ onLogout }: Props) {
   const [ready, setReady] = useState<ReadyStatus | null>(null)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -74,7 +76,23 @@ export function Dashboard({ onLogout }: Props) {
     return () => clearInterval(t)
   }, [load])
 
+  useEffect(() => {
+    if (selectedLocationId != null && locations.some((l) => l.id === selectedLocationId)) return
+    const firstActive = locations.find((l) => l.is_active) ?? locations[0]
+    setSelectedLocationId(firstActive?.id ?? null)
+  }, [locations, selectedLocationId])
+
+  function handleLocationCreated(created: LocationItem) {
+    setLocations((prev) => [...prev, created])
+  }
+
+  function handleLocationDeleted(id: string) {
+    setLocations((prev) => prev.filter((l) => l.id !== id))
+    setSelectedLocationId((prev) => (prev === id ? null : prev))
+  }
+
   const mock = storms.some((s) => s.is_mock)
+  const selectedLocation = locations.find((l) => l.id === selectedLocationId) ?? null
 
   return (
     <>
@@ -104,155 +122,83 @@ export function Dashboard({ onLogout }: Props) {
       </header>
 
       <div className="dashboard-body">
-        <SummaryStrip
-          alertsCount={alerts.length}
-          agroAlertsCount={
-            alerts.filter(
-              (a) => a.event_type === 'frost_warning' || a.event_type === 'dry_spell_warning',
-            ).length
-          }
-          locationsCount={locations.filter((l) => l.is_active).length}
-          satelliteCount={satelliteWatches.length}
-          stormsCount={storms.length}
-        />
+        {error && <div className="panel error">⚠️ {error}</div>}
 
-        <div className="layout">
-          <div className="map-card">
-            <StormMap
-              ref={mapRef}
-              storms={storms}
-              locations={locations}
-              satelliteWatches={satelliteWatches}
-              satelliteImage={showSatelliteImage ? satelliteImage : null}
-            />
-            <div className="map-legend">
-              <span className="legend-item">
-                <span className="swatch" style={{ background: '#37d39b' }} /> fraca
-              </span>
-              <span className="legend-item">
-                <span className="swatch" style={{ background: '#f2c14e' }} /> moderada
-              </span>
-              <span className="legend-item">
-                <span className="swatch" style={{ background: '#f59e5b' }} /> forte
-              </span>
-              <span className="legend-item">
-                <span className="swatch" style={{ background: '#ef6d6d' }} /> severa
-              </span>
-              <span className="legend-item">
-                <span className="swatch" style={{ background: '#4cc2e6' }} /> local
-              </span>
-              <span className="legend-item">
-                <span className="swatch" style={{ background: '#a78bfa' }} /> satélite
-              </span>
-              {satelliteImage && (
-                <label className="legend-item satellite-image-toggle">
-                  <input
-                    type="checkbox"
-                    checked={showSatelliteImage}
-                    onChange={(e) => setShowSatelliteImage(e.target.checked)}
-                  />
-                  imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
-                </label>
-              )}
-            </div>
-          </div>
+        <div className="top-cards">
+          <LocationSearchCard
+            locations={locations}
+            selectedLocationId={selectedLocationId}
+            onSelectLocation={(id) => {
+              setSelectedLocationId(id)
+              const loc = locations.find((l) => l.id === id)
+              if (loc) mapRef.current?.flyTo(loc.latitude, loc.longitude)
+            }}
+            onLocationCreated={handleLocationCreated}
+            onLocationDeleted={handleLocationDeleted}
+          />
+          <LocationWeatherCard location={selectedLocation} />
+        </div>
 
-          <div className="side">
-            {error && <div className="panel error">⚠️ {error}</div>}
-            <div id="panel-alerts">
-              <AlertsPanel alerts={alerts} />
-            </div>
-            <div id="panel-agro">
-              <AgroPanel
-                locations={locations}
-                onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
-              />
-            </div>
-            <div id="panel-locations">
-              <LocationsPanel locations={locations} />
-            </div>
-            <div id="panel-satellite">
-              <SatelliteWatchesPanel
-                watches={satelliteWatches}
-                onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
-              />
-            </div>
-            <div id="panel-storms">
-              <StormsPanel storms={storms} />
-            </div>
-            {updatedAt && (
-              <div className="updated">
-                Atualizado {updatedAt.toLocaleTimeString('pt-BR')} · atualização automática 30s
-              </div>
+        <div className="top-cards secondary">
+          <AlertsPanel alerts={alerts} />
+          <AgroPanel
+            locations={locations}
+            onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+          />
+          <SatelliteWatchesPanel
+            watches={satelliteWatches}
+            onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+          />
+          <StormsPanel storms={storms} />
+        </div>
+
+        <div className="map-card">
+          <StormMap
+            ref={mapRef}
+            storms={storms}
+            locations={locations}
+            satelliteWatches={satelliteWatches}
+            satelliteImage={showSatelliteImage ? satelliteImage : null}
+          />
+          <div className="map-legend">
+            <span className="legend-item">
+              <span className="swatch" style={{ background: '#37d39b' }} /> fraca
+            </span>
+            <span className="legend-item">
+              <span className="swatch" style={{ background: '#f2c14e' }} /> moderada
+            </span>
+            <span className="legend-item">
+              <span className="swatch" style={{ background: '#f59e5b' }} /> forte
+            </span>
+            <span className="legend-item">
+              <span className="swatch" style={{ background: '#ef6d6d' }} /> severa
+            </span>
+            <span className="legend-item">
+              <span className="swatch" style={{ background: '#4cc2e6' }} /> local
+            </span>
+            <span className="legend-item">
+              <span className="swatch" style={{ background: '#a78bfa' }} /> satélite
+            </span>
+            {satelliteImage && (
+              <label className="legend-item satellite-image-toggle">
+                <input
+                  type="checkbox"
+                  checked={showSatelliteImage}
+                  onChange={(e) => setShowSatelliteImage(e.target.checked)}
+                />
+                imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
+              </label>
             )}
           </div>
         </div>
+
+        {updatedAt && (
+          <div className="updated">
+            Atualizado {updatedAt.toLocaleTimeString('pt-BR')} · atualização automática 30s
+          </div>
+        )}
       </div>
     </>
-  )
-}
-
-function scrollToPanel(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-}
-
-interface SummaryTileProps {
-  icon: string
-  label: string
-  count: number
-  targetId: string
-  warn?: boolean
-}
-
-function SummaryTile({ icon, label, count, targetId, warn }: SummaryTileProps) {
-  return (
-    <button
-      type="button"
-      className={`summary-tile ${warn ? 'warn' : ''}`}
-      onClick={() => scrollToPanel(targetId)}
-    >
-      <span className="summary-tile-icon" aria-hidden>
-        {icon}
-      </span>
-      <span className="summary-tile-count">{count}</span>
-      <span className="summary-tile-label">{label}</span>
-    </button>
-  )
-}
-
-function SummaryStrip({
-  alertsCount,
-  agroAlertsCount,
-  locationsCount,
-  satelliteCount,
-  stormsCount,
-}: {
-  alertsCount: number
-  agroAlertsCount: number
-  locationsCount: number
-  satelliteCount: number
-  stormsCount: number
-}) {
-  return (
-    <div className="summary-strip">
-      <SummaryTile
-        icon="🚨"
-        label="Alertas"
-        count={alertsCount}
-        targetId="panel-alerts"
-        warn={alertsCount > 0}
-      />
-      <SummaryTile
-        icon="🌾"
-        label="Agro"
-        count={agroAlertsCount}
-        targetId="panel-agro"
-        warn={agroAlertsCount > 0}
-      />
-      <SummaryTile icon="📍" label="Locais" count={locationsCount} targetId="panel-locations" />
-      <SummaryTile icon="🛰️" label="Satélite" count={satelliteCount} targetId="panel-satellite" />
-      <SummaryTile icon="⛈️" label="Células" count={stormsCount} targetId="panel-storms" />
-    </div>
   )
 }
 
@@ -374,78 +320,6 @@ function SatelliteWatchesPanel({
 // see ADR-0014. Not fetched dynamically: same reasoning as other
 // thresholds already baked into this dashboard.
 const FROST_THRESHOLD_C = 3
-
-function LocationsPanel({ locations }: { locations: LocationItem[] }) {
-  const [selected, setSelected] = useState<string | null>(null)
-  const [forecast, setForecast] = useState<ForecastPoint[] | null>(null)
-  const [forecastError, setForecastError] = useState<string | null>(null)
-
-  async function toggle(id: string) {
-    if (selected === id) {
-      setSelected(null)
-      setForecast(null)
-      setForecastError(null)
-      return
-    }
-    setSelected(id)
-    setForecast(null)
-    setForecastError(null)
-    try {
-      const data = await api.forecast(id)
-      setForecast(data.points)
-    } catch (err) {
-      setForecastError(err instanceof ApiError ? err.message : 'Previsão indisponível')
-    }
-  }
-
-  return (
-    <section className="panel">
-      <h2>
-        Locais monitorados <span className="count">{locations.length}</span>
-      </h2>
-      <div className="list">
-        {locations.length === 0 && <p className="empty">Nenhum local cadastrado.</p>}
-        {locations.map((l) => (
-          <div key={l.id}>
-            <div
-              className={`row clickable ${selected === l.id ? 'selected' : ''}`}
-              onClick={() => toggle(l.id)}
-            >
-              <div className="grow">
-                <div>{l.name}</div>
-                <div className="sub">
-                  {l.kind} · raio {l.radius_km} km
-                </div>
-              </div>
-              <span className="count">{l.alert_preferences.filter((p) => p.enabled).length}⚑</span>
-            </div>
-            {selected === l.id && (
-              <div className="forecast">
-                {forecastError && <span className="sub">⚠️ {forecastError}</span>}
-                {forecast &&
-                  forecast.map((p, i) => (
-                    <div className={`forecast-row ${i === 0 ? 'past' : ''}`} key={i}>
-                      <span className="sub">
-                        {new Date(p.time).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                        })}
-                        {i === 0 ? ' (ontem)' : ''}
-                      </span>
-                      <span>{p.temperature_c != null ? `${p.temperature_c.toFixed(0)}°C` : '—'}</span>
-                    </div>
-                  ))}
-                {forecast && forecast.length === 0 && (
-                  <span className="sub">Sem pontos de previsão.</span>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
 
 interface AgroEntry {
   frostRisk: boolean

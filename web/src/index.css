@@ -174,81 +174,33 @@ button {
 .dashboard-body {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 58px);
-  min-height: 0;
-}
-.summary-strip {
-  display: flex;
-  gap: 10px;
-  padding: 14px 14px 0;
-  flex-wrap: wrap;
-  flex: 0 0 auto;
-}
-.summary-tile {
-  flex: 1 1 140px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: inherit;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-.summary-tile:hover,
-.summary-tile:focus-visible {
-  border-color: var(--accent);
-  outline: none;
-}
-.summary-tile.warn {
-  border-color: rgba(245, 158, 91, 0.5);
-  background: rgba(245, 158, 91, 0.08);
-}
-.summary-tile-icon {
-  font-size: 1.3rem;
-  line-height: 1;
-}
-.summary-tile-count {
-  font-family: var(--mono);
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--ink);
-}
-.summary-tile.warn .summary-tile-count {
-  color: var(--orange);
-}
-.summary-tile-label {
-  font-size: 0.76rem;
-  color: var(--ink-mute);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.layout {
-  display: grid;
-  grid-template-columns: 1fr 380px;
   gap: 14px;
   padding: 14px;
+  min-height: calc(100vh - 58px);
+}
+
+.top-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+.top-cards.secondary {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.top-cards.secondary .panel {
+  display: flex;
+  flex-direction: column;
+  height: 320px;
+  padding: 12px 14px;
+}
+.top-cards.secondary .list {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
 }
-@media (max-width: 900px) {
-  .dashboard-body {
-    height: auto;
-  }
-  .layout {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-  .side {
-    overflow-y: visible;
-  }
+.top-cards.secondary .panel-hint {
+  margin: -2px 0 8px;
+  flex: 0 0 auto;
 }
 
 .map-card {
@@ -256,7 +208,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 14px;
   overflow: hidden;
-  min-height: 360px;
+  height: 480px;
 }
 .map {
   position: absolute;
@@ -300,12 +252,6 @@ button {
   cursor: pointer;
 }
 
-.side {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  overflow-y: auto;
-}
 .panel {
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -468,4 +414,75 @@ button {
 }
 .agro-row.warn {
   color: var(--orange);
+}
+
+.location-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  margin-bottom: 10px;
+}
+.location-create-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.location-create-actions .btn {
+  width: auto;
+  margin-top: 0;
+  flex: 1;
+}
+.search-results {
+  margin-top: 6px;
+}
+.location-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.location-search-row input {
+  flex: 1;
+}
+.location-search-row .btn.ghost.small {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.weather-current {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 4px 0 10px;
+}
+.weather-current-temp {
+  font-family: var(--mono);
+  font-size: 2.2rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.weather-current-source {
+  font-size: 0.76rem;
+  color: var(--ink-mute);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.forecast-strip {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.forecast-strip-day {
+  flex: 1;
+  text-align: center;
+  padding: 8px 4px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  font-size: 0.82rem;
 }

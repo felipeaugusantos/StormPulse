@@ -9,6 +9,8 @@
  * name later, falling back to raw coordinates on any failure.
  */
 
+import type { CitySearchResult } from './types'
+
 const CACHE = new Map<string, string | null>()
 const MIN_GAP_MS = 1100
 
@@ -55,4 +57,42 @@ export function reverseGeocodeCity(
     onResolved(place)
     await new Promise((resolve) => setTimeout(resolve, MIN_GAP_MS))
   })
+}
+
+/** Forward geocode (city name → candidates) via Nominatim, restricted to
+ * Brazil (`countrycodes=br`) so a search like "Ribeirão" doesn't match a
+ * place in Spain. Shares the same request queue as `reverseGeocodeCity` so
+ * the two never exceed Nominatim's ~1 req/s usage policy together. */
+export async function searchCity(query: string): Promise<CitySearchResult[]> {
+  const trimmed = query.trim()
+  if (trimmed.length < 2) return []
+
+  const run = async (): Promise<CitySearchResult[]> => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(trimmed)}&format=jsonv2&countrycodes=br&limit=5`
+      const res = await fetch(url, { headers: { Accept: 'application/json' } })
+      if (!res.ok) return []
+      const data = (await res.json()) as Array<{
+        display_name: string
+        lat: string
+        lon: string
+      }>
+      return data.map((item) => ({
+        label: item.display_name,
+        latitude: Number(item.lat),
+        longitude: Number(item.lon),
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  const previous = queue
+  let result: CitySearchResult[] = []
+  queue = previous.then(async () => {
+    result = await run()
+    await new Promise((resolve) => setTimeout(resolve, MIN_GAP_MS))
+  })
+  await queue
+  return result
 }

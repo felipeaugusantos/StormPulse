@@ -1,6 +1,7 @@
 import type {
   AlertItem,
   ConvectiveWatch,
+  CurrentConditions,
   Forecast,
   LocationItem,
   Me,
@@ -130,12 +131,26 @@ export async function loginWithGoogle(idToken: string): Promise<string> {
   return data.access_token
 }
 
+export interface CreateLocationInput {
+  name: string
+  kind?: string
+  latitude: number
+  longitude: number
+  radius_km?: number
+}
+
 export const api = {
   me: () => request<Me>('/users/me'),
   storms: () => request<StormCell[]>('/storms?limit=200'),
   locations: () => request<LocationItem[]>('/locations'),
+  createLocation: (data: CreateLocationInput) =>
+    request<LocationItem>('/locations', { method: 'POST', body: JSON.stringify(data) }),
+  deleteLocation: (locationId: string) =>
+    request<void>(`/locations/${locationId}`, { method: 'DELETE' }),
   alerts: () => request<AlertItem[]>('/alerts'),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
+  currentConditions: (locationId: string) =>
+    request<CurrentConditions>(`/locations/${locationId}/current`),
   satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),
   sprayWindow: (locationId: string) =>
     request<SprayWindow>(`/locations/${locationId}/agro/spray-window`),

@@ -115,3 +115,26 @@ export interface RainfallHistory {
   longitude: number
   daily: DailyRainfall[]
 }
+
+export interface Provenance {
+  source_name: string
+  source_kind: string
+  is_mock: boolean
+}
+
+export interface CurrentConditions {
+  provenance: Provenance
+  observed_at: string
+  latitude: number
+  longitude: number
+  temperature_c: number | null
+  wind_kmh: number | null
+  wind_gusts_kmh: number | null
+  precipitation_mm: number | null
+}
+
+export interface CitySearchResult {
+  label: string
+  latitude: number
+  longitude: number
+}
