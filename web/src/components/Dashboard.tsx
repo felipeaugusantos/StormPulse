@@ -103,68 +103,156 @@ export function Dashboard({ onLogout }: Props) {
         </button>
       </header>
 
-      <div className="layout">
-        <div className="map-card">
-          <StormMap
-            ref={mapRef}
-            storms={storms}
-            locations={locations}
-            satelliteWatches={satelliteWatches}
-            satelliteImage={showSatelliteImage ? satelliteImage : null}
-          />
-          <div className="map-legend">
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#37d39b' }} /> fraca
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#f2c14e' }} /> moderada
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#f59e5b' }} /> forte
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#ef6d6d' }} /> severa
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#4cc2e6' }} /> local
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#a78bfa' }} /> satélite
-            </span>
-            {satelliteImage && (
-              <label className="legend-item satellite-image-toggle">
-                <input
-                  type="checkbox"
-                  checked={showSatelliteImage}
-                  onChange={(e) => setShowSatelliteImage(e.target.checked)}
-                />
-                imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
-              </label>
+      <div className="dashboard-body">
+        <SummaryStrip
+          alertsCount={alerts.length}
+          agroAlertsCount={
+            alerts.filter(
+              (a) => a.event_type === 'frost_warning' || a.event_type === 'dry_spell_warning',
+            ).length
+          }
+          locationsCount={locations.filter((l) => l.is_active).length}
+          satelliteCount={satelliteWatches.length}
+          stormsCount={storms.length}
+        />
+
+        <div className="layout">
+          <div className="map-card">
+            <StormMap
+              ref={mapRef}
+              storms={storms}
+              locations={locations}
+              satelliteWatches={satelliteWatches}
+              satelliteImage={showSatelliteImage ? satelliteImage : null}
+            />
+            <div className="map-legend">
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#37d39b' }} /> fraca
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#f2c14e' }} /> moderada
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#f59e5b' }} /> forte
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#ef6d6d' }} /> severa
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#4cc2e6' }} /> local
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#a78bfa' }} /> satélite
+              </span>
+              {satelliteImage && (
+                <label className="legend-item satellite-image-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showSatelliteImage}
+                    onChange={(e) => setShowSatelliteImage(e.target.checked)}
+                  />
+                  imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
+                </label>
+              )}
+            </div>
+          </div>
+
+          <div className="side">
+            {error && <div className="panel error">⚠️ {error}</div>}
+            <div id="panel-alerts">
+              <AlertsPanel alerts={alerts} />
+            </div>
+            <div id="panel-agro">
+              <AgroPanel
+                locations={locations}
+                onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+              />
+            </div>
+            <div id="panel-locations">
+              <LocationsPanel locations={locations} />
+            </div>
+            <div id="panel-satellite">
+              <SatelliteWatchesPanel
+                watches={satelliteWatches}
+                onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+              />
+            </div>
+            <div id="panel-storms">
+              <StormsPanel storms={storms} />
+            </div>
+            {updatedAt && (
+              <div className="updated">
+                Atualizado {updatedAt.toLocaleTimeString('pt-BR')} · atualização automática 30s
+              </div>
             )}
           </div>
         </div>
-
-        <div className="side">
-          {error && <div className="panel error">⚠️ {error}</div>}
-          <AlertsPanel alerts={alerts} />
-          <StormsPanel storms={storms} />
-          <SatelliteWatchesPanel
-            watches={satelliteWatches}
-            onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
-          />
-          <LocationsPanel locations={locations} />
-          <AgroPanel
-            locations={locations}
-            onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
-          />
-          {updatedAt && (
-            <div className="updated">
-              Atualizado {updatedAt.toLocaleTimeString('pt-BR')} · atualização automática 30s
-            </div>
-          )}
-        </div>
       </div>
     </>
+  )
+}
+
+function scrollToPanel(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+interface SummaryTileProps {
+  icon: string
+  label: string
+  count: number
+  targetId: string
+  warn?: boolean
+}
+
+function SummaryTile({ icon, label, count, targetId, warn }: SummaryTileProps) {
+  return (
+    <button
+      type="button"
+      className={`summary-tile ${warn ? 'warn' : ''}`}
+      onClick={() => scrollToPanel(targetId)}
+    >
+      <span className="summary-tile-icon" aria-hidden>
+        {icon}
+      </span>
+      <span className="summary-tile-count">{count}</span>
+      <span className="summary-tile-label">{label}</span>
+    </button>
+  )
+}
+
+function SummaryStrip({
+  alertsCount,
+  agroAlertsCount,
+  locationsCount,
+  satelliteCount,
+  stormsCount,
+}: {
+  alertsCount: number
+  agroAlertsCount: number
+  locationsCount: number
+  satelliteCount: number
+  stormsCount: number
+}) {
+  return (
+    <div className="summary-strip">
+      <SummaryTile
+        icon="🚨"
+        label="Alertas"
+        count={alertsCount}
+        targetId="panel-alerts"
+        warn={alertsCount > 0}
+      />
+      <SummaryTile
+        icon="🌾"
+        label="Agro"
+        count={agroAlertsCount}
+        targetId="panel-agro"
+        warn={agroAlertsCount > 0}
+      />
+      <SummaryTile icon="📍" label="Locais" count={locationsCount} targetId="panel-locations" />
+      <SummaryTile icon="🛰️" label="Satélite" count={satelliteCount} targetId="panel-satellite" />
+      <SummaryTile icon="⛈️" label="Células" count={stormsCount} targetId="panel-storms" />
+    </div>
   )
 }
 
