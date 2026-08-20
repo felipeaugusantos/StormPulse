@@ -122,6 +122,16 @@ async def login_google(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token do Google sem e-mail/sub",
         )
+    if claims.get("email_verified") is not True:
+        # Google can issue a validly-signed token asserting an email that
+        # was never confirmed by its owner (e.g. Workspace-provisioned
+        # addresses). Trusting it here would let an attacker link their
+        # Google identity to — or create an account under — someone else's
+        # email. Never link/create on an unverified email.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="E-mail do Google não verificado",
+        )
 
     user = await authenticate_google(
         session, google_sub=google_sub, email=email, full_name=claims.get("name")
