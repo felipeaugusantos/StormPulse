@@ -17,8 +17,7 @@ from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
 from app.weather.factory import get_weather_provider
-from app.weather.inmet import WeatherProviderUnavailableError
-from app.weather.provider import Forecast
+from app.weather.provider import Forecast, WeatherProviderUnavailableError
 
 router = APIRouter(tags=["locations"])
 

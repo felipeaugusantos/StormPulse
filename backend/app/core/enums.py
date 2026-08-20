@@ -66,6 +66,7 @@ class WeatherSourceKind(StrEnum):
     SATELLITE = "satellite"
     STATION = "station"
     OFFICIAL_WARNING = "official_warning"
+    FORECAST_MODEL = "forecast_model"
 
 
 class AlertEventType(StrEnum):

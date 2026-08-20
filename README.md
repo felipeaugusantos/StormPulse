@@ -57,8 +57,9 @@ O que já funciona nesta fase:
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
 > engine não existe) — nunca dados fictícios. O provider de dados é escolhido
-> por `WEATHER_PROVIDER`: `mock` (SIMULADO, marcado explicitamente) ou
-> `inmet` (real, FASE 13 — ver [ADR-0006](docs/adr/0006-integracao-real-inmet.md)).
+> por `WEATHER_PROVIDER`: `mock` (SIMULADO, marcado explicitamente), `inmet`
+> (real, FASE 13 — ver [ADR-0006](docs/adr/0006-integracao-real-inmet.md)) ou
+> `cptec` (real, FASE 17 — só previsão).
 
 ## Provedor meteorológico real (INMET, FASE 13/15)
 
@@ -72,6 +73,19 @@ estado (UF) e não por polígono exato, e a previsão (`GET
 (não 7 — limite confirmado da API pública do INMET) via resolução de
 geocódigo IBGE pelo nome da estação mais próxima. CEMADEN e radar real
 ficam para uma fase futura.
+
+## Redundância INPE/CPTEC (FASE 17)
+
+O INMET já se mostrou instável em produção (indisponibilidade real da API
+pública). Com `WEATHER_PROVIDER=inmet` e `CPTEC_FALLBACK_ENABLED=true`
+(padrão), `get_current_data`/`get_forecast` caem automaticamente para o
+serviço XML público do INPE/CPTEC quando o INMET falha — sem geocódigo
+(aceita lat/lon direto), sem chave. A previsão do CPTEC traz até 6 dias
+reais (o endpoint chama-se "7dias" mas devolveu 6 no teste ao vivo — não
+arredondado para 7). O CPTEC não tem radar/avisos/condições atuais para
+coordenadas arbitrárias, então o ciclo de ingestão (`get_radar_frames`)
+continua parado quando o INMET cai — só a previsão e as condições atuais
+ganham redundância. Ver [ADR-0011](docs/adr/0011-inpe-cptec-fallback.md).
 
 ## Login com Google e modo visitante (FASE 15)
 

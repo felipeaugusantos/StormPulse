@@ -72,6 +72,18 @@ class Forecast(BaseModel):
     points: list[ForecastPoint] = Field(default_factory=list)
 
 
+class WeatherProviderUnavailableError(RuntimeError):
+    """Raised when a provider cannot honestly produce the requested data.
+
+    Shared base for every concrete provider's own exception (e.g.
+    ``InmetWeatherProvider``'s and ``CptecWeatherProvider``'s) so callers —
+    including ``FallbackWeatherProvider`` and API routers — can catch one
+    type regardless of which source is active. Callers must never
+    substitute mock data silently under a "real" provenance when this is
+    raised.
+    """
+
+
 class WeatherProvider(abc.ABC):
     """Interface every weather source must implement."""
 

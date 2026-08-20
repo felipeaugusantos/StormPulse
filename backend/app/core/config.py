@@ -111,6 +111,17 @@ class Settings(BaseSettings):
     satellite_grid_resolution_km: float = Field(default=4.0, gt=0)
     satellite_max_watch_age_hours: float = Field(default=3.0, gt=0)
 
+    # --- INPE/CPTEC forecast (redundância, FASE 17) ---
+    # Serviço XML público do CPTEC — sem chave, sem geocódigo (aceita
+    # lat/lon direto). Usado como fallback automático de `get_current_data`
+    # e `get_forecast` quando o provedor primário (INMET) falha; ligado por
+    # padrão porque o custo é baixo (só uma chamada HTTP extra, só quando o
+    # primário já falhou) — ao contrário do satélite, que sempre baixa e
+    # processa NetCDF.
+    cptec_base_url: str = "https://servicos.cptec.inpe.br/XML"
+    cptec_http_timeout_seconds: float = Field(default=10.0, gt=0)
+    cptec_fallback_enabled: bool = True
+
     @model_validator(mode="after")
     def _forbid_dev_secret_in_production(self) -> Settings:
         if self.environment == "production" and (

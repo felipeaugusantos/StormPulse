@@ -47,6 +47,9 @@ from app.weather.provider import (
     Warning,
     WeatherProvider,
 )
+from app.weather.provider import (
+    WeatherProviderUnavailableError as _BaseWeatherProviderUnavailableError,
+)
 from engine.geo import haversine_km
 
 _PROVIDER_NAME = "INMET"
@@ -73,7 +76,7 @@ def _normalize_name(value: str) -> str:
     return stripped.strip().upper()
 
 
-class WeatherProviderUnavailableError(RuntimeError):
+class WeatherProviderUnavailableError(_BaseWeatherProviderUnavailableError):
     """Raised when INMET data cannot be honestly produced for a request.
 
     Callers (the ingestion pipeline) must log and skip the cycle — never
