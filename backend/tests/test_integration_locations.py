@@ -119,6 +119,17 @@ async def test_storms_nearby_runs_postgis_query(client: AsyncClient) -> None:
     assert isinstance(resp.json(), list)
 
 
+async def test_current_conditions_returns_live_reading(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    created = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    resp = await client.get(f"/api/v1/locations/{created['id']}/current", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "temperature_c" in body
+    assert body["provenance"]["is_mock"] is True
+
+
 async def test_spray_window_returns_live_wind_check(client: AsyncClient) -> None:
     # The shared `client` fixture's Settings default to the mock provider,
     # which always answers — exercises the success path (see

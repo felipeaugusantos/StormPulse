@@ -18,7 +18,12 @@ from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
 from app.weather.factory import get_weather_provider
-from app.weather.provider import Forecast, RainfallHistory, WeatherProviderUnavailableError
+from app.weather.provider import (
+    CurrentConditions,
+    Forecast,
+    RainfallHistory,
+    WeatherProviderUnavailableError,
+)
 
 router = APIRouter(tags=["locations"])
 
@@ -130,6 +135,28 @@ async def get_location_forecast(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Previsão indisponível para este local no momento",
+        ) from exc
+
+
+@router.get(
+    "/{location_id}/current",
+    response_model=CurrentConditions,
+    summary="Condições atuais do local (fonte real, quando configurada)",
+)
+async def get_location_current(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> CurrentConditions:
+    location = await _get_owned_or_404(session, user, location_id)
+    provider = get_weather_provider(settings)
+    try:
+        return await provider.get_current_data(location.latitude, location.longitude)
+    except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Condições atuais indisponíveis para este local no momento",
         ) from exc
 
 
