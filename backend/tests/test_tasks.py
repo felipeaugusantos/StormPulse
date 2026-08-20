@@ -18,6 +18,7 @@ from typing import Any
 
 import workers.tasks as tasks_module
 from workers.agro_pipeline import AgroCycleSummary
+from workers.notification_pipeline import NotificationDeliverySummary
 from workers.pipeline_service import CycleSummary
 from workers.satellite_pipeline import SatelliteCycleSummary
 
@@ -111,3 +112,38 @@ def test_run_agro_advisory_task_reports_disabled(monkeypatch: Any) -> None:
 
     assert result["enabled"] is False
     assert result["locations_checked"] == 0
+
+
+def test_run_notification_delivery_task_returns_summary_dict(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "run_notification_delivery_cycle",
+        lambda session: NotificationDeliverySummary(
+            configured=True, attempted=4, sent=2, failed=1, suppressed=1
+        ),
+    )
+
+    result = tasks_module.run_notification_delivery_task()
+
+    assert result == {
+        "configured": True,
+        "attempted": 4,
+        "sent": 2,
+        "failed": 1,
+        "suppressed": 1,
+    }
+
+
+def test_run_notification_delivery_task_reports_unconfigured(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "run_notification_delivery_cycle",
+        lambda session: NotificationDeliverySummary(configured=False),
+    )
+
+    result = tasks_module.run_notification_delivery_task()
+
+    assert result["configured"] is False
+    assert result["attempted"] == 0

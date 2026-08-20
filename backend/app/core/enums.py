@@ -91,7 +91,7 @@ class AlertEventType(StrEnum):
 
 
 class NotificationChannel(StrEnum):
-    PUSH = "push"  # Firebase Cloud Messaging (FASE 9)
+    PUSH = "push"  # browser Web Push / VAPID (FASE 22)
     EMAIL = "email"
 
 
@@ -99,7 +99,9 @@ class NotificationStatus(StrEnum):
     PENDING = "pending"
     SENT = "sent"
     FAILED = "failed"
-    SUPPRESSED = "suppressed"  # withheld by anti-spam rules
+    # No push subscription for the user (never opted in), or no VAPID key
+    # configured — an honest non-attempt, not a fabricated success.
+    SUPPRESSED = "suppressed"
 
 
 class ReportType(StrEnum):

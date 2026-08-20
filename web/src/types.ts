@@ -138,3 +138,8 @@ export interface CitySearchResult {
   latitude: number
   longitude: number
 }
+
+export interface PushSubscriptionInput {
+  endpoint: string
+  keys: { p256dh: string; auth: string }
+}

@@ -1,4 +1,5 @@
-"""Notification model — delivery record for an alert (FCM in FASE 9)."""
+"""Notification model — delivery record for an alert, and the browser Web
+Push subscriptions those deliveries fan out to (FASE 22)."""
 
 from __future__ import annotations
 
@@ -34,3 +35,17 @@ class Notification(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     )
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PushSubscription(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
+    """A browser's Web Push subscription (one per device/browser a user opted
+    in from — ``PushManager.subscribe()`` on the frontend)."""
+
+    __tablename__ = "push_subscriptions"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    endpoint: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    p256dh: Mapped[str] = mapped_column(Text, nullable=False)
+    auth: Mapped[str] = mapped_column(Text, nullable=False)

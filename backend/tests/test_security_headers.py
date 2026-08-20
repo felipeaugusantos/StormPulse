@@ -39,7 +39,19 @@ async def test_baseline_security_headers_are_present() -> None:
     assert resp.headers["X-Frame-Options"] == "DENY"
     assert resp.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
     assert "Permissions-Policy" in resp.headers
+    assert resp.headers["Content-Security-Policy"] == "default-src 'none'; frame-ancestors 'none'"
     assert "Strict-Transport-Security" not in resp.headers
+
+
+async def test_csp_is_absent_on_docs_routes() -> None:
+    app = create_app(Settings(environment="test", log_json=False, log_level="WARNING"))
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client,
+    ):
+        resp = await client.get("/docs")
+    assert "Content-Security-Policy" not in resp.headers
+    assert resp.headers["X-Content-Type-Options"] == "nosniff"
 
 
 async def test_hsts_header_is_added_when_enabled() -> None:

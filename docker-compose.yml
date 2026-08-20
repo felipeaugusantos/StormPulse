@@ -56,6 +56,9 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       WEATHER_PROVIDER: ${WEATHER_PROVIDER:-mock}
       SATELLITE_ENABLED: ${SATELLITE_ENABLED:-false}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@stormpulse.example}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -83,6 +86,9 @@ services:
       REDIS_DB: ${REDIS_DB:-0}
       WEATHER_PROVIDER: ${WEATHER_PROVIDER:-mock}
       SATELLITE_ENABLED: ${SATELLITE_ENABLED:-false}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@stormpulse.example}
     depends_on:
       db:
         condition: service_healthy

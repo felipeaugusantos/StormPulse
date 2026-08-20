@@ -214,6 +214,14 @@ button {
   position: absolute;
   inset: 0;
 }
+.map-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-mute);
+  font-size: 0.85rem;
+}
 .map-legend {
   position: absolute;
   left: 10px;

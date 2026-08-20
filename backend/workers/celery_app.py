@@ -41,5 +41,12 @@ celery_app.conf.update(
             # location — less frequent is honest and kinder to the API.
             "schedule": 21_600.0,  # seconds
         },
+        "deliver-notifications-every-minute": {
+            "task": "workers.tasks.run_notification_delivery_task",
+            # Alerts are time-sensitive by nature — deliver pending ones
+            # quickly. No-op cost is a single indexed SELECT when the queue
+            # is empty.
+            "schedule": 60.0,  # seconds
+        },
     },
 )

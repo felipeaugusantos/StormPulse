@@ -11,10 +11,11 @@ import type {
   StormCell,
 } from '../types'
 import { timeAgo } from '../format'
+import { isPushSupported, subscribeToPush } from '../push'
 import { LocationSearchCard } from './LocationSearchCard'
 import { LocationWeatherCard } from './LocationWeatherCard'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
-import { StormMap, type StormMapHandle } from './StormMap'
+import { StormMap, type StormMapHandle } from './LazyStormMap'
 
 interface Props {
   onLogout: () => void
@@ -35,6 +36,9 @@ export function Dashboard({ onLogout }: Props) {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+  const [deletingAccount, setDeletingAccount] = useState(false)
+  const [pushStatus, setPushStatus] = useState<'idle' | 'subscribing' | 'on' | 'error'>('idle')
+  const [pushError, setPushError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -91,6 +95,37 @@ export function Dashboard({ onLogout }: Props) {
     setSelectedLocationId((prev) => (prev === id ? null : prev))
   }
 
+  async function handleEnablePush() {
+    setPushStatus('subscribing')
+    setPushError(null)
+    try {
+      await subscribeToPush()
+      setPushStatus('on')
+    } catch (err) {
+      setPushStatus('error')
+      setPushError(err instanceof Error ? err.message : 'Não foi possível ativar notificações')
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (
+      !window.confirm(
+        'Excluir sua conta é permanente e apaga todos os seus locais, alertas e histórico. Tem certeza?',
+      )
+    ) {
+      return
+    }
+    setDeletingAccount(true)
+    try {
+      await api.deleteAccount()
+    } catch {
+      // Even if the request itself failed after the account was gone
+      // (e.g. token already invalid), logging out locally is still correct.
+    }
+    clearToken()
+    onLogout()
+  }
+
   const mock = storms.some((s) => s.is_mock)
   const selectedLocation = locations.find((l) => l.id === selectedLocationId) ?? null
 
@@ -116,6 +151,20 @@ export function Dashboard({ onLogout }: Props) {
           </span>
           <span className="pill">{me?.email ?? '—'}</span>
         </div>
+        {isPushSupported() && pushStatus !== 'on' && (
+          <button
+            className="btn ghost"
+            onClick={handleEnablePush}
+            disabled={pushStatus === 'subscribing'}
+            title={pushError ?? undefined}
+          >
+            {pushStatus === 'subscribing' ? 'Ativando…' : '🔔 Ativar notificações'}
+          </button>
+        )}
+        {pushStatus === 'on' && <span className="pill">🔔 Notificações ativas</span>}
+        <button className="btn ghost" onClick={handleDeleteAccount} disabled={deletingAccount}>
+          {deletingAccount ? 'Excluindo…' : 'Excluir conta'}
+        </button>
         <button className="btn ghost" onClick={onLogout}>
           Sair
         </button>

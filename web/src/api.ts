@@ -5,6 +5,7 @@ import type {
   Forecast,
   LocationItem,
   Me,
+  PushSubscriptionInput,
   RainfallHistory,
   ReadyStatus,
   SatelliteImageMeta,
@@ -141,6 +142,15 @@ export interface CreateLocationInput {
 
 export const api = {
   me: () => request<Me>('/users/me'),
+  deleteAccount: () =>
+    request<void>('/users/me', { method: 'DELETE', body: JSON.stringify({ confirm: true }) }),
+  registerPushSubscription: (data: PushSubscriptionInput) =>
+    request<void>('/users/me/push-subscription', { method: 'POST', body: JSON.stringify(data) }),
+  deletePushSubscription: (endpoint: string) =>
+    request<void>('/users/me/push-subscription', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+    }),
   storms: () => request<StormCell[]>('/storms?limit=200'),
   locations: () => request<LocationItem[]>('/locations'),
   createLocation: (data: CreateLocationInput) =>

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from app.alerts.models import Alert
 from app.locations.models import AlertPreference, Location
-from app.notifications.models import Notification
+from app.notifications.models import Notification, PushSubscription
 from app.reports.models import UserReport
 from app.satellite.models import ConvectiveWatch, SatelliteImage
 from app.storms.models import StormCell, StormObservation, StormRisk, StormTrack
@@ -22,6 +22,7 @@ __all__ = [
     "ConvectiveWatch",
     "Location",
     "Notification",
+    "PushSubscription",
     "RadarFrame",
     "SatelliteImage",
     "StormCell",

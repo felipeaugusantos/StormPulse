@@ -3,7 +3,7 @@ import { ApiError, publicApi } from '../api'
 import { timeAgo } from '../format'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
 import type { ConvectiveWatch, SatelliteImageMeta, StormCell, WarningItem } from '../types'
-import { StormMap, type StormMapHandle } from './StormMap'
+import { StormMap, type StormMapHandle } from './LazyStormMap'
 
 interface Props {
   onBack: () => void

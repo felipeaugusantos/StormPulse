@@ -92,3 +92,51 @@ async def test_refresh_issues_a_new_token_pair(client: AsyncClient) -> None:
 async def test_refresh_with_garbage_token_returns_401(client: AsyncClient) -> None:
     resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": "not-a-real-token"})
     assert resp.status_code == 401
+
+
+async def test_delete_me_without_confirm_returns_400(client: AsyncClient) -> None:
+    email = _unique_email()
+    await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    login = await client.post("/api/v1/auth/login", json={"email": email, "password": _PASSWORD})
+    access = login.json()["access_token"]
+
+    resp = await client.request(
+        "DELETE",
+        "/api/v1/users/me",
+        headers={"Authorization": f"Bearer {access}"},
+        json={"confirm": False},
+    )
+    assert resp.status_code == 400
+
+
+async def test_delete_me_removes_account_and_owned_data(client: AsyncClient) -> None:
+    email = _unique_email()
+    await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    login = await client.post("/api/v1/auth/login", json={"email": email, "password": _PASSWORD})
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+
+    location_payload = {
+        "name": "Casa",
+        "kind": "home",
+        "latitude": -23.55,
+        "longitude": -46.63,
+        "radius_km": 50,
+    }
+    created = (
+        await client.post("/api/v1/locations", json=location_payload, headers=headers)
+    ).json()
+
+    resp = await client.request(
+        "DELETE", "/api/v1/users/me", headers=headers, json={"confirm": True}
+    )
+    assert resp.status_code == 204
+
+    # The old access token is for a user that no longer exists.
+    me_resp = await client.get("/api/v1/users/me", headers=headers)
+    assert me_resp.status_code == 401
+
+    # Can register the same e-mail again — nothing orphaned blocking it.
+    again = await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    assert again.status_code == 201
+    assert created["id"]  # sanity: the location really was created before deletion

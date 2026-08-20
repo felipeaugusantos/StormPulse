@@ -8,6 +8,7 @@ from typing import Any
 from workers.agro_pipeline import run_agro_advisory_cycle
 from workers.celery_app import celery_app
 from workers.db import session_scope
+from workers.notification_pipeline import run_notification_delivery_cycle
 from workers.pipeline_service import run_ingestion_cycle
 from workers.satellite_pipeline import run_satellite_detection_cycle
 
@@ -64,4 +65,23 @@ def run_agro_advisory_task() -> dict[str, Any]:
         "dry_spell_alerts": summary.dry_spell_alerts,
     }
     logger.info("agro advisory cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_notification_delivery_task")
+def run_notification_delivery_task() -> dict[str, Any]:
+    """Deliver pending push notifications (FASE 22).
+
+    No-op (returns immediately) when no VAPID key is configured.
+    """
+    with session_scope() as session:
+        summary = run_notification_delivery_cycle(session)
+    result = {
+        "configured": summary.configured,
+        "attempted": summary.attempted,
+        "sent": summary.sent,
+        "failed": summary.failed,
+        "suppressed": summary.suppressed,
+    }
+    logger.info("notification delivery cycle complete", extra=result)
     return result

@@ -149,6 +149,18 @@ class Settings(BaseSettings):
     # simply doesn't disqualify the window when the source can't say.
     agro_spray_max_rain_probability_percent: int = Field(default=30, ge=0, le=100)
 
+    # --- Notificação push real (Web Push / VAPID, FASE 22) ---
+    # Sem serviço externo (FCM/APNs) — o navegador é o próprio serviço de
+    # push, só a assinatura VAPID é local. `vapid_private_key`/
+    # `vapid_public_key` são um par de chave EC P-256 crua, codificada em
+    # base64url (gerar com `py_vapid`) — ver ADR-0016 e `.env.example` para
+    # o passo a passo. Sem chave configurada, a task de entrega marca cada
+    # notificação como `SUPPRESSED` em vez de tentar enviar (honesto, sem
+    # fingir sucesso — mesmo espírito de `WeatherProviderUnavailableError`).
+    vapid_private_key: SecretStr | None = None
+    vapid_public_key: str | None = None
+    vapid_subject: str = "mailto:contato@stormpulse.example"
+
     @model_validator(mode="after")
     def _forbid_dev_secret_in_production(self) -> Settings:
         if self.environment == "production" and (
