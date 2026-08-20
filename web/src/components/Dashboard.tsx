@@ -9,6 +9,7 @@ import type {
   ReadyStatus,
   StormCell,
 } from '../types'
+import { cardinalDirection, convectiveIntensity, timeAgo } from '../format'
 import { StormMap } from './StormMap'
 
 interface Props {
@@ -224,26 +225,35 @@ function SatelliteWatchesPanel({ watches }: { watches: ConvectiveWatch[] }) {
       <h2>
         Observações via satélite <span className="count">{watches.length}</span>
       </h2>
+      <p className="panel-hint">
+        Nuvens esfriando no topo, vistas pelo satélite — sinal de que pode virar chuva, antes de
+        aparecer como célula de tempestade.
+      </p>
       <div className="list">
         {watches.length === 0 && (
           <p className="empty">
             Nenhuma observação ativa (ou SATELLITE_ENABLED=false — ver README).
           </p>
         )}
-        {watches.map((w) => (
-          <div className="row" key={w.id}>
-            <span className="badge sev">watch</span>
-            <div className="grow">
-              <div>
-                {w.latitude.toFixed(2)}, {w.longitude.toFixed(2)}
-              </div>
-              <div className="sub">
-                {w.min_brightness_temp_k.toFixed(0)} K
-                {w.speed_kmh != null ? ` · ${w.speed_kmh.toFixed(0)} km/h` : ''}
+        {watches.map((w) => {
+          const intensity = convectiveIntensity(w.min_brightness_temp_k)
+          return (
+            <div className="row" key={w.id}>
+              <span className={`badge ${intensity.className}`}>{intensity.label}</span>
+              <div className="grow">
+                <div>
+                  Nuvem em formação · {timeAgo(w.detected_at)}
+                  {w.speed_kmh != null && w.direction_deg != null
+                    ? ` · movendo para ${cardinalDirection(w.direction_deg)} a ${w.speed_kmh.toFixed(0)} km/h`
+                    : ''}
+                </div>
+                <div className="sub">
+                  📍 {w.latitude.toFixed(2)}, {w.longitude.toFixed(2)}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </section>
   )

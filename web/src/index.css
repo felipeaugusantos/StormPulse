@@ -246,6 +246,12 @@ button {
   font-family: var(--mono);
   color: var(--ink-dim);
 }
+.panel-hint {
+  margin: -4px 0 10px;
+  font-size: 0.76rem;
+  color: var(--ink-mute);
+  line-height: 1.4;
+}
 .list {
   display: flex;
   flex-direction: column;
