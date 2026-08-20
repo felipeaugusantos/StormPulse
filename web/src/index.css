@@ -288,6 +288,15 @@ button {
   color: var(--ink-mute);
   font-size: 0.76rem;
 }
+.row.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.row.clickable:hover,
+.row.clickable:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
 .badge {
   font-family: var(--mono);
   font-size: 0.68rem;

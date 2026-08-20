@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import type {
   GeoJSONSource,
@@ -14,6 +14,11 @@ interface Props {
   locations: LocationItem[]
   satelliteWatches?: ConvectiveWatch[]
   satelliteImage?: SatelliteImageMeta | null
+}
+
+export interface StormMapHandle {
+  /** Centers and zooms the map on a point — e.g. clicking a satellite watch row. */
+  flyTo(latitude: number, longitude: number): void
 }
 
 const SATELLITE_WATCH_COLOR = '#a78bfa'
@@ -84,15 +89,19 @@ function imageCoordinates(
   ]
 }
 
-export function StormMap({
-  storms,
-  locations,
-  satelliteWatches = [],
-  satelliteImage = null,
-}: Props) {
+export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
+  { storms, locations, satelliteWatches = [], satelliteImage = null },
+  ref,
+) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const readyRef = useRef(false)
+
+  useImperativeHandle(ref, () => ({
+    flyTo(latitude: number, longitude: number) {
+      mapRef.current?.flyTo({ center: [longitude, latitude], zoom: 9, duration: 600 })
+    },
+  }))
 
   // Initialize the map once.
   useEffect(() => {
@@ -217,4 +226,4 @@ export function StormMap({
   }, [storms, locations, satelliteWatches, satelliteImage])
 
   return <div className="map" ref={containerRef} />
-}
+})

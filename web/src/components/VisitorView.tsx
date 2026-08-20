@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, publicApi } from '../api'
-import { cardinalDirection, convectiveIntensity, timeAgo } from '../format'
+import { timeAgo } from '../format'
+import { SatelliteWatchRow } from './SatelliteWatchRow'
 import type { ConvectiveWatch, SatelliteImageMeta, StormCell, WarningItem } from '../types'
-import { StormMap } from './StormMap'
+import { StormMap, type StormMapHandle } from './StormMap'
 
 interface Props {
   onBack: () => void
@@ -15,6 +16,7 @@ const REFRESH_MS = 30_000
 const REFERENCE_POINT = { lat: -23.55, lon: -46.63 }
 
 export function VisitorView({ onBack }: Props) {
+  const mapRef = useRef<StormMapHandle>(null)
   const [storms, setStorms] = useState<StormCell[]>([])
   const [warnings, setWarnings] = useState<WarningItem[]>([])
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
@@ -68,6 +70,7 @@ export function VisitorView({ onBack }: Props) {
       <div className="layout">
         <div className="map-card">
           <StormMap
+            ref={mapRef}
             storms={storms}
             locations={[]}
             satelliteWatches={satelliteWatches}
@@ -95,31 +98,19 @@ export function VisitorView({ onBack }: Props) {
             </h2>
             <p className="panel-hint">
               Nuvens esfriando no topo, vistas pelo satélite — sinal de que pode virar chuva, antes
-              de aparecer como célula de tempestade.
+              de aparecer como célula de tempestade. Clique numa observação para ver no mapa.
             </p>
             <div className="list">
               {satelliteWatches.length === 0 && (
                 <p className="empty">Nenhuma observação ativa no momento.</p>
               )}
-              {satelliteWatches.slice(0, 8).map((w) => {
-                const intensity = convectiveIntensity(w.min_brightness_temp_k)
-                return (
-                  <div className="row" key={w.id}>
-                    <span className={`badge ${intensity.className}`}>{intensity.label}</span>
-                    <div className="grow">
-                      <div>
-                        Nuvem em formação · {timeAgo(w.detected_at)}
-                        {w.speed_kmh != null && w.direction_deg != null
-                          ? ` · movendo para ${cardinalDirection(w.direction_deg)} a ${w.speed_kmh.toFixed(0)} km/h`
-                          : ''}
-                      </div>
-                      <div className="sub">
-                        📍 {w.latitude.toFixed(2)}, {w.longitude.toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+              {satelliteWatches.slice(0, 8).map((w) => (
+                <SatelliteWatchRow
+                  key={w.id}
+                  watch={w}
+                  onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+                />
+              ))}
             </div>
           </section>
           <section className="panel">

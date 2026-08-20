@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api, clearToken, publicApi, readiness } from '../api'
 import type {
   AlertItem,
@@ -10,8 +10,9 @@ import type {
   SatelliteImageMeta,
   StormCell,
 } from '../types'
-import { cardinalDirection, convectiveIntensity, timeAgo } from '../format'
-import { StormMap } from './StormMap'
+import { timeAgo } from '../format'
+import { SatelliteWatchRow } from './SatelliteWatchRow'
+import { StormMap, type StormMapHandle } from './StormMap'
 
 interface Props {
   onLogout: () => void
@@ -20,6 +21,7 @@ interface Props {
 const REFRESH_MS = 30_000
 
 export function Dashboard({ onLogout }: Props) {
+  const mapRef = useRef<StormMapHandle>(null)
   const [me, setMe] = useState<Me | null>(null)
   const [storms, setStorms] = useState<StormCell[]>([])
   const [locations, setLocations] = useState<LocationItem[]>([])
@@ -103,6 +105,7 @@ export function Dashboard({ onLogout }: Props) {
       <div className="layout">
         <div className="map-card">
           <StormMap
+            ref={mapRef}
             storms={storms}
             locations={locations}
             satelliteWatches={satelliteWatches}
@@ -144,7 +147,10 @@ export function Dashboard({ onLogout }: Props) {
           {error && <div className="panel error">⚠️ {error}</div>}
           <AlertsPanel alerts={alerts} />
           <StormsPanel storms={storms} />
-          <SatelliteWatchesPanel watches={satelliteWatches} />
+          <SatelliteWatchesPanel
+            watches={satelliteWatches}
+            onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+          />
           <LocationsPanel locations={locations} />
           {updatedAt && (
             <div className="updated">
@@ -240,7 +246,13 @@ function StormsPanel({ storms }: { storms: StormCell[] }) {
   )
 }
 
-function SatelliteWatchesPanel({ watches }: { watches: ConvectiveWatch[] }) {
+function SatelliteWatchesPanel({
+  watches,
+  onSelect,
+}: {
+  watches: ConvectiveWatch[]
+  onSelect: (latitude: number, longitude: number) => void
+}) {
   return (
     <section className="panel">
       <h2>
@@ -248,7 +260,7 @@ function SatelliteWatchesPanel({ watches }: { watches: ConvectiveWatch[] }) {
       </h2>
       <p className="panel-hint">
         Nuvens esfriando no topo, vistas pelo satélite — sinal de que pode virar chuva, antes de
-        aparecer como célula de tempestade.
+        aparecer como célula de tempestade. Clique numa observação para ver no mapa.
       </p>
       <div className="list">
         {watches.length === 0 && (
@@ -256,25 +268,9 @@ function SatelliteWatchesPanel({ watches }: { watches: ConvectiveWatch[] }) {
             Nenhuma observação ativa (ou SATELLITE_ENABLED=false — ver README).
           </p>
         )}
-        {watches.map((w) => {
-          const intensity = convectiveIntensity(w.min_brightness_temp_k)
-          return (
-            <div className="row" key={w.id}>
-              <span className={`badge ${intensity.className}`}>{intensity.label}</span>
-              <div className="grow">
-                <div>
-                  Nuvem em formação · {timeAgo(w.detected_at)}
-                  {w.speed_kmh != null && w.direction_deg != null
-                    ? ` · movendo para ${cardinalDirection(w.direction_deg)} a ${w.speed_kmh.toFixed(0)} km/h`
-                    : ''}
-                </div>
-                <div className="sub">
-                  📍 {w.latitude.toFixed(2)}, {w.longitude.toFixed(2)}
-                </div>
-              </div>
-            </div>
-          )
-        })}
+        {watches.map((w) => (
+          <SatelliteWatchRow key={w.id} watch={w} onSelect={onSelect} />
+        ))}
       </div>
     </section>
   )
