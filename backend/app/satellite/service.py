@@ -7,7 +7,7 @@ from geoalchemy2.functions import ST_Distance, ST_DWithin
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.satellite.models import ConvectiveWatch
+from app.satellite.models import ConvectiveWatch, SatelliteImage
 
 
 def _point(latitude: float, longitude: float) -> WKTElement:
@@ -48,3 +48,11 @@ async def watches_within_radius(
         .limit(limit)
     )
     return [(watch, dist_m / 1000.0) for watch, dist_m in result.all()]
+
+
+async def get_latest_image(session: AsyncSession) -> SatelliteImage | None:
+    """The current satellite frame, if any cycle has produced one yet."""
+    result = await session.execute(
+        select(SatelliteImage).order_by(SatelliteImage.captured_at.desc()).limit(1)
+    )
+    return result.scalars().first()

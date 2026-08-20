@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any
 
 from geoalchemy2 import Geography
-from sqlalchemy import Boolean, DateTime, Float
+from sqlalchemy import Boolean, DateTime, Float, Integer, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -43,5 +43,32 @@ class ConvectiveWatch(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     # Always real satellite data (no mock satellite provider exists), but
     # the technique itself is unvalidated meteorologically — see ADR-0005.
+    is_mock: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    experimental: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class SatelliteImage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """The most recent rendered satellite IR frame (FASE 18).
+
+    Only the latest frame is ever kept — see ``workers.satellite_pipeline
+    ._persist_image``, which deletes any existing row before inserting a new
+    one each cycle. This is a *display* image (downsampled, grayscale IR
+    convention), not the scientific raw grid — the real measurements live on
+    ``ConvectiveWatch`` rows instead.
+    """
+
+    __tablename__ = "satellite_images"
+
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    bbox_lon_min: Mapped[float] = mapped_column(Float, nullable=False)
+    bbox_lat_min: Mapped[float] = mapped_column(Float, nullable=False)
+    bbox_lon_max: Mapped[float] = mapped_column(Float, nullable=False)
+    bbox_lat_max: Mapped[float] = mapped_column(Float, nullable=False)
+    band: Mapped[str] = mapped_column(String(16), nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    png_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     is_mock: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     experimental: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

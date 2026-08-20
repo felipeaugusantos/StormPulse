@@ -45,6 +45,7 @@ satellite = [
     "netCDF4",
     "opencv-python-headless",
     "pathos",
+    "pillow",
     "pyproj",
     "rasterstats",
     "rtree",
@@ -99,7 +100,7 @@ known-first-party = ["app", "engine", "workers"]
 # mypy (typing)
 # ---------------------------------------------------------------------------
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 warn_unused_ignores = true
@@ -120,6 +121,12 @@ ignore_missing_imports = true
 # GDAL/TATHU: C-extension bindings with no type stubs, and not installed at
 # all outside the Docker image (see workers/satellite_pipeline.py docstring).
 module = ["osgeo.*", "tathu.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# numpy/Pillow: not installed outside the Docker image (satellite extra),
+# same as osgeo/tathu above.
+module = ["numpy.*", "PIL.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

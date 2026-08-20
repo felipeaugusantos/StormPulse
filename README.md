@@ -54,6 +54,7 @@ O que já funciona nesta fase:
 | GET | `/api/v1/public/warnings` | Avisos oficiais ao vivo por ponto, sem login — FASE 15 |
 | GET | `/api/v1/satellite`, `/satellite/nearby` | Observações via satélite (GDAL+TATHU) — FASE 16 |
 | GET | `/api/v1/public/satellite/watches` | Observações via satélite, sem login — FASE 16 |
+| GET | `/api/v1/public/satellite/image`, `.../image.png` | Imagem IR do GOES-19 ao vivo (metadados + PNG), sem login — FASE 18 |
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
 > engine não existe) — nunca dados fictícios. O provider de dados é escolhido
@@ -117,6 +118,14 @@ nesse caso). Aparece no dashboard como um novo painel/camada no mapa
 (`SATELLITE_WATCH_DETECTED`/`DISSIPATED`, nível sempre amarelo — sinal
 precoce, não uma tempestade confirmada). Limitações e decisões documentadas
 no [ADR-0009](docs/adr/0009-satelite-goes19-tathu.md).
+
+Com `SATELLITE_ENABLED=true`, cada ciclo também renderiza a imagem IR real
+(banda 13, escala de cinza invertida — convenção meteorológica padrão) a
+partir do mesmo grid já reprojetado para detecção, sem custo extra de
+download/GDAL. Aparece como camada no mapa (com toggle para
+ligar/desligar), servida sem login em `GET /api/v1/public/satellite/image`
+(metadados) e `.../image.png` — só a imagem mais recente é guardada, sem
+histórico. Ver [ADR-0013](docs/adr/0013-imagem-satelite-ao-vivo.md).
 
 ## Documentação
 

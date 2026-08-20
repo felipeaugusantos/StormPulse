@@ -85,3 +85,11 @@ export interface ConvectiveWatch {
   is_mock: boolean
   experimental: boolean
 }
+
+export interface SatelliteImageMeta {
+  captured_at: string
+  bbox: [number, number, number, number]
+  band: string
+  width: number
+  height: number
+}

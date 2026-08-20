@@ -5,6 +5,7 @@ import type {
   LocationItem,
   Me,
   ReadyStatus,
+  SatelliteImageMeta,
   StormCell,
   WarningItem,
 } from './types'
@@ -85,6 +86,24 @@ export const publicApi = {
   warnings: (lat: number, lon: number) =>
     request<WarningItem[]>(`/public/warnings?lat=${lat}&lon=${lon}`),
   satelliteWatches: () => request<ConvectiveWatch[]>('/public/satellite/watches'),
+  // No cycle has run yet (or SATELLITE_ENABLED=false) is a normal, common
+  // state — treated as "no image", not an error, same spirit as an empty
+  // watches list.
+  satelliteImage: async (): Promise<SatelliteImageMeta | null> => {
+    try {
+      return await request<SatelliteImageMeta>('/public/satellite/image')
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null
+      throw err
+    }
+  },
+}
+
+// The MapLibre `image` source fetches this URL directly (no Authorization
+// header attached) — the endpoint must be, and is, public. `capturedAt` in
+// the query string busts the browser cache when a new frame is available.
+export function satelliteImagePngUrl(capturedAt: string): string {
+  return `${V1}/public/satellite/image.png?t=${encodeURIComponent(capturedAt)}`
 }
 
 // Health/readiness live at the API root, not under /api/v1.

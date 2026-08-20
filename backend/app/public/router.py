@@ -8,17 +8,18 @@ official warnings, fetched live from the active weather provider per point
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.core.config import Settings, get_settings
 from app.satellite import service as satellite_service
-from app.satellite.schemas import ConvectiveWatchOut
+from app.satellite.schemas import ConvectiveWatchOut, SatelliteImageMetaOut
 from app.storms import service as storm_service
 from app.storms.schemas import NearbyStormCellOut, StormCellOut
 from app.weather.factory import get_weather_provider
-from app.weather.provider import Warning
+from app.weather.provider import Warning, WeatherProviderUnavailableError
 
 router = APIRouter(tags=["public"])
 
@@ -67,6 +68,51 @@ async def public_satellite_watches(
 
 
 @router.get(
+    "/satellite/image",
+    response_model=SatelliteImageMetaOut,
+    summary="Metadados do quadro de satélite atual (público)",
+)
+async def public_satellite_image_meta(
+    session: AsyncSession = Depends(get_db),
+) -> SatelliteImageMetaOut:
+    image = await satellite_service.get_latest_image(session)
+    if image is None:
+        # Honest 404: SATELLITE_ENABLED=false, or no cycle has run yet —
+        # never a placeholder/blank image pretending to be real.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma imagem de satélite disponível no momento",
+        )
+    return SatelliteImageMetaOut(
+        captured_at=image.captured_at,
+        bbox=(image.bbox_lon_min, image.bbox_lat_min, image.bbox_lon_max, image.bbox_lat_max),
+        band=image.band,
+        width=image.width,
+        height=image.height,
+    )
+
+
+@router.get(
+    "/satellite/image.png",
+    summary="PNG do quadro de satélite atual (público, sem autenticação — usado direto pelo mapa)",
+)
+async def public_satellite_image_png(
+    session: AsyncSession = Depends(get_db),
+) -> Response:
+    image = await satellite_service.get_latest_image(session)
+    if image is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma imagem de satélite disponível no momento",
+        )
+    return Response(
+        content=image.png_data,
+        media_type="image/png",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.get(
     "/warnings",
     response_model=list[Warning],
     summary="Avisos oficiais ativos perto de um ponto (público, ao vivo)",
@@ -77,4 +123,10 @@ async def public_warnings(
     settings: Settings = Depends(get_settings),
 ) -> list[Warning]:
     provider = get_weather_provider(settings)
-    return await provider.get_warnings(lat, lon)
+    try:
+        return await provider.get_warnings(lat, lon)
+    except (WeatherProviderUnavailableError, httpx.HTTPError):
+        # Honest empty list, not a 500: the same "no warnings available"
+        # outcome InmetWeatherProvider.get_warnings already returns for a
+        # partial failure — this just extends it to a full provider outage.
+        return []

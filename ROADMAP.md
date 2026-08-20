@@ -23,6 +23,7 @@ automaticamente para a próxima.
 | **15** | Login Google + modo visitante + previsão real | `POST /auth/google` (vínculo por `google_sub`), `/api/v1/public/*` (células+avisos sem conta), `GET /locations/{id}/forecast` (5 dias reais do INMET + 1 histórico) — ver [ADR-0008](docs/adr/0008-login-google-visitante-previsao-inmet.md) | ✅ Concluída |
 | **16** | Observação via satélite (GOES-19 + TATHU) | `ConvectiveWatch` (detecção de convecção via infravermelho, GDAL+TATHU), integrado ao Alert Engine, `/api/v1/satellite` e `/api/v1/public/satellite/watches`, desligado por padrão (`SATELLITE_ENABLED=false`) — ver [ADR-0009](docs/adr/0009-satelite-goes19-tathu.md) | ✅ Concluída |
 | **17** | Redundância INPE/CPTEC | `CptecWeatherProvider` (previsão real via XML público do INPE/CPTEC, sem geocódigo) + `FallbackWeatherProvider` — fallback automático por método quando o INMET falha, ligado por padrão (`CPTEC_FALLBACK_ENABLED=true`) — ver [ADR-0011](docs/adr/0011-inpe-cptec-fallback.md) | ✅ Concluída |
+| **18** | Imagem de satélite ao vivo no mapa | `SatelliteImage` (frame IR do GOES-19 renderizado a partir do mesmo grid já reprojetado pra detecção), `/api/v1/public/satellite/image` + `.../image.png`, camada `image` no MapLibre com toggle — ver [ADR-0013](docs/adr/0013-imagem-satelite-ao-vivo.md) | ✅ Concluída |
 
 ## Escopo do MVP (fases 1–10)
 

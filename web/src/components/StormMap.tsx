@@ -2,15 +2,18 @@ import { useEffect, useRef } from 'react'
 import maplibregl from 'maplibre-gl'
 import type {
   GeoJSONSource,
+  ImageSource,
   LngLatBoundsLike,
   StyleSpecification,
 } from 'maplibre-gl'
-import type { ConvectiveWatch, LocationItem, StormCell } from '../types'
+import { satelliteImagePngUrl } from '../api'
+import type { ConvectiveWatch, LocationItem, SatelliteImageMeta, StormCell } from '../types'
 
 interface Props {
   storms: StormCell[]
   locations: LocationItem[]
   satelliteWatches?: ConvectiveWatch[]
+  satelliteImage?: SatelliteImageMeta | null
 }
 
 const SATELLITE_WATCH_COLOR = '#a78bfa'
@@ -68,7 +71,25 @@ function satelliteWatchesGeoJSON(watches: ConvectiveWatch[]) {
   }
 }
 
-export function StormMap({ storms, locations, satelliteWatches = [] }: Props) {
+function imageCoordinates(
+  bbox: [number, number, number, number],
+): [[number, number], [number, number], [number, number], [number, number]] {
+  const [lonMin, latMin, lonMax, latMax] = bbox
+  // MapLibre `image` source coordinates go clockwise from the top-left.
+  return [
+    [lonMin, latMax],
+    [lonMax, latMax],
+    [lonMax, latMin],
+    [lonMin, latMin],
+  ]
+}
+
+export function StormMap({
+  storms,
+  locations,
+  satelliteWatches = [],
+  satelliteImage = null,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const readyRef = useRef(false)
@@ -151,6 +172,33 @@ export function StormMap({ storms, locations, satelliteWatches = [] }: Props) {
       locs.setData(locationsGeoJSON(locations))
       watches.setData(satelliteWatchesGeoJSON(satelliteWatches))
 
+      if (satelliteImage) {
+        const url = satelliteImagePngUrl(satelliteImage.captured_at)
+        const coordinates = imageCoordinates(satelliteImage.bbox)
+        const existing = map.getSource('satellite-image') as ImageSource | undefined
+        if (existing) {
+          existing.updateImage({ url, coordinates })
+        } else {
+          map.addSource('satellite-image', { type: 'image', url, coordinates })
+          // Below satellite-watches (a raster frame behind every point layer,
+          // right above the OSM basemap) so it never competes with points.
+          map.addLayer(
+            {
+              id: 'satellite-image',
+              type: 'raster',
+              source: 'satellite-image',
+              paint: { 'raster-opacity': 0.55 },
+            },
+            'satellite-watches',
+          )
+        }
+        if (map.getLayer('satellite-image')) {
+          map.setLayoutProperty('satellite-image', 'visibility', 'visible')
+        }
+      } else if (map.getLayer('satellite-image')) {
+        map.setLayoutProperty('satellite-image', 'visibility', 'none')
+      }
+
       const points = [
         ...storms.map((s) => [s.longitude, s.latitude] as [number, number]),
         ...locations.map((l) => [l.longitude, l.latitude] as [number, number]),
@@ -166,7 +214,7 @@ export function StormMap({ storms, locations, satelliteWatches = [] }: Props) {
 
     if (readyRef.current) apply()
     else map.once('load', apply)
-  }, [storms, locations, satelliteWatches])
+  }, [storms, locations, satelliteWatches, satelliteImage])
 
   return <div className="map" ref={containerRef} />
 }

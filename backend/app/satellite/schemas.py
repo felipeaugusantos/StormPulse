@@ -29,3 +29,16 @@ class NearbyConvectiveWatchOut(ConvectiveWatchOut):
     """A convective watch plus its distance to the query point."""
 
     distance_km: float
+
+
+class SatelliteImageMetaOut(BaseModel):
+    """Metadata for the current satellite frame — the PNG itself is served
+    separately (``GET .../satellite/image.png``) since it's binary."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    captured_at: datetime
+    bbox: tuple[float, float, float, float]
+    band: str
+    width: int
+    height: int

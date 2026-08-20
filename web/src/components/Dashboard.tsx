@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ApiError, api, clearToken, readiness } from '../api'
+import { ApiError, api, clearToken, publicApi, readiness } from '../api'
 import type {
   AlertItem,
   ConvectiveWatch,
@@ -7,6 +7,7 @@ import type {
   LocationItem,
   Me,
   ReadyStatus,
+  SatelliteImageMeta,
   StormCell,
 } from '../types'
 import { cardinalDirection, convectiveIntensity, timeAgo } from '../format'
@@ -24,24 +25,29 @@ export function Dashboard({ onLogout }: Props) {
   const [locations, setLocations] = useState<LocationItem[]>([])
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
+  const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
+  const [showSatelliteImage, setShowSatelliteImage] = useState(true)
   const [ready, setReady] = useState<ReadyStatus | null>(null)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const [meRes, stormsRes, locsRes, alertsRes, satelliteRes] = await Promise.all([
-        api.me(),
-        api.storms(),
-        api.locations(),
-        api.alerts(),
-        api.satelliteWatches(),
-      ])
+      const [meRes, stormsRes, locsRes, alertsRes, satelliteRes, satelliteImageRes] =
+        await Promise.all([
+          api.me(),
+          api.storms(),
+          api.locations(),
+          api.alerts(),
+          api.satelliteWatches(),
+          publicApi.satelliteImage(),
+        ])
       setMe(meRes)
       setStorms(stormsRes)
       setLocations(locsRes)
       setAlerts(alertsRes)
       setSatelliteWatches(satelliteRes)
+      setSatelliteImage(satelliteImageRes)
       setUpdatedAt(new Date())
       setError(null)
     } catch (err) {
@@ -96,7 +102,12 @@ export function Dashboard({ onLogout }: Props) {
 
       <div className="layout">
         <div className="map-card">
-          <StormMap storms={storms} locations={locations} satelliteWatches={satelliteWatches} />
+          <StormMap
+            storms={storms}
+            locations={locations}
+            satelliteWatches={satelliteWatches}
+            satelliteImage={showSatelliteImage ? satelliteImage : null}
+          />
           <div className="map-legend">
             <span className="legend-item">
               <span className="swatch" style={{ background: '#37d39b' }} /> fraca
@@ -116,6 +127,16 @@ export function Dashboard({ onLogout }: Props) {
             <span className="legend-item">
               <span className="swatch" style={{ background: '#a78bfa' }} /> satélite
             </span>
+            {satelliteImage && (
+              <label className="legend-item satellite-image-toggle">
+                <input
+                  type="checkbox"
+                  checked={showSatelliteImage}
+                  onChange={(e) => setShowSatelliteImage(e.target.checked)}
+                />
+                imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
+              </label>
+            )}
           </div>
         </div>
 

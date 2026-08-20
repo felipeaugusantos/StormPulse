@@ -31,6 +31,7 @@ class _FakeProvider(WeatherProvider):
         self._fails = fails
         self._via_http_error = via_http_error
         self.calls = 0
+        self.closed = False
 
     @property
     def name(self) -> str:
@@ -70,6 +71,50 @@ class _FakeProvider(WeatherProvider):
     async def get_forecast(self, latitude: float, longitude: float) -> Forecast:
         self._maybe_fail()
         return Forecast(provenance=self._provenance(), latitude=latitude, longitude=longitude)
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
+def test_name_and_kind_reflect_the_wrapped_providers() -> None:
+    primary = _FakeProvider("primary")
+    secondary = _FakeProvider("secondary")
+    provider = FallbackWeatherProvider(primary, secondary)
+
+    assert provider.name == "primary+secondary"
+    assert provider.kind == primary.kind
+
+
+async def test_aclose_closes_both_providers() -> None:
+    primary = _FakeProvider("primary")
+    secondary = _FakeProvider("secondary")
+    provider = FallbackWeatherProvider(primary, secondary)
+
+    await provider.aclose()
+
+    assert primary.closed is True
+    assert secondary.closed is True
+
+
+async def test_get_radar_frames_uses_primary_when_it_succeeds() -> None:
+    primary = _FakeProvider("primary")
+    secondary = _FakeProvider("secondary")
+    provider = FallbackWeatherProvider(primary, secondary)
+
+    frames = await provider.get_radar_frames(limit=2)
+
+    assert frames[0].provenance.source_name == "primary"
+    assert secondary.calls == 0
+
+
+async def test_get_radar_frames_falls_back_when_primary_fails() -> None:
+    primary = _FakeProvider("primary", fails=True)
+    secondary = _FakeProvider("secondary")
+    provider = FallbackWeatherProvider(primary, secondary)
+
+    frames = await provider.get_radar_frames()
+
+    assert frames[0].provenance.source_name == "secondary"
 
 
 async def test_uses_primary_when_it_succeeds() -> None:

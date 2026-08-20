@@ -6,7 +6,10 @@ import pytest
 
 from app.core.config import Settings
 from app.core.enums import WeatherSourceKind
+from app.weather.cptec import CptecWeatherProvider
 from app.weather.factory import get_weather_provider
+from app.weather.fallback import FallbackWeatherProvider
+from app.weather.inmet import InmetWeatherProvider
 from app.weather.mock import MockWeatherProvider
 
 
@@ -44,3 +47,22 @@ def test_factory_returns_mock_by_default() -> None:
 def test_factory_rejects_unknown_provider() -> None:
     with pytest.raises(ValueError, match="Unknown weather provider"):
         get_weather_provider(Settings(environment="test", weather_provider="nao_existe"))
+
+
+def test_factory_wraps_inmet_with_cptec_fallback_by_default() -> None:
+    provider = get_weather_provider(
+        Settings(environment="test", weather_provider="inmet", cptec_fallback_enabled=True)
+    )
+    assert isinstance(provider, FallbackWeatherProvider)
+
+
+def test_factory_returns_bare_inmet_when_fallback_disabled() -> None:
+    provider = get_weather_provider(
+        Settings(environment="test", weather_provider="inmet", cptec_fallback_enabled=False)
+    )
+    assert isinstance(provider, InmetWeatherProvider)
+
+
+def test_factory_returns_cptec_standalone() -> None:
+    provider = get_weather_provider(Settings(environment="test", weather_provider="cptec"))
+    assert isinstance(provider, CptecWeatherProvider)

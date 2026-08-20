@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, publicApi } from '../api'
 import { cardinalDirection, convectiveIntensity, timeAgo } from '../format'
-import type { ConvectiveWatch, StormCell, WarningItem } from '../types'
+import type { ConvectiveWatch, SatelliteImageMeta, StormCell, WarningItem } from '../types'
 import { StormMap } from './StormMap'
 
 interface Props {
@@ -18,18 +18,22 @@ export function VisitorView({ onBack }: Props) {
   const [storms, setStorms] = useState<StormCell[]>([])
   const [warnings, setWarnings] = useState<WarningItem[]>([])
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
+  const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
+  const [showSatelliteImage, setShowSatelliteImage] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const [stormsRes, warningsRes, satelliteRes] = await Promise.all([
+      const [stormsRes, warningsRes, satelliteRes, satelliteImageRes] = await Promise.all([
         publicApi.storms(),
         publicApi.warnings(REFERENCE_POINT.lat, REFERENCE_POINT.lon),
         publicApi.satelliteWatches(),
+        publicApi.satelliteImage(),
       ])
       setStorms(stormsRes)
       setWarnings(warningsRes)
       setSatelliteWatches(satelliteRes)
+      setSatelliteImage(satelliteImageRes)
       setError(null)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao carregar')
@@ -63,7 +67,24 @@ export function VisitorView({ onBack }: Props) {
 
       <div className="layout">
         <div className="map-card">
-          <StormMap storms={storms} locations={[]} satelliteWatches={satelliteWatches} />
+          <StormMap
+            storms={storms}
+            locations={[]}
+            satelliteWatches={satelliteWatches}
+            satelliteImage={showSatelliteImage ? satelliteImage : null}
+          />
+          {satelliteImage && (
+            <div className="map-legend">
+              <label className="legend-item satellite-image-toggle standalone">
+                <input
+                  type="checkbox"
+                  checked={showSatelliteImage}
+                  onChange={(e) => setShowSatelliteImage(e.target.checked)}
+                />
+                imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
+              </label>
+            </div>
+          )}
         </div>
 
         <div className="side">

@@ -207,6 +207,7 @@ button {
   padding: 8px 10px;
   font-size: 0.72rem;
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
 }
 .legend-item {
@@ -219,6 +220,18 @@ button {
   width: 10px;
   height: 10px;
   border-radius: 3px;
+}
+.satellite-image-toggle {
+  cursor: pointer;
+  border-left: 1px solid var(--line-soft);
+  padding-left: 12px;
+}
+.satellite-image-toggle.standalone {
+  border-left: none;
+  padding-left: 0;
+}
+.satellite-image-toggle input {
+  cursor: pointer;
 }
 
 .side {

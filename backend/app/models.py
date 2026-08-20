@@ -10,7 +10,7 @@ from app.alerts.models import Alert
 from app.locations.models import AlertPreference, Location
 from app.notifications.models import Notification
 from app.reports.models import UserReport
-from app.satellite.models import ConvectiveWatch
+from app.satellite.models import ConvectiveWatch, SatelliteImage
 from app.storms.models import StormCell, StormObservation, StormRisk, StormTrack
 from app.tenants.models import Tenant
 from app.users.models import User
@@ -23,6 +23,7 @@ __all__ = [
     "Location",
     "Notification",
     "RadarFrame",
+    "SatelliteImage",
     "StormCell",
     "StormObservation",
     "StormRisk",
