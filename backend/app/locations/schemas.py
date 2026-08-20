@@ -54,3 +54,15 @@ class LocationOut(LocationBase):
     is_active: bool
     created_at: datetime
     alert_preferences: list[AlertPreferenceOut] = Field(default_factory=list)
+
+
+class SprayWindowOut(BaseModel):
+    """Live wind-only spray-safety check (FASE 19) — see ADR-0014 for why
+    this doesn't also weigh rain forecast (no numeric precipitation
+    forecast is available from any current source)."""
+
+    wind_kmh: float | None
+    wind_gusts_kmh: float | None
+    max_wind_kmh: float
+    # None when the source didn't report wind at all — never guessed.
+    safe: bool | None

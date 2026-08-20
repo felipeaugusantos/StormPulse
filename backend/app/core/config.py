@@ -122,6 +122,18 @@ class Settings(BaseSettings):
     cptec_http_timeout_seconds: float = Field(default=10.0, gt=0)
     cptec_fallback_enabled: bool = True
 
+    # --- Sinais agronômicos (FASE 19) ---
+    # Reusa get_forecast/get_recent_rainfall/get_current_data já existentes
+    # — sem custo de infra novo (ao contrário do satélite), ligado por
+    # padrão. Limiares são referências agronômicas genéricas, não
+    # específicas por cultura — ver ADR-0014.
+    agro_enabled: bool = True
+    agro_frost_threshold_c: float = 3.0
+    agro_dry_spell_window_days: int = Field(default=15, gt=0)
+    agro_dry_spell_min_days: int = Field(default=7, gt=0)
+    agro_dry_spell_rain_threshold_mm: float = Field(default=1.0, ge=0)
+    agro_spray_max_wind_kmh: float = Field(default=15.0, gt=0)
+
     @model_validator(mode="after")
     def _forbid_dev_secret_in_production(self) -> Settings:
         if self.environment == "production" and (

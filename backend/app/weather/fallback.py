@@ -27,6 +27,7 @@ from app.weather.provider import (
     CurrentConditions,
     Forecast,
     RadarFrameData,
+    RainfallHistory,
     Warning,
     WeatherProvider,
     WeatherProviderUnavailableError,
@@ -99,6 +100,20 @@ class FallbackWeatherProvider(WeatherProvider):
                 self._secondary.name,
             )
             return await self._secondary.get_forecast(latitude, longitude)
+
+    async def get_recent_rainfall(
+        self, latitude: float, longitude: float, *, days: int = 15
+    ) -> RainfallHistory:
+        try:
+            return await self._primary.get_recent_rainfall(latitude, longitude, days=days)
+        except _RECOVERABLE as exc:
+            logger.warning(
+                "%s recent rainfall unavailable (%s); falling back to %s",
+                self._primary.name,
+                exc,
+                self._secondary.name,
+            )
+            return await self._secondary.get_recent_rainfall(latitude, longitude, days=days)
 
     async def aclose(self) -> None:
         for provider in (self._primary, self._secondary):

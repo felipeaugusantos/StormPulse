@@ -54,6 +54,7 @@ export interface ReadyStatus {
 export interface ForecastPoint {
   time: string
   temperature_c: number | null
+  temperature_min_c: number | null
   precipitation_probability: number | null
   precipitation_mm: number | null
 }
@@ -92,4 +93,22 @@ export interface SatelliteImageMeta {
   band: string
   width: number
   height: number
+}
+
+export interface SprayWindow {
+  wind_kmh: number | null
+  wind_gusts_kmh: number | null
+  max_wind_kmh: number
+  safe: boolean | null
+}
+
+export interface DailyRainfall {
+  date: string
+  total_mm: number
+}
+
+export interface RainfallHistory {
+  latitude: number
+  longitude: number
+  daily: DailyRainfall[]
 }

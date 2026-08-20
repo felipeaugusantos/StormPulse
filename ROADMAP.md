@@ -24,6 +24,7 @@ automaticamente para a próxima.
 | **16** | Observação via satélite (GOES-19 + TATHU) | `ConvectiveWatch` (detecção de convecção via infravermelho, GDAL+TATHU), integrado ao Alert Engine, `/api/v1/satellite` e `/api/v1/public/satellite/watches`, desligado por padrão (`SATELLITE_ENABLED=false`) — ver [ADR-0009](docs/adr/0009-satelite-goes19-tathu.md) | ✅ Concluída |
 | **17** | Redundância INPE/CPTEC | `CptecWeatherProvider` (previsão real via XML público do INPE/CPTEC, sem geocódigo) + `FallbackWeatherProvider` — fallback automático por método quando o INMET falha, ligado por padrão (`CPTEC_FALLBACK_ENABLED=true`) — ver [ADR-0011](docs/adr/0011-inpe-cptec-fallback.md) | ✅ Concluída |
 | **18** | Imagem de satélite ao vivo no mapa | `SatelliteImage` (frame IR do GOES-19 renderizado a partir do mesmo grid já reprojetado pra detecção), `/api/v1/public/satellite/image` + `.../image.png`, camada `image` no MapLibre com toggle — ver [ADR-0013](docs/adr/0013-imagem-satelite-ao-vivo.md) | ✅ Concluída |
+| **19** | Sinais agronômicos | Alerta de geada e sequência-sem-chuva (`FROST_WARNING`/`DRY_SPELL_WARNING`, ciclo a cada 6h), janela de pulverização (só vento — sem previsão numérica de chuva disponível) e chuva acumulada via `GET /locations/{id}/agro/{spray-window,rainfall}` — ver [ADR-0014](docs/adr/0014-sinais-agronomicos.md) | ✅ Concluída |
 
 ## Escopo do MVP (fases 1–10)
 

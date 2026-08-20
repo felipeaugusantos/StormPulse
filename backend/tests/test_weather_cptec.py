@@ -63,6 +63,7 @@ async def test_get_forecast_parses_previsao_days() -> None:
     assert forecast.provenance.is_mock is False
     assert len(forecast.points) == 2
     assert forecast.points[0].temperature_c == 32.0
+    assert forecast.points[0].temperature_min_c == 16.0
     assert forecast.points[0].precipitation_mm is None
     assert forecast.points[1].temperature_c == 29.0
 
@@ -155,3 +156,9 @@ async def test_current_data_and_radar_and_warnings_are_honestly_unavailable() ->
         await provider.get_radar_frames()
     with pytest.raises(WeatherProviderUnavailableError):
         await provider.get_warnings(-21.1775, -47.8103)
+
+
+async def test_recent_rainfall_is_honestly_unavailable() -> None:
+    provider = _make_provider(httpx.MockTransport(lambda request: httpx.Response(200)))
+    with pytest.raises(WeatherProviderUnavailableError):
+        await provider.get_recent_rainfall(-21.1775, -47.8103, days=15)

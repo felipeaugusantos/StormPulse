@@ -19,6 +19,7 @@ from app.weather.provider import (
     Forecast,
     Provenance,
     RadarFrameData,
+    RainfallHistory,
     Warning,
     WeatherProvider,
     WeatherProviderUnavailableError,
@@ -72,6 +73,14 @@ class _FakeProvider(WeatherProvider):
         self._maybe_fail()
         return Forecast(provenance=self._provenance(), latitude=latitude, longitude=longitude)
 
+    async def get_recent_rainfall(
+        self, latitude: float, longitude: float, *, days: int = 15
+    ) -> RainfallHistory:
+        self._maybe_fail()
+        return RainfallHistory(
+            provenance=self._provenance(), latitude=latitude, longitude=longitude
+        )
+
     async def aclose(self) -> None:
         self.closed = True
 
@@ -115,6 +124,16 @@ async def test_get_radar_frames_falls_back_when_primary_fails() -> None:
     frames = await provider.get_radar_frames()
 
     assert frames[0].provenance.source_name == "secondary"
+
+
+async def test_get_recent_rainfall_falls_back_when_primary_fails() -> None:
+    primary = _FakeProvider("primary", fails=True)
+    secondary = _FakeProvider("secondary")
+    provider = FallbackWeatherProvider(primary, secondary)
+
+    rainfall = await provider.get_recent_rainfall(-21.0, -47.0, days=10)
+
+    assert rainfall.provenance.source_name == "secondary"
 
 
 async def test_uses_primary_when_it_succeeds() -> None:

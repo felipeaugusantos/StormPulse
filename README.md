@@ -55,6 +55,8 @@ O que já funciona nesta fase:
 | GET | `/api/v1/satellite`, `/satellite/nearby` | Observações via satélite (GDAL+TATHU) — FASE 16 |
 | GET | `/api/v1/public/satellite/watches` | Observações via satélite, sem login — FASE 16 |
 | GET | `/api/v1/public/satellite/image`, `.../image.png` | Imagem IR do GOES-19 ao vivo (metadados + PNG), sem login — FASE 18 |
+| GET | `/api/v1/locations/{id}/agro/spray-window` | Janela de pulverização (só vento atual) — FASE 19 |
+| GET | `/api/v1/locations/{id}/agro/rainfall` | Chuva acumulada por dia, janela recente — FASE 19 |
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
 > engine não existe) — nunca dados fictícios. O provider de dados é escolhido
@@ -126,6 +128,26 @@ download/GDAL. Aparece como camada no mapa (com toggle para
 ligar/desligar), servida sem login em `GET /api/v1/public/satellite/image`
 (metadados) e `.../image.png` — só a imagem mais recente é guardada, sem
 histórico. Ver [ADR-0013](docs/adr/0013-imagem-satelite-ao-vivo.md).
+
+## Sinais agronômicos (FASE 19)
+
+Ligado por padrão (`AGRO_ENABLED=true`) — reusa chamadas que já existem,
+sem custo de infra novo. A cada 6h, cada local monitorado é checado:
+
+- **Geada** (`FROST_WARNING`): mínima prevista ≤ `AGRO_FROST_THRESHOLD_C`
+  (padrão 3°C — referência agronômica genérica, não específica por
+  cultura).
+- **Sequência sem chuva** (`DRY_SPELL_WARNING`): N dias consecutivos sem
+  chuva mensurável na estação mais próxima (padrão: 7 dias, limiar
+  1mm). Chamado assim, não "veranico" — não temos normais climatológicas
+  pra afirmar que é anormal pra época do ano.
+
+Dois endpoints live, sem persistência (mesmo padrão do `/forecast`):
+`GET /locations/{id}/agro/spray-window` (janela de pulverização — **só
+vento atual**, já que nenhuma fonte disponível dá previsão numérica de
+chuva) e `GET /locations/{id}/agro/rainfall` (chuva acumulada por dia).
+Decisões e limitações documentadas no
+[ADR-0014](docs/adr/0014-sinais-agronomicos.md).
 
 ## Documentação
 

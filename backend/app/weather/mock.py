@@ -13,10 +13,12 @@ from datetime import UTC, datetime, timedelta
 from app.core.enums import WeatherSourceKind
 from app.weather.provider import (
     CurrentConditions,
+    DailyRainfall,
     Forecast,
     ForecastPoint,
     Provenance,
     RadarFrameData,
+    RainfallHistory,
     RawCell,
     Warning,
     WeatherProvider,
@@ -103,6 +105,7 @@ class MockWeatherProvider(WeatherProvider):
             ForecastPoint(
                 time=now + timedelta(hours=h),
                 temperature_c=round(15 + 15 * self._wave(latitude, longitude, h * 0.2), 1),
+                temperature_min_c=round(7 + 15 * self._wave(latitude, longitude, h * 0.2), 1),
                 precipitation_probability=int(100 * self._wave(latitude, longitude, h * 0.3)),
                 precipitation_mm=round(10 * self._wave(latitude, longitude, h * 0.4), 1),
             )
@@ -113,4 +116,22 @@ class MockWeatherProvider(WeatherProvider):
             latitude=latitude,
             longitude=longitude,
             points=points,
+        )
+
+    async def get_recent_rainfall(
+        self, latitude: float, longitude: float, *, days: int = 15
+    ) -> RainfallHistory:
+        today = datetime.now(UTC).date()
+        daily = [
+            DailyRainfall(
+                date=today - timedelta(days=d),
+                total_mm=round(15 * self._wave(latitude, longitude, d * 0.5), 1),
+            )
+            for d in range(days)
+        ]
+        return RainfallHistory(
+            provenance=self._provenance(),
+            latitude=latitude,
+            longitude=longitude,
+            daily=daily,
         )

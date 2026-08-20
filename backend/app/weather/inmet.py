@@ -39,10 +39,12 @@ import httpx
 from app.core.enums import WeatherSourceKind
 from app.weather.provider import (
     CurrentConditions,
+    DailyRainfall,
     Forecast,
     ForecastPoint,
     Provenance,
     RadarFrameData,
+    RainfallHistory,
     RawCell,
     Warning,
     WeatherProvider,
@@ -411,6 +413,7 @@ class InmetWeatherProvider(WeatherProvider):
                 ForecastPoint(
                     time=day,
                     temperature_c=_as_float(period, ("temp_max",)),
+                    temperature_min_c=_as_float(period, ("temp_min",)),
                     # INMET gives a free-text summary ("Poucas nuvens"), not a
                     # numeric probability or mm — left unset rather than
                     # invented from text.
@@ -424,6 +427,33 @@ class InmetWeatherProvider(WeatherProvider):
             latitude=latitude,
             longitude=longitude,
             points=points,
+        )
+
+    async def get_recent_rainfall(
+        self, latitude: float, longitude: float, *, days: int = 15
+    ) -> RainfallHistory:
+        stations = await self._fetch_stations()
+        station = self._nearest_station(latitude, longitude, stations)
+        code = _first(station, _CODE_KEYS)
+        if code is None:
+            raise WeatherProviderUnavailableError("Nearest INMET station has no station code.")
+
+        today = datetime.now(UTC).date()
+        daily: list[DailyRainfall] = []
+        for d in range(days):
+            day = today - timedelta(days=d)
+            try:
+                readings = await self._fetch_station_readings(str(code), day)
+            except (httpx.HTTPError, WeatherProviderUnavailableError):
+                continue
+            total = sum(v for r in readings if (v := _as_float(r, _RAIN_KEYS)) is not None)
+            daily.append(DailyRainfall(date=day, total_mm=round(total, 1)))
+
+        return RainfallHistory(
+            provenance=self._provenance(),
+            latitude=latitude,
+            longitude=longitude,
+            daily=daily,
         )
 
     async def aclose(self) -> None:

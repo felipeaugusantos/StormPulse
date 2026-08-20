@@ -382,3 +382,24 @@ button {
 .forecast-row.past .sub {
   color: var(--ink-mute);
 }
+
+.agro-section {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.agro-title {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ink-mute);
+}
+.agro-row {
+  color: var(--ink-dim);
+}
+.agro-row.warn {
+  color: var(--orange);
+}

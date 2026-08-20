@@ -83,6 +83,11 @@ class AlertEventType(StrEnum):
     # with the STORM_* events above.
     SATELLITE_WATCH_DETECTED = "satellite_watch_detected"
     SATELLITE_WATCH_DISSIPATED = "satellite_watch_dissipated"
+    # Agronomic advisories (FASE 19) — derived from forecast/historical
+    # readings already collected, evaluated per monitored Location on its
+    # own schedule (see workers/agro_pipeline.py), not from the storm engine.
+    FROST_WARNING = "frost_warning"
+    DRY_SPELL_WARNING = "dry_spell_warning"
 
 
 class NotificationChannel(StrEnum):

@@ -4,8 +4,10 @@ import type {
   Forecast,
   LocationItem,
   Me,
+  RainfallHistory,
   ReadyStatus,
   SatelliteImageMeta,
+  SprayWindow,
   StormCell,
   WarningItem,
 } from './types'
@@ -77,6 +79,10 @@ export const api = {
   alerts: () => request<AlertItem[]>('/alerts'),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
   satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),
+  sprayWindow: (locationId: string) =>
+    request<SprayWindow>(`/locations/${locationId}/agro/spray-window`),
+  rainfall: (locationId: string, days = 15) =>
+    request<RainfallHistory>(`/locations/${locationId}/agro/rainfall?days=${days}`),
 }
 
 // No token required (visitor mode) — same request() helper, it just won't

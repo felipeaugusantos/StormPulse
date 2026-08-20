@@ -37,6 +37,13 @@ async def test_forecast_has_points(provider: MockWeatherProvider) -> None:
     forecast = await provider.get_forecast(-23.5, -46.6)
     assert forecast.provenance.is_mock is True
     assert len(forecast.points) == 12
+    assert all(p.temperature_min_c is not None for p in forecast.points)
+
+
+async def test_recent_rainfall_is_flagged_mock(provider: MockWeatherProvider) -> None:
+    rainfall = await provider.get_recent_rainfall(-23.5, -46.6, days=10)
+    assert rainfall.provenance.is_mock is True
+    assert len(rainfall.daily) == 10
 
 
 def test_factory_returns_mock_by_default() -> None:

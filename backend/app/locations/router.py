@@ -5,19 +5,19 @@ from __future__ import annotations
 import uuid
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import Settings, get_settings
 from app.locations import service
 from app.locations.models import Location
-from app.locations.schemas import LocationCreate, LocationOut, LocationUpdate
+from app.locations.schemas import LocationCreate, LocationOut, LocationUpdate, SprayWindowOut
 from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
 from app.weather.factory import get_weather_provider
-from app.weather.provider import Forecast, WeatherProviderUnavailableError
+from app.weather.provider import Forecast, RainfallHistory, WeatherProviderUnavailableError
 
 router = APIRouter(tags=["locations"])
 
@@ -129,4 +129,58 @@ async def get_location_forecast(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Previsão indisponível para este local no momento",
+        ) from exc
+
+
+@router.get(
+    "/{location_id}/agro/spray-window",
+    response_model=SprayWindowOut,
+    summary="Janela de pulverização — só vento atual (FASE 19, ver ADR-0014)",
+)
+async def get_location_spray_window(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> SprayWindowOut:
+    location = await _get_owned_or_404(session, user, location_id)
+    provider = get_weather_provider(settings)
+    try:
+        current = await provider.get_current_data(location.latitude, location.longitude)
+    except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Condições atuais indisponíveis para este local no momento",
+        ) from exc
+
+    wind = current.wind_gusts_kmh if current.wind_gusts_kmh is not None else current.wind_kmh
+    safe = None if wind is None else wind < settings.agro_spray_max_wind_kmh
+    return SprayWindowOut(
+        wind_kmh=current.wind_kmh,
+        wind_gusts_kmh=current.wind_gusts_kmh,
+        max_wind_kmh=settings.agro_spray_max_wind_kmh,
+        safe=safe,
+    )
+
+
+@router.get(
+    "/{location_id}/agro/rainfall",
+    response_model=RainfallHistory,
+    summary="Chuva acumulada por dia, janela recente (FASE 19)",
+)
+async def get_location_rainfall(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+    days: int = Query(default=15, ge=1, le=60),
+) -> RainfallHistory:
+    location = await _get_owned_or_404(session, user, location_id)
+    provider = get_weather_provider(settings)
+    try:
+        return await provider.get_recent_rainfall(location.latitude, location.longitude, days=days)
+    except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Histórico de chuva indisponível para este local no momento",
         ) from exc

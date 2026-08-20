@@ -8,7 +8,7 @@ Every DTO carries provenance so simulated data can never masquerade as real.
 from __future__ import annotations
 
 import abc
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
@@ -61,6 +61,10 @@ class Warning(BaseModel):
 class ForecastPoint(BaseModel):
     time: datetime
     temperature_c: float | None = None
+    # The day's low — distinct from `temperature_c` (which represents the
+    # day's high, an INMET-inherited convention). Needed for frost risk;
+    # not every source can populate it (see each provider's docstring).
+    temperature_min_c: float | None = None
     precipitation_probability: int | None = None
     precipitation_mm: float | None = None
 
@@ -70,6 +74,18 @@ class Forecast(BaseModel):
     latitude: float
     longitude: float
     points: list[ForecastPoint] = Field(default_factory=list)
+
+
+class DailyRainfall(BaseModel):
+    date: date
+    total_mm: float
+
+
+class RainfallHistory(BaseModel):
+    provenance: Provenance
+    latitude: float
+    longitude: float
+    daily: list[DailyRainfall] = Field(default_factory=list)
 
 
 class WeatherProviderUnavailableError(RuntimeError):
@@ -106,3 +122,8 @@ class WeatherProvider(abc.ABC):
 
     @abc.abstractmethod
     async def get_forecast(self, latitude: float, longitude: float) -> Forecast: ...
+
+    @abc.abstractmethod
+    async def get_recent_rainfall(
+        self, latitude: float, longitude: float, *, days: int = 15
+    ) -> RainfallHistory: ...

@@ -177,9 +177,11 @@ async def test_forecast_includes_real_inmet_days_plus_yesterday(
     assert forecast.provenance.is_mock is False
     # 1 historical (yesterday, from the station) + 2 real forecast days.
     assert len(forecast.points) == 3
-    # The forecast-derived points use the "tarde" period's temp_max.
+    # The forecast-derived points use the "tarde" period's temp_max/temp_min.
     forecast_temps = {p.temperature_c for p in forecast.points[1:]}
     assert forecast_temps == {27.0, 22.0}
+    forecast_min_temps = {p.temperature_min_c for p in forecast.points[1:]}
+    assert forecast_min_temps == {14.0, 13.0}
     # No fabricated precipitation numbers from INMET's free-text summary.
     assert all(p.precipitation_probability is None for p in forecast.points[1:])
     assert all(p.precipitation_mm is None for p in forecast.points[1:])
@@ -190,6 +192,22 @@ async def test_forecast_raises_when_municipality_not_found_in_ibge(
 ) -> None:
     with pytest.raises(WeatherProviderUnavailableError):
         await provider.get_forecast(0.0, 0.0)  # nearest station has UF "XX", no IBGE match
+
+
+async def test_recent_rainfall_sums_daily_readings(provider: InmetWeatherProvider) -> None:
+    rainfall = await provider.get_recent_rainfall(-23.5, -46.6, days=3)
+    assert rainfall.provenance.is_mock is False
+    assert len(rainfall.daily) == 3
+    # The fixture handler serves the same single reading (CHUVA=8.0) for
+    # any requested day, so each day's total is that one reading's value.
+    assert all(d.total_mm == 8.0 for d in rainfall.daily)
+
+
+async def test_recent_rainfall_raises_when_no_station_nearby(
+    provider: InmetWeatherProvider,
+) -> None:
+    with pytest.raises(WeatherProviderUnavailableError):
+        await provider.get_recent_rainfall(60.0, 60.0, days=5)
 
 
 def test_marshall_palmer_dbz_is_zero_for_no_rain() -> None:

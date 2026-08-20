@@ -6,8 +6,10 @@ import type {
   ForecastPoint,
   LocationItem,
   Me,
+  RainfallHistory,
   ReadyStatus,
   SatelliteImageMeta,
+  SprayWindow,
   StormCell,
 } from '../types'
 import { timeAgo } from '../format'
@@ -276,28 +278,55 @@ function SatelliteWatchesPanel({
   )
 }
 
+// Mirrors the backend default (AGRO_FROST_THRESHOLD_C) for the client-side
+// derivation below — a generic agronomic reference, not crop-specific;
+// see ADR-0014. Not fetched dynamically: same reasoning as other
+// thresholds already baked into this dashboard.
+const FROST_THRESHOLD_C = 3
+
 function LocationsPanel({ locations }: { locations: LocationItem[] }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [forecast, setForecast] = useState<ForecastPoint[] | null>(null)
   const [forecastError, setForecastError] = useState<string | null>(null)
+  const [sprayWindow, setSprayWindow] = useState<SprayWindow | null>(null)
+  const [rainfall, setRainfall] = useState<RainfallHistory | null>(null)
+  const [agroError, setAgroError] = useState<string | null>(null)
 
   async function toggle(id: string) {
     if (selected === id) {
       setSelected(null)
       setForecast(null)
       setForecastError(null)
+      setSprayWindow(null)
+      setRainfall(null)
+      setAgroError(null)
       return
     }
     setSelected(id)
     setForecast(null)
     setForecastError(null)
+    setSprayWindow(null)
+    setRainfall(null)
+    setAgroError(null)
     try {
       const data = await api.forecast(id)
       setForecast(data.points)
     } catch (err) {
       setForecastError(err instanceof ApiError ? err.message : 'Previsão indisponível')
     }
+    try {
+      const [spray, rain] = await Promise.all([api.sprayWindow(id), api.rainfall(id)])
+      setSprayWindow(spray)
+      setRainfall(rain)
+    } catch (err) {
+      setAgroError(err instanceof ApiError ? err.message : 'Dados agro indisponíveis')
+    }
   }
+
+  const frostRisk = forecast?.some(
+    (p) => p.temperature_min_c != null && p.temperature_min_c <= FROST_THRESHOLD_C,
+  )
+  const rainfallTotal = rainfall?.daily.reduce((sum, d) => sum + d.total_mm, 0)
 
   return (
     <section className="panel">
@@ -339,6 +368,35 @@ function LocationsPanel({ locations }: { locations: LocationItem[] }) {
                 {forecast && forecast.length === 0 && (
                   <span className="sub">Sem pontos de previsão.</span>
                 )}
+                <div className="agro-section">
+                  <div className="agro-title">🌾 Agro</div>
+                  {agroError && <span className="sub">⚠️ {agroError}</span>}
+                  {frostRisk && (
+                    <div className="agro-row warn">
+                      ❄️ Risco de geada nos próximos dias (mínima ≤ {FROST_THRESHOLD_C}°C prevista)
+                    </div>
+                  )}
+                  {sprayWindow && (
+                    <div className={`agro-row ${sprayWindow.safe === false ? 'warn' : ''}`}>
+                      🌬️ Pulverização:{' '}
+                      {sprayWindow.wind_kmh != null
+                        ? `vento ${sprayWindow.wind_kmh.toFixed(0)} km/h`
+                        : 'vento indisponível'}{' '}
+                      —{' '}
+                      {sprayWindow.safe == null
+                        ? 'não avaliável'
+                        : sprayWindow.safe
+                          ? 'janela segura'
+                          : `vento forte (acima de ${sprayWindow.max_wind_kmh.toFixed(0)} km/h)`}
+                    </div>
+                  )}
+                  {rainfall && rainfallTotal != null && (
+                    <div className="agro-row">
+                      🌧️ Chuva acumulada ({rainfall.daily.length} dias): {rainfallTotal.toFixed(0)}
+                      mm
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

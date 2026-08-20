@@ -57,6 +57,7 @@ from app.weather.provider import (
     ForecastPoint,
     Provenance,
     RadarFrameData,
+    RainfallHistory,
     Warning,
     WeatherProvider,
 )
@@ -158,6 +159,7 @@ class CptecWeatherProvider(WeatherProvider):
                 ForecastPoint(
                     time=datetime.combine(day, datetime.min.time(), tzinfo=UTC),
                     temperature_c=_as_float(previsao, "maxima"),
+                    temperature_min_c=_as_float(previsao, "minima"),
                     # CPTEC's "tempo" is a condition code (e.g. "pn"), not a
                     # numeric probability or mm — left unset rather than
                     # invented from a code.
@@ -171,6 +173,13 @@ class CptecWeatherProvider(WeatherProvider):
             latitude=latitude,
             longitude=longitude,
             points=points,
+        )
+
+    async def get_recent_rainfall(
+        self, latitude: float, longitude: float, *, days: int = 15
+    ) -> RainfallHistory:
+        raise WeatherProviderUnavailableError(
+            "CPTEC's public XML service has no historical rainfall data, only forecasts."
         )
 
     async def aclose(self) -> None:

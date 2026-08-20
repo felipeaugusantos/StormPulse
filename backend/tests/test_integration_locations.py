@@ -117,3 +117,31 @@ async def test_storms_nearby_runs_postgis_query(client: AsyncClient) -> None:
     )
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
+
+
+async def test_spray_window_returns_live_wind_check(client: AsyncClient) -> None:
+    # The shared `client` fixture's Settings default to the mock provider,
+    # which always answers — exercises the success path (see
+    # test_weather_mock.py for the honest-404 path via a failing provider).
+    headers = await _auth_headers(client)
+    created = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    resp = await client.get(f"/api/v1/locations/{created['id']}/agro/spray-window", headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "safe" in body
+    assert body["max_wind_kmh"] > 0
+
+
+async def test_rainfall_history_returns_daily_totals(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    created = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    resp = await client.get(
+        f"/api/v1/locations/{created['id']}/agro/rainfall",
+        params={"days": 5},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["daily"]) == 5

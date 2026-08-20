@@ -34,5 +34,12 @@ celery_app.conf.update(
             "task": "workers.tasks.run_satellite_detection_task",
             "schedule": 600.0,  # seconds — matches GOES-19 full-disk cadence
         },
+        "agro-advisory-every-6-hours": {
+            "task": "workers.tasks.run_agro_advisory_task",
+            # Frost/dry-spell don't change minute to minute like storms, and
+            # the rainfall check calls INMET once per day requested per
+            # location — less frequent is honest and kinder to the API.
+            "schedule": 21_600.0,  # seconds
+        },
     },
 )
