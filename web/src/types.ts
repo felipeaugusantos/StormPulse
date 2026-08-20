@@ -99,6 +99,9 @@ export interface SprayWindow {
   wind_kmh: number | null
   wind_gusts_kmh: number | null
   max_wind_kmh: number
+  rain_probability_percent: number | null
+  rain_expected_mm: number | null
+  max_rain_probability_percent: number
   safe: boolean | null
 }
 

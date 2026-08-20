@@ -6,7 +6,6 @@ import type {
   ForecastPoint,
   LocationItem,
   Me,
-  RainfallHistory,
   ReadyStatus,
   SatelliteImageMeta,
   SprayWindow,
@@ -154,6 +153,10 @@ export function Dashboard({ onLogout }: Props) {
             onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
           />
           <LocationsPanel locations={locations} />
+          <AgroPanel
+            locations={locations}
+            onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+          />
           {updatedAt && (
             <div className="updated">
               Atualizado {updatedAt.toLocaleTimeString('pt-BR')} · atualização automática 30s
@@ -288,45 +291,24 @@ function LocationsPanel({ locations }: { locations: LocationItem[] }) {
   const [selected, setSelected] = useState<string | null>(null)
   const [forecast, setForecast] = useState<ForecastPoint[] | null>(null)
   const [forecastError, setForecastError] = useState<string | null>(null)
-  const [sprayWindow, setSprayWindow] = useState<SprayWindow | null>(null)
-  const [rainfall, setRainfall] = useState<RainfallHistory | null>(null)
-  const [agroError, setAgroError] = useState<string | null>(null)
 
   async function toggle(id: string) {
     if (selected === id) {
       setSelected(null)
       setForecast(null)
       setForecastError(null)
-      setSprayWindow(null)
-      setRainfall(null)
-      setAgroError(null)
       return
     }
     setSelected(id)
     setForecast(null)
     setForecastError(null)
-    setSprayWindow(null)
-    setRainfall(null)
-    setAgroError(null)
     try {
       const data = await api.forecast(id)
       setForecast(data.points)
     } catch (err) {
       setForecastError(err instanceof ApiError ? err.message : 'Previsão indisponível')
     }
-    try {
-      const [spray, rain] = await Promise.all([api.sprayWindow(id), api.rainfall(id)])
-      setSprayWindow(spray)
-      setRainfall(rain)
-    } catch (err) {
-      setAgroError(err instanceof ApiError ? err.message : 'Dados agro indisponíveis')
-    }
   }
-
-  const frostRisk = forecast?.some(
-    (p) => p.temperature_min_c != null && p.temperature_min_c <= FROST_THRESHOLD_C,
-  )
-  const rainfallTotal = rainfall?.daily.reduce((sum, d) => sum + d.total_mm, 0)
 
   return (
     <section className="panel">
@@ -368,39 +350,165 @@ function LocationsPanel({ locations }: { locations: LocationItem[] }) {
                 {forecast && forecast.length === 0 && (
                   <span className="sub">Sem pontos de previsão.</span>
                 )}
-                <div className="agro-section">
-                  <div className="agro-title">🌾 Agro</div>
-                  {agroError && <span className="sub">⚠️ {agroError}</span>}
-                  {frostRisk && (
-                    <div className="agro-row warn">
-                      ❄️ Risco de geada nos próximos dias (mínima ≤ {FROST_THRESHOLD_C}°C prevista)
-                    </div>
-                  )}
-                  {sprayWindow && (
-                    <div className={`agro-row ${sprayWindow.safe === false ? 'warn' : ''}`}>
-                      🌬️ Pulverização:{' '}
-                      {sprayWindow.wind_kmh != null
-                        ? `vento ${sprayWindow.wind_kmh.toFixed(0)} km/h`
-                        : 'vento indisponível'}{' '}
-                      —{' '}
-                      {sprayWindow.safe == null
-                        ? 'não avaliável'
-                        : sprayWindow.safe
-                          ? 'janela segura'
-                          : `vento forte (acima de ${sprayWindow.max_wind_kmh.toFixed(0)} km/h)`}
-                    </div>
-                  )}
-                  {rainfall && rainfallTotal != null && (
-                    <div className="agro-row">
-                      🌧️ Chuva acumulada ({rainfall.daily.length} dias): {rainfallTotal.toFixed(0)}
-                      mm
-                    </div>
-                  )}
-                </div>
               </div>
             )}
           </div>
         ))}
+      </div>
+    </section>
+  )
+}
+
+interface AgroEntry {
+  frostRisk: boolean
+  sprayWindow: SprayWindow | null
+  rainfallTotalMm: number | null
+  rainfallDays: number
+  error: string | null
+}
+
+function AgroPanel({
+  locations,
+  onSelect,
+}: {
+  locations: LocationItem[]
+  onSelect: (latitude: number, longitude: number) => void
+}) {
+  const [entries, setEntries] = useState<Record<string, AgroEntry>>({})
+  const activeIds = locations
+    .filter((l) => l.is_active)
+    .map((l) => l.id)
+    .join(',')
+
+  useEffect(() => {
+    let cancelled = false
+    const active = locations.filter((l) => l.is_active)
+
+    async function load() {
+      const results = await Promise.all(
+        active.map(async (l): Promise<[string, AgroEntry]> => {
+          try {
+            const [forecast, sprayWindow, rainfall] = await Promise.all([
+              api.forecast(l.id).catch(() => null),
+              api.sprayWindow(l.id).catch(() => null),
+              api.rainfall(l.id).catch(() => null),
+            ])
+            return [
+              l.id,
+              {
+                frostRisk:
+                  forecast?.points.some(
+                    (p) => p.temperature_min_c != null && p.temperature_min_c <= FROST_THRESHOLD_C,
+                  ) ?? false,
+                sprayWindow,
+                rainfallTotalMm: rainfall
+                  ? rainfall.daily.reduce((sum, d) => sum + d.total_mm, 0)
+                  : null,
+                rainfallDays: rainfall?.daily.length ?? 0,
+                error:
+                  forecast == null && sprayWindow == null && rainfall == null
+                    ? 'Dados agro indisponíveis no momento'
+                    : null,
+              },
+            ]
+          } catch {
+            return [
+              l.id,
+              {
+                frostRisk: false,
+                sprayWindow: null,
+                rainfallTotalMm: null,
+                rainfallDays: 0,
+                error: 'Dados agro indisponíveis no momento',
+              },
+            ]
+          }
+        }),
+      )
+      if (!cancelled) setEntries(Object.fromEntries(results))
+    }
+
+    load()
+    const t = setInterval(load, REFRESH_MS)
+    return () => {
+      cancelled = true
+      clearInterval(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIds])
+
+  const activeLocations = locations.filter((l) => l.is_active)
+
+  return (
+    <section className="panel">
+      <h2>
+        🌾 Agro <span className="count">{activeLocations.length}</span>
+      </h2>
+      <p className="panel-hint">
+        Geada (previsão), pulverização (vento + chuva prevista quando disponível) e chuva
+        acumulada, por local monitorado.
+      </p>
+      <div className="list">
+        {activeLocations.length === 0 && (
+          <p className="empty">Nenhum local monitorado ativo.</p>
+        )}
+        {activeLocations.map((l) => {
+          const entry = entries[l.id]
+          return (
+            <div
+              className="row clickable"
+              key={l.id}
+              onClick={() => onSelect(l.latitude, l.longitude)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                {!entry && <div className="sub">carregando…</div>}
+                {entry?.error && <div className="sub">⚠️ {entry.error}</div>}
+                {entry && !entry.error && (
+                  <div className="agro-section">
+                    {entry.frostRisk && (
+                      <div className="agro-row warn">
+                        ❄️ Risco de geada nos próximos dias (mínima ≤ {FROST_THRESHOLD_C}°C)
+                      </div>
+                    )}
+                    {entry.sprayWindow && (
+                      <div className={`agro-row ${entry.sprayWindow.safe === false ? 'warn' : ''}`}>
+                        🌬️{' '}
+                        {entry.sprayWindow.wind_kmh != null
+                          ? `vento ${entry.sprayWindow.wind_kmh.toFixed(0)} km/h`
+                          : 'vento indisponível'}
+                        {entry.sprayWindow.wind_gusts_kmh != null
+                          ? ` (rajada ${entry.sprayWindow.wind_gusts_kmh.toFixed(0)} km/h)`
+                          : ''}{' '}
+                        —{' '}
+                        {entry.sprayWindow.safe == null
+                          ? 'não avaliável'
+                          : entry.sprayWindow.safe
+                            ? 'janela segura pra pulverizar'
+                            : entry.sprayWindow.rain_probability_percent != null &&
+                                entry.sprayWindow.rain_probability_percent >=
+                                  entry.sprayWindow.max_rain_probability_percent
+                              ? `chuva provável (${entry.sprayWindow.rain_probability_percent}%)`
+                              : `vento acima do limite de ${entry.sprayWindow.max_wind_kmh.toFixed(0)} km/h`}
+                      </div>
+                    )}
+                    {entry.rainfallTotalMm != null && (
+                      <div className="agro-row">
+                        🌧️ {entry.rainfallTotalMm.toFixed(0)}mm acumulados ({entry.rainfallDays}{' '}
+                        dias)
+                      </div>
+                    )}
+                    {!entry.frostRisk && !entry.sprayWindow && entry.rainfallTotalMm == null && (
+                      <div className="agro-row sub">Sem sinais no momento.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </section>
   )
