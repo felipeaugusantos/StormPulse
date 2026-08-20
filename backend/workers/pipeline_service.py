@@ -167,10 +167,18 @@ def run_ingestion_cycle(
     provider = provider or get_weather_provider(settings)
     policy = AlertPolicy()
 
+    # Prune stale mock cells *before* fetching frames, and commit right
+    # away: when the real provider is down, get_radar_frames raises and
+    # session_scope() rolls back the whole transaction — if pruning ran
+    # later (or shared this transaction), that rollback would silently
+    # undo the cleanup too, and old mock rows from an earlier session
+    # would linger on the dashboard indefinitely, looking like live data
+    # instead of the stale demo leftovers they are.
+    _prune_old_mock_cells(session, older_than=timedelta(hours=2))
+    session.commit()
+
     frames = asyncio.run(provider.get_radar_frames(limit=6))
     tracked_storms = StormEngine().process(_to_frame_inputs(frames))
-
-    _prune_old_mock_cells(session, older_than=timedelta(hours=2))
 
     persisted: list[tuple[StormCell, TrackedStorm]] = [
         (_persist_tracked(session, tracked), tracked) for tracked in tracked_storms
