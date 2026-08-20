@@ -55,7 +55,7 @@ O que já funciona nesta fase:
 | GET | `/api/v1/satellite`, `/satellite/nearby` | Observações via satélite (GDAL+TATHU) — FASE 16 |
 | GET | `/api/v1/public/satellite/watches` | Observações via satélite, sem login — FASE 16 |
 | GET | `/api/v1/public/satellite/image`, `.../image.png` | Imagem IR do GOES-19 ao vivo (metadados + PNG), sem login — FASE 18 |
-| GET | `/api/v1/locations/{id}/agro/spray-window` | Janela de pulverização (só vento atual) — FASE 19 |
+| GET | `/api/v1/locations/{id}/agro/spray-window` | Janela de pulverização (vento + chuva prevista quando disponível) — FASE 19/20 |
 | GET | `/api/v1/locations/{id}/agro/rainfall` | Chuva acumulada por dia, janela recente — FASE 19 |
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
@@ -89,6 +89,17 @@ arredondado para 7). O CPTEC não tem radar/avisos/condições atuais para
 coordenadas arbitrárias, então o ciclo de ingestão (`get_radar_frames`)
 continua parado quando o INMET cai — só a previsão e as condições atuais
 ganham redundância. Ver [ADR-0011](docs/adr/0011-inpe-cptec-fallback.md).
+
+## Terceira redundância: Open-Meteo (FASE 20)
+
+Além do CPTEC, `WEATHER_PROVIDER=inmet` com `OPEN_METEO_FALLBACK_ENABLED=true`
+(padrão) tenta o [Open-Meteo](https://open-meteo.com) por último — agregador
+internacional sem chave, gratuito até 10.000 chamadas/dia pra uso não
+comercial. É o único dos 3 que dá **previsão numérica real de chuva**
+(probabilidade + mm), por isso a janela de pulverização
+(`/agro/spray-window`) passou a considerar chuva também, não só vento.
+Cadeia completa: INMET → CPTEC → Open-Meteo, cada um só tentado quando o
+anterior falha. Ver [ADR-0015](docs/adr/0015-open-meteo-terceiro-fallback.md).
 
 ## Login com Google e modo visitante (FASE 15)
 
@@ -143,10 +154,11 @@ sem custo de infra novo. A cada 6h, cada local monitorado é checado:
   pra afirmar que é anormal pra época do ano.
 
 Dois endpoints live, sem persistência (mesmo padrão do `/forecast`):
-`GET /locations/{id}/agro/spray-window` (janela de pulverização — **só
-vento atual**, já que nenhuma fonte disponível dá previsão numérica de
-chuva) e `GET /locations/{id}/agro/rainfall` (chuva acumulada por dia).
-Decisões e limitações documentadas no
+`GET /locations/{id}/agro/spray-window` (janela de pulverização — vento
+atual + chuva prevista quando a fonte ativa der previsão numérica, ver
+[ADR-0015](docs/adr/0015-open-meteo-terceiro-fallback.md)) e
+`GET /locations/{id}/agro/rainfall` (chuva acumulada por dia). Decisões e
+limitações documentadas no
 [ADR-0014](docs/adr/0014-sinais-agronomicos.md).
 
 ## Documentação

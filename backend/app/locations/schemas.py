@@ -57,12 +57,19 @@ class LocationOut(LocationBase):
 
 
 class SprayWindowOut(BaseModel):
-    """Live wind-only spray-safety check (FASE 19) — see ADR-0014 for why
-    this doesn't also weigh rain forecast (no numeric precipitation
-    forecast is available from any current source)."""
+    """Live spray-safety check (FASE 19, rain-aware since FASE 20).
+
+    Originally wind-only — INMET/CPTEC never gave numeric precipitation
+    forecast (ADR-0014). Open-Meteo does (ADR-0015), so rain is now weighed
+    in *when available*; wind alone still decides ``safe`` when it isn't
+    (e.g. the active provider is still just INMET/CPTEC).
+    """
 
     wind_kmh: float | None
     wind_gusts_kmh: float | None
     max_wind_kmh: float
-    # None when the source didn't report wind at all — never guessed.
+    rain_probability_percent: int | None
+    rain_expected_mm: float | None
+    max_rain_probability_percent: int
+    # None when wind wasn't reported at all — never guessed.
     safe: bool | None

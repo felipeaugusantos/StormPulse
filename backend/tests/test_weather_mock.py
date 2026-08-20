@@ -11,6 +11,7 @@ from app.weather.factory import get_weather_provider
 from app.weather.fallback import FallbackWeatherProvider
 from app.weather.inmet import InmetWeatherProvider
 from app.weather.mock import MockWeatherProvider
+from app.weather.open_meteo import OpenMeteoWeatherProvider
 
 
 @pytest.fixture
@@ -56,20 +57,45 @@ def test_factory_rejects_unknown_provider() -> None:
         get_weather_provider(Settings(environment="test", weather_provider="nao_existe"))
 
 
-def test_factory_wraps_inmet_with_cptec_fallback_by_default() -> None:
-    provider = get_weather_provider(
-        Settings(environment="test", weather_provider="inmet", cptec_fallback_enabled=True)
-    )
+def test_factory_wraps_inmet_with_cptec_and_open_meteo_fallback_by_default() -> None:
+    provider = get_weather_provider(Settings(environment="test", weather_provider="inmet"))
     assert isinstance(provider, FallbackWeatherProvider)
+    # Outer tier is INMET+CPTEC, wrapped again with Open-Meteo as the 3rd.
+    assert isinstance(provider._primary, FallbackWeatherProvider)  # noqa: SLF001
+    assert isinstance(provider._secondary, OpenMeteoWeatherProvider)  # noqa: SLF001
 
 
-def test_factory_returns_bare_inmet_when_fallback_disabled() -> None:
+def test_factory_returns_bare_inmet_when_all_fallbacks_disabled() -> None:
     provider = get_weather_provider(
-        Settings(environment="test", weather_provider="inmet", cptec_fallback_enabled=False)
+        Settings(
+            environment="test",
+            weather_provider="inmet",
+            cptec_fallback_enabled=False,
+            open_meteo_fallback_enabled=False,
+        )
     )
     assert isinstance(provider, InmetWeatherProvider)
+
+
+def test_factory_wraps_inmet_with_open_meteo_only_when_cptec_disabled() -> None:
+    provider = get_weather_provider(
+        Settings(
+            environment="test",
+            weather_provider="inmet",
+            cptec_fallback_enabled=False,
+            open_meteo_fallback_enabled=True,
+        )
+    )
+    assert isinstance(provider, FallbackWeatherProvider)
+    assert isinstance(provider._primary, InmetWeatherProvider)  # noqa: SLF001
+    assert isinstance(provider._secondary, OpenMeteoWeatherProvider)  # noqa: SLF001
 
 
 def test_factory_returns_cptec_standalone() -> None:
     provider = get_weather_provider(Settings(environment="test", weather_provider="cptec"))
     assert isinstance(provider, CptecWeatherProvider)
+
+
+def test_factory_returns_open_meteo_standalone() -> None:
+    provider = get_weather_provider(Settings(environment="test", weather_provider="open_meteo"))
+    assert isinstance(provider, OpenMeteoWeatherProvider)

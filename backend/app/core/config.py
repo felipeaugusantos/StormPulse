@@ -122,6 +122,17 @@ class Settings(BaseSettings):
     cptec_http_timeout_seconds: float = Field(default=10.0, gt=0)
     cptec_fallback_enabled: bool = True
 
+    # --- Open-Meteo (redundância, FASE 20) ---
+    # Terceiro nível de fallback, atrás de INMET e CPTEC — agregador
+    # internacional sem chave (ver ADR-0015). Único dos 3 que dá previsão
+    # numérica de chuva de verdade (probabilidade + mm), não só
+    # texto/código. Gratuito até 10.000 chamadas/dia para uso não
+    # comercial — StormPulse fica bem abaixo disso.
+    open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
+    open_meteo_archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
+    open_meteo_http_timeout_seconds: float = Field(default=10.0, gt=0)
+    open_meteo_fallback_enabled: bool = True
+
     # --- Sinais agronômicos (FASE 19) ---
     # Reusa get_forecast/get_recent_rainfall/get_current_data já existentes
     # — sem custo de infra novo (ao contrário do satélite), ligado por
@@ -133,6 +144,10 @@ class Settings(BaseSettings):
     agro_dry_spell_min_days: int = Field(default=7, gt=0)
     agro_dry_spell_rain_threshold_mm: float = Field(default=1.0, ge=0)
     agro_spray_max_wind_kmh: float = Field(default=15.0, gt=0)
+    # Only weighed in when a forecast with real precipitation_probability is
+    # available (Open-Meteo, FASE 20) — INMET/CPTEC leave it unset, so this
+    # simply doesn't disqualify the window when the source can't say.
+    agro_spray_max_rain_probability_percent: int = Field(default=30, ge=0, le=100)
 
     @model_validator(mode="after")
     def _forbid_dev_secret_in_production(self) -> Settings:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -135,7 +136,7 @@ async def get_location_forecast(
 @router.get(
     "/{location_id}/agro/spray-window",
     response_model=SprayWindowOut,
-    summary="Janela de pulverização — só vento atual (FASE 19, ver ADR-0014)",
+    summary="Janela de pulverização — vento + chuva prevista quando disponível (FASE 19/20)",
 )
 async def get_location_spray_window(
     location_id: uuid.UUID,
@@ -153,12 +154,36 @@ async def get_location_spray_window(
             detail="Condições atuais indisponíveis para este local no momento",
         ) from exc
 
+    # Rain is a bonus signal — only INMET/CPTEC's forecast lacking it
+    # (ADR-0014) must never block reporting wind status, so a forecast
+    # failure here degrades gracefully instead of 404ing the endpoint.
+    rain_probability: int | None = None
+    rain_mm: float | None = None
+    try:
+        forecast = await provider.get_forecast(location.latitude, location.longitude)
+        today = datetime.now(UTC).date()
+        today_point = next((p for p in forecast.points if p.time.date() == today), None)
+        if today_point is not None:
+            rain_probability = today_point.precipitation_probability
+            rain_mm = today_point.precipitation_mm
+    except (WeatherProviderUnavailableError, httpx.HTTPError):
+        pass
+
     wind = current.wind_gusts_kmh if current.wind_gusts_kmh is not None else current.wind_kmh
-    safe = None if wind is None else wind < settings.agro_spray_max_wind_kmh
+    wind_safe = None if wind is None else wind < settings.agro_spray_max_wind_kmh
+    rain_unsafe = (
+        rain_probability is not None
+        and rain_probability >= settings.agro_spray_max_rain_probability_percent
+    )
+    safe = None if wind_safe is None else (wind_safe and not rain_unsafe)
+
     return SprayWindowOut(
         wind_kmh=current.wind_kmh,
         wind_gusts_kmh=current.wind_gusts_kmh,
         max_wind_kmh=settings.agro_spray_max_wind_kmh,
+        rain_probability_percent=rain_probability,
+        rain_expected_mm=rain_mm,
+        max_rain_probability_percent=settings.agro_spray_max_rain_probability_percent,
         safe=safe,
     )
 
