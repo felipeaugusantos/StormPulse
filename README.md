@@ -139,6 +139,30 @@ cp ../.env.example .env      # ajuste POSTGRES_HOST/REDIS_HOST=localhost
 uvicorn app.main:app --reload
 ```
 
+### Opção C — Imagem publicada (GHCR)
+
+O workflow [`docker-publish.yml`](.github/workflows/docker-publish.yml) builda
+a imagem do backend e publica no GitHub Container Registry a cada push em
+`main` (e em tags `vX.Y.Z`). Não requer build local:
+
+```bash
+docker pull ghcr.io/felipeaugusantos/stormpulse:latest
+docker run --rm -p 8000:8000 \
+  -e POSTGRES_HOST=<host> -e POSTGRES_PASSWORD=<senha> \
+  -e REDIS_HOST=<host> -e JWT_SECRET_KEY=<segredo-forte> \
+  ghcr.io/felipeaugusantos/stormpulse:latest
+```
+
+Tags disponíveis: `latest` (branch `main`), `main`, `sha-<curto>` e `vX.Y.Z`
+para releases. O mesmo binário serve API, `worker` e `beat` — só o `command`
+do container muda (ver `docker-compose.yml`).
+
+> Build/push local de imagens **não funciona neste ambiente de
+> desenvolvimento remoto**: o proxy de rede da sandbox bloqueia o download de
+> camadas de qualquer registry de containers (Docker Hub, GHCR, ECR, Quay —
+> todos testados, todos 403). Por isso a publicação roda via GitHub Actions,
+> que tem acesso de rede irrestrito.
+
 ---
 
 ## Pipeline (workers) e dashboard
