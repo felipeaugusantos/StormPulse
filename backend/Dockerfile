@@ -13,8 +13,11 @@ WORKDIR /app
 # ---- Builder: install dependencies into a venv --------------------------
 FROM base AS builder
 
+# gdal-bin/libgdal-dev: satellite observation (FASE 16, GOES-19 + TATHU).
+# The GDAL Python bindings must match the system libgdal version exactly —
+# installed separately (not pinned in pyproject.toml) for that reason.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
+    && apt-get install -y --no-install-recommends build-essential gdal-bin libgdal-dev git \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python -m venv /opt/venv
@@ -25,10 +28,20 @@ COPY pyproject.toml ./
 COPY app ./app
 COPY engine ./engine
 COPY workers ./workers
-RUN pip install --upgrade pip && pip install .
+RUN pip install --upgrade pip \
+    && pip install "GDAL==$(gdal-config --version)" \
+    && pip install ".[satellite]" \
+    && pip install --no-deps "git+https://github.com/uba/tathu.git@master"
 
 # ---- Runtime -------------------------------------------------------------
 FROM base AS runtime
+
+# Runtime GDAL shared libs — pulled in by gdal-bin's own dependencies
+# (avoids hard-coding the versioned libgdalNN package name, which varies by
+# Debian release) — needed by the GDAL Python bindings from the builder.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gdal-bin \
+    && rm -rf /var/lib/apt/lists/*
 
 # Non-root user.
 RUN useradd --create-home --uid 1000 appuser

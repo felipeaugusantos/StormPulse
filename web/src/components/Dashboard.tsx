@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api, clearToken, readiness } from '../api'
-import type { AlertItem, ForecastPoint, LocationItem, Me, ReadyStatus, StormCell } from '../types'
+import type {
+  AlertItem,
+  ConvectiveWatch,
+  ForecastPoint,
+  LocationItem,
+  Me,
+  ReadyStatus,
+  StormCell,
+} from '../types'
 import { StormMap } from './StormMap'
 
 interface Props {
@@ -14,22 +22,25 @@ export function Dashboard({ onLogout }: Props) {
   const [storms, setStorms] = useState<StormCell[]>([])
   const [locations, setLocations] = useState<LocationItem[]>([])
   const [alerts, setAlerts] = useState<AlertItem[]>([])
+  const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
   const [ready, setReady] = useState<ReadyStatus | null>(null)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const [meRes, stormsRes, locsRes, alertsRes] = await Promise.all([
+      const [meRes, stormsRes, locsRes, alertsRes, satelliteRes] = await Promise.all([
         api.me(),
         api.storms(),
         api.locations(),
         api.alerts(),
+        api.satelliteWatches(),
       ])
       setMe(meRes)
       setStorms(stormsRes)
       setLocations(locsRes)
       setAlerts(alertsRes)
+      setSatelliteWatches(satelliteRes)
       setUpdatedAt(new Date())
       setError(null)
     } catch (err) {
@@ -84,7 +95,7 @@ export function Dashboard({ onLogout }: Props) {
 
       <div className="layout">
         <div className="map-card">
-          <StormMap storms={storms} locations={locations} />
+          <StormMap storms={storms} locations={locations} satelliteWatches={satelliteWatches} />
           <div className="map-legend">
             <span className="legend-item">
               <span className="swatch" style={{ background: '#37d39b' }} /> fraca
@@ -101,6 +112,9 @@ export function Dashboard({ onLogout }: Props) {
             <span className="legend-item">
               <span className="swatch" style={{ background: '#4cc2e6' }} /> local
             </span>
+            <span className="legend-item">
+              <span className="swatch" style={{ background: '#a78bfa' }} /> satélite
+            </span>
           </div>
         </div>
 
@@ -108,6 +122,7 @@ export function Dashboard({ onLogout }: Props) {
           {error && <div className="panel error">⚠️ {error}</div>}
           <AlertsPanel alerts={alerts} />
           <StormsPanel storms={storms} />
+          <SatelliteWatchesPanel watches={satelliteWatches} />
           <LocationsPanel locations={locations} />
           {updatedAt && (
             <div className="updated">
@@ -199,6 +214,37 @@ function StormsPanel({ storms }: { storms: StormCell[] }) {
           </button>
         </div>
       )}
+    </section>
+  )
+}
+
+function SatelliteWatchesPanel({ watches }: { watches: ConvectiveWatch[] }) {
+  return (
+    <section className="panel">
+      <h2>
+        Observações via satélite <span className="count">{watches.length}</span>
+      </h2>
+      <div className="list">
+        {watches.length === 0 && (
+          <p className="empty">
+            Nenhuma observação ativa (ou SATELLITE_ENABLED=false — ver README).
+          </p>
+        )}
+        {watches.map((w) => (
+          <div className="row" key={w.id}>
+            <span className="badge sev">watch</span>
+            <div className="grow">
+              <div>
+                {w.latitude.toFixed(2)}, {w.longitude.toFixed(2)}
+              </div>
+              <div className="sub">
+                {w.min_brightness_temp_k.toFixed(0)} K
+                {w.speed_kmh != null ? ` · ${w.speed_kmh.toFixed(0)} km/h` : ''}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   )
 }

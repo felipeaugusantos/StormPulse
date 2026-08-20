@@ -28,6 +28,29 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# GDAL/TATHU need matching system libgdal headers to even install — kept out
+# of the main dependency list so a plain dev venv (this one included) isn't
+# forced to have GDAL. The Docker image installs this extra explicitly,
+# after apt-get installs the matching system GDAL. See Dockerfile and
+# workers/satellite_pipeline.py.
+#
+# TATHU isn't on PyPI (INPE ships it for conda/mamba only, see its
+# INSTALL.rst) — installed from GitHub directly in the Dockerfile
+# (--no-deps) with its real runtime deps listed here individually, derived
+# from its env.yml minus plotting/docs-only packages we never call
+# (cartopy, geopandas, sphinx*, tqdm).
+satellite = [
+    "aenum",
+    "affine",
+    "netCDF4",
+    "opencv-python-headless",
+    "pathos",
+    "pyproj",
+    "rasterstats",
+    "rtree",
+    "scikit-image",
+    "scipy",
+]
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
@@ -91,6 +114,12 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 # google-auth ships without inline types/py.typed for these submodules.
 module = ["google.oauth2.*", "google.auth.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# GDAL/TATHU: C-extension bindings with no type stubs, and not installed at
+# all outside the Docker image (see workers/satellite_pipeline.py docstring).
+module = ["osgeo.*", "tathu.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

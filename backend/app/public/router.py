@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
 from app.core.config import Settings, get_settings
+from app.satellite import service as satellite_service
+from app.satellite.schemas import ConvectiveWatchOut
 from app.storms import service as storm_service
 from app.storms.schemas import NearbyStormCellOut, StormCellOut
 from app.weather.factory import get_weather_provider
@@ -50,6 +52,18 @@ async def public_storms_nearby(
         )
         for cell, dist in pairs
     ]
+
+
+@router.get(
+    "/satellite/watches",
+    response_model=list[ConvectiveWatchOut],
+    summary="Observações via satélite ativas (público)",
+)
+async def public_satellite_watches(
+    session: AsyncSession = Depends(get_db),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> object:
+    return await satellite_service.list_active_watches(session, limit=limit)
 
 
 @router.get(

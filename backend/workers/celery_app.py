@@ -30,5 +30,9 @@ celery_app.conf.update(
             "task": "workers.tasks.run_ingestion_cycle_task",
             "schedule": 300.0,  # seconds
         },
+        "satellite-detect-every-10-minutes": {
+            "task": "workers.tasks.run_satellite_detection_task",
+            "schedule": 600.0,  # seconds — matches GOES-19 full-disk cadence
+        },
     },
 )

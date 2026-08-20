@@ -1,5 +1,6 @@
 import type {
   AlertItem,
+  ConvectiveWatch,
   Forecast,
   LocationItem,
   Me,
@@ -74,6 +75,7 @@ export const api = {
   locations: () => request<LocationItem[]>('/locations'),
   alerts: () => request<AlertItem[]>('/alerts'),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
+  satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),
 }
 
 // No token required (visitor mode) — same request() helper, it just won't
@@ -82,6 +84,7 @@ export const publicApi = {
   storms: () => request<StormCell[]>('/public/storms?limit=200'),
   warnings: (lat: number, lon: number) =>
     request<WarningItem[]>(`/public/warnings?lat=${lat}&lon=${lon}`),
+  satelliteWatches: () => request<ConvectiveWatch[]>('/public/satellite/watches'),
 }
 
 // Health/readiness live at the API root, not under /api/v1.

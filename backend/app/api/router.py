@@ -14,6 +14,7 @@ from app.api import health
 from app.auth.router import router as auth_router
 from app.locations.router import router as locations_router
 from app.public.router import router as public_router
+from app.satellite.router import router as satellite_router
 from app.storms.router import router as storms_router
 from app.users.router import router as users_router
 
@@ -27,6 +28,7 @@ v1_router.include_router(users_router, prefix="/users")
 v1_router.include_router(locations_router, prefix="/locations")
 v1_router.include_router(storms_router, prefix="/storms")
 v1_router.include_router(alerts_router, prefix="/alerts")
+v1_router.include_router(satellite_router, prefix="/satellite")
 
 # Unauthenticated "visitor mode" endpoints (FASE 15) — mounted separately by
 # main.py under /public with its own (stricter) rate limit, not included

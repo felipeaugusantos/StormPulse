@@ -70,3 +70,18 @@ export interface WarningItem {
   severity: string
   description: string
 }
+
+export interface ConvectiveWatch {
+  id: string
+  first_detected_at: string
+  detected_at: string
+  latitude: number
+  longitude: number
+  min_brightness_temp_k: number
+  area_km2: number | null
+  speed_kmh: number | null
+  direction_deg: number | null
+  is_active: boolean
+  is_mock: boolean
+  experimental: boolean
+}

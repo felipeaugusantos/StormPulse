@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, publicApi } from '../api'
-import type { StormCell, WarningItem } from '../types'
+import type { ConvectiveWatch, StormCell, WarningItem } from '../types'
 import { StormMap } from './StormMap'
 
 interface Props {
@@ -16,16 +16,19 @@ const REFERENCE_POINT = { lat: -23.55, lon: -46.63 }
 export function VisitorView({ onBack }: Props) {
   const [storms, setStorms] = useState<StormCell[]>([])
   const [warnings, setWarnings] = useState<WarningItem[]>([])
+  const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const [stormsRes, warningsRes] = await Promise.all([
+      const [stormsRes, warningsRes, satelliteRes] = await Promise.all([
         publicApi.storms(),
         publicApi.warnings(REFERENCE_POINT.lat, REFERENCE_POINT.lon),
+        publicApi.satelliteWatches(),
       ])
       setStorms(stormsRes)
       setWarnings(warningsRes)
+      setSatelliteWatches(satelliteRes)
       setError(null)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao carregar')
@@ -59,11 +62,32 @@ export function VisitorView({ onBack }: Props) {
 
       <div className="layout">
         <div className="map-card">
-          <StormMap storms={storms} locations={[]} />
+          <StormMap storms={storms} locations={[]} satelliteWatches={satelliteWatches} />
         </div>
 
         <div className="side">
           {error && <div className="panel error">⚠️ {error}</div>}
+          <section className="panel">
+            <h2>
+              Observações via satélite <span className="count">{satelliteWatches.length}</span>
+            </h2>
+            <div className="list">
+              {satelliteWatches.length === 0 && (
+                <p className="empty">Nenhuma observação ativa no momento.</p>
+              )}
+              {satelliteWatches.slice(0, 8).map((w) => (
+                <div className="row" key={w.id}>
+                  <span className="badge sev">watch</span>
+                  <div className="grow">
+                    <div>
+                      {w.latitude.toFixed(2)}, {w.longitude.toFixed(2)}
+                    </div>
+                    <div className="sub">{w.min_brightness_temp_k.toFixed(0)} K</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
           <section className="panel">
             <h2>
               Avisos oficiais <span className="count">{warnings.length}</span>

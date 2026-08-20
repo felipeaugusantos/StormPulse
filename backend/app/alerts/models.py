@@ -33,6 +33,10 @@ class Alert(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     storm_risk_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("storm_risks.id", ondelete="SET NULL"), nullable=True
     )
+    # Satellite-derived alerts (FASE 16) point here instead of storm_cell_id.
+    convective_watch_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("convective_watches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     event_type: Mapped[AlertEventType] = mapped_column(
         Enum(AlertEventType, name="alert_event_type", native_enum=True), nullable=False
     )

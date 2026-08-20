@@ -5,12 +5,15 @@ import type {
   LngLatBoundsLike,
   StyleSpecification,
 } from 'maplibre-gl'
-import type { LocationItem, StormCell } from '../types'
+import type { ConvectiveWatch, LocationItem, StormCell } from '../types'
 
 interface Props {
   storms: StormCell[]
   locations: LocationItem[]
+  satelliteWatches?: ConvectiveWatch[]
 }
+
+const SATELLITE_WATCH_COLOR = '#a78bfa'
 
 const SEVERITY_COLOR: Record<string, string> = {
   weak: '#37d39b',
@@ -54,7 +57,18 @@ function locationsGeoJSON(locations: LocationItem[]) {
   }
 }
 
-export function StormMap({ storms, locations }: Props) {
+function satelliteWatchesGeoJSON(watches: ConvectiveWatch[]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: watches.map((w) => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [w.longitude, w.latitude] },
+      properties: { id: w.id },
+    })),
+  }
+}
+
+export function StormMap({ storms, locations, satelliteWatches = [] }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<maplibregl.Map | null>(null)
   const readyRef = useRef(false)
@@ -75,6 +89,21 @@ export function StormMap({ storms, locations }: Props) {
     map.on('load', () => {
       map.addSource('cells', { type: 'geojson', data: cellsGeoJSON([]) })
       map.addSource('locations', { type: 'geojson', data: locationsGeoJSON([]) })
+      map.addSource('satellite-watches', { type: 'geojson', data: satelliteWatchesGeoJSON([]) })
+      // Satellite watches under storm cells: a precursor signal, drawn
+      // "behind" confirmed cells rather than competing visually with them.
+      map.addLayer({
+        id: 'satellite-watches',
+        type: 'circle',
+        source: 'satellite-watches',
+        paint: {
+          'circle-radius': 12,
+          'circle-color': SATELLITE_WATCH_COLOR,
+          'circle-opacity': 0.25,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': SATELLITE_WATCH_COLOR,
+        },
+      })
       map.addLayer({
         id: 'cells',
         type: 'circle',
@@ -116,9 +145,11 @@ export function StormMap({ storms, locations }: Props) {
     const apply = () => {
       const cells = map.getSource('cells') as GeoJSONSource | undefined
       const locs = map.getSource('locations') as GeoJSONSource | undefined
-      if (!cells || !locs) return
+      const watches = map.getSource('satellite-watches') as GeoJSONSource | undefined
+      if (!cells || !locs || !watches) return
       cells.setData(cellsGeoJSON(storms))
       locs.setData(locationsGeoJSON(locations))
+      watches.setData(satelliteWatchesGeoJSON(satelliteWatches))
 
       const points = [
         ...storms.map((s) => [s.longitude, s.latitude] as [number, number]),
@@ -135,7 +166,7 @@ export function StormMap({ storms, locations }: Props) {
 
     if (readyRef.current) apply()
     else map.once('load', apply)
-  }, [storms, locations])
+  }, [storms, locations, satelliteWatches])
 
   return <div className="map" ref={containerRef} />
 }

@@ -77,6 +77,11 @@ class AlertEventType(StrEnum):
     STORM_ENTERED_MONITORING_AREA = "storm_entered_monitoring_area"
     STORM_RISK_CHANGED = "storm_risk_changed"
     STORM_PASSED = "storm_passed"
+    # Satellite-derived convective watches (FASE 16) — a distinct, earlier
+    # and less certain signal than a confirmed storm cell; never conflated
+    # with the STORM_* events above.
+    SATELLITE_WATCH_DETECTED = "satellite_watch_detected"
+    SATELLITE_WATCH_DISSIPATED = "satellite_watch_dissipated"
 
 
 class NotificationChannel(StrEnum):

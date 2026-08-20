@@ -97,6 +97,20 @@ class Settings(BaseSettings):
     inmet_min_rain_rate_mm_h: float = Field(default=4.0, gt=0)
     inmet_max_station_distance_km: float = Field(default=100.0, gt=0)
 
+    # --- Satellite observation (GOES-19 / TATHU, FASE 16) ---
+    # Off by default: real infra cost (GDAL, ~20-30MB NetCDF per band per
+    # 10-min cycle) — opt in explicitly.
+    satellite_enabled: bool = False
+    satellite_stac_url: str = "https://data.inpe.br/bdc/stac/v1"
+    satellite_collection: str = "GOES19-L2-CMI-1"
+    satellite_band: str = "B13"
+    # Brazil bounding box: lon_min,lat_min,lon_max,lat_max.
+    satellite_extent: str = "-74,-34,-34,6"
+    satellite_threshold_kelvin: float = Field(default=230.0, gt=0)
+    satellite_min_area_km2: float = Field(default=3000.0, gt=0)
+    satellite_grid_resolution_km: float = Field(default=4.0, gt=0)
+    satellite_max_watch_age_hours: float = Field(default=3.0, gt=0)
+
     @model_validator(mode="after")
     def _forbid_dev_secret_in_production(self) -> Settings:
         if self.environment == "production" and (
@@ -141,6 +155,17 @@ class Settings(BaseSettings):
     def cors_allowed_origins_list(self) -> list[str]:
         """Parsed from a comma-separated env var (12-factor friendly)."""
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def satellite_extent_bbox(self) -> tuple[float, float, float, float]:
+        """``(lon_min, lat_min, lon_max, lat_max)`` parsed from the env string."""
+        parts = [float(p.strip()) for p in self.satellite_extent.split(",")]
+        if len(parts) != 4:
+            raise ValueError(
+                f"satellite_extent must have 4 comma-separated values: {self.satellite_extent!r}"
+            )
+        return parts[0], parts[1], parts[2], parts[3]
 
     @computed_field  # type: ignore[prop-decorator]
     @property

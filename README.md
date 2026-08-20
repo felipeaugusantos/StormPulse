@@ -52,6 +52,8 @@ O que já funciona nesta fase:
 | GET | `/api/v1/locations/{id}/forecast` | Previsão (5 dias reais do INMET + 1 histórico) — FASE 15 |
 | GET | `/api/v1/public/storms`, `/public/storms/nearby` | Células recentes, sem login — FASE 15 |
 | GET | `/api/v1/public/warnings` | Avisos oficiais ao vivo por ponto, sem login — FASE 15 |
+| GET | `/api/v1/satellite`, `/satellite/nearby` | Observações via satélite (GDAL+TATHU) — FASE 16 |
+| GET | `/api/v1/public/satellite/watches` | Observações via satélite, sem login — FASE 16 |
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
 > engine não existe) — nunca dados fictícios. O provider de dados é escolhido
@@ -82,6 +84,25 @@ ficam para uma fase futura.
   células de tempestade e avisos oficiais via `/api/v1/public/*`, sem
   precisar de conta. Locais monitorados e risco personalizado continuam
   exigindo login.
+
+## Observação via satélite (GOES-19 + TATHU, FASE 16)
+
+Detecta convecção crescendo (nuvem esfriando no topo, via infravermelho do
+satélite GOES-19) **antes** de virar chuva confirmada — um sinal precoce,
+não uma previsão. **Desligado por padrão** (`SATELLITE_ENABLED=false`) por
+causa do custo real de infra (GDAL + ~20-30MB baixados a cada ciclo de
+10 min). Para ligar:
+
+```bash
+SATELLITE_ENABLED=true docker compose up -d --build
+```
+
+O Dockerfile já instala GDAL/TATHU (imagem maior, build mais lento — só
+nesse caso). Aparece no dashboard como um novo painel/camada no mapa
+("Observações via satélite", roxo) e gera alertas próprios
+(`SATELLITE_WATCH_DETECTED`/`DISSIPATED`, nível sempre amarelo — sinal
+precoce, não uma tempestade confirmada). Limitações e decisões documentadas
+no [ADR-0009](docs/adr/0009-satelite-goes19-tathu.md).
 
 ## Documentação
 
