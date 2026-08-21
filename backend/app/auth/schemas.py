@@ -24,7 +24,11 @@ class LoginIn(BaseModel):
 
 
 class RefreshIn(BaseModel):
-    refresh_token: str = Field(min_length=1)
+    # Optional: when the refresh-token cookie is enabled (ADR-0029), the
+    # browser sends it automatically and the body may omit it entirely.
+    # With the cookie disabled (default today), this is required exactly
+    # as before.
+    refresh_token: str | None = Field(default=None, min_length=1)
 
 
 class GoogleAuthIn(BaseModel):
@@ -35,5 +39,9 @@ class GoogleAuthIn(BaseModel):
 
 class TokenPair(BaseModel):
     access_token: str
-    refresh_token: str
+    # None when the refresh-token cookie is enabled (ADR-0029) — the token
+    # went out as an HttpOnly Set-Cookie instead, never in a JS-readable
+    # response body. With the cookie disabled (default today), this is
+    # always populated exactly as before.
+    refresh_token: str | None = None
     token_type: str = "bearer"

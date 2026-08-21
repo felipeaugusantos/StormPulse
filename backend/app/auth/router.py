@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,6 +49,41 @@ def _issue_tokens(user: User, settings: Settings) -> TokenPair:
     )
 
 
+def _apply_token_response(tokens: TokenPair, response: Response, settings: Settings) -> TokenPair:
+    """When the refresh-token cookie is enabled (ADR-0029, off by default —
+    no production domain topology decided yet), sets it as an HttpOnly
+    cookie and strips it from the JSON body, so it's never readable from
+    JS. With the cookie disabled, returns `tokens` untouched — identical to
+    the pre-ADR-0029 behavior."""
+    if not settings.refresh_cookie_enabled:
+        return tokens
+    assert tokens.refresh_token is not None  # always set here, before stripping
+    response.set_cookie(
+        key=settings.refresh_cookie_name,
+        value=tokens.refresh_token,
+        max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+        path=settings.refresh_cookie_path,
+        domain=settings.refresh_cookie_domain,
+        secure=settings.refresh_cookie_secure,
+        httponly=True,
+        samesite=settings.refresh_cookie_samesite,
+    )
+    return tokens.model_copy(update={"refresh_token": None})
+
+
+def _clear_refresh_cookie(response: Response, settings: Settings) -> None:
+    # delete_cookie is a no-op (still a harmless Set-Cookie header) if the
+    # browser never had this cookie — logout stays idempotent either way.
+    response.delete_cookie(
+        key=settings.refresh_cookie_name,
+        path=settings.refresh_cookie_path,
+        domain=settings.refresh_cookie_domain,
+        secure=settings.refresh_cookie_secure,
+        httponly=True,
+        samesite=settings.refresh_cookie_samesite,
+    )
+
+
 @router.post(
     "/register",
     response_model=UserOut,
@@ -77,8 +112,9 @@ async def register(
 )
 async def login(
     data: LoginIn,
+    response: Response,
     session: AsyncSession = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_request_settings),
 ) -> TokenPair:
     user = await authenticate(session, data.email, data.password)
     if user is None:
@@ -86,7 +122,7 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas",
         )
-    return _issue_tokens(user, settings)
+    return _apply_token_response(_issue_tokens(user, settings), response, settings)
 
 
 @router.post(
@@ -97,6 +133,7 @@ async def login(
 )
 async def login_google(
     data: GoogleAuthIn,
+    response: Response,
     session: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_request_settings),
 ) -> TokenPair:
@@ -141,17 +178,31 @@ async def login_google(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Conta desativada",
         )
-    return _issue_tokens(user, settings)
+    return _apply_token_response(_issue_tokens(user, settings), response, settings)
 
 
 @router.post("/refresh", response_model=TokenPair, summary="Renovar tokens")
 async def refresh(
     data: RefreshIn,
+    request: Request,
+    response: Response,
     session: AsyncSession = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_request_settings),
 ) -> TokenPair:
+    # Accept the refresh token from either the body (default today) or the
+    # cookie (ADR-0029, opt-in) — whichever the client actually sent.
+    refresh_token = data.refresh_token or (
+        request.cookies.get(settings.refresh_cookie_name)
+        if settings.refresh_cookie_enabled
+        else None
+    )
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token ausente",
+        )
     try:
-        payload = decode_token(data.refresh_token, settings, expected_type="refresh")
+        payload = decode_token(refresh_token, settings, expected_type="refresh")
         user_id = uuid.UUID(payload["sub"])
     except (TokenError, ValueError) as exc:
         raise HTTPException(
@@ -165,4 +216,21 @@ async def refresh(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário inválido",
         )
-    return _issue_tokens(user, settings)
+    return _apply_token_response(_issue_tokens(user, settings), response, settings)
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Encerrar sessão (limpa o cookie de refresh, se configurado)",
+)
+async def logout(
+    response: Response,
+    settings: Settings = Depends(get_request_settings),
+) -> None:
+    # Stateless by design: the access token simply expires (15min) and the
+    # client is expected to discard both tokens client-side too. This only
+    # has cookie state to clear when ADR-0029's cookie is enabled — with it
+    # off (default), this is a no-op 204, which is still the correct
+    # contract for a client that always calls it on sign-out.
+    _clear_refresh_cookie(response, settings)

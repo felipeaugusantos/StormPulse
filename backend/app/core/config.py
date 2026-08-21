@@ -78,6 +78,23 @@ class Settings(BaseSettings):
     # --- CORS (dashboard web / app mobile) ---
     cors_allowed_origins: str = "http://localhost:5173"
 
+    # --- Refresh token cookie (hardening ADR-0029) — opt-in, off by
+    # default. Migrating the refresh token from the JS-readable response
+    # body to an HttpOnly cookie needs a real production domain topology
+    # decided first (same-origin vs. cross-site changes SameSite/CSRF
+    # requirements) — not decided yet, so this stays disabled until then.
+    # With it off, every endpoint behaves exactly as before this ADR.
+    refresh_cookie_enabled: bool = False
+    refresh_cookie_name: str = "stormpulse_refresh"
+    # Cookie's own explicit path — the browser never sends it on any other
+    # route, limiting exposure if another endpoint were ever compromised.
+    refresh_cookie_path: str = "/api/v1/auth"
+    refresh_cookie_secure: bool = True
+    refresh_cookie_samesite: Literal["strict", "lax", "none"] = "lax"
+    # None = host-only cookie (no Domain attribute) — correct for a
+    # same-origin deploy. Only set this once a real domain exists.
+    refresh_cookie_domain: str | None = None
+
     # --- Google OAuth (login social) ---
     # Only the client_id is needed: verifying an ID token's signature +
     # audience doesn't require the client secret (that's only for the
@@ -193,6 +210,15 @@ class Settings(BaseSettings):
             raise ValueError(
                 "JWT_SECRET_KEY must be set to a strong secret in production "
                 "(the built-in development secret is refused)."
+            )
+        if (
+            self.environment == "production"
+            and self.refresh_cookie_enabled
+            and not self.refresh_cookie_secure
+        ):
+            raise ValueError(
+                "REFRESH_COOKIE_SECURE must be true in production (a "
+                "non-Secure cookie would be sent over plain HTTP)."
             )
         return self
 
