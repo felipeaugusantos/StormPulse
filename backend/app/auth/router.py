@@ -17,7 +17,7 @@ from app.auth.service import (
     authenticate_google,
     register_user,
 )
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 from app.core.ratelimit import RateLimiter
 from app.core.security import (
     TokenError,
@@ -32,12 +32,23 @@ _google_request = google_requests.Request()
 
 router = APIRouter(tags=["auth"])
 
-_settings = get_settings()
-_auth_rate_limit = RateLimiter(
-    max_requests=_settings.auth_rate_limit_max,
-    window_seconds=_settings.auth_rate_limit_window_seconds,
-    scope="auth",
-)
+
+async def _auth_rate_limit(request: Request) -> None:
+    """Built from *this request's* app settings, not a module-level
+    singleton — a `RateLimiter` built once at import time (the previous
+    approach) would freeze whichever `Settings` happened to be current the
+    first time this module was imported, ignoring the actual app instance's
+    config in any process running more than one (e.g. tests exercising two
+    different configs — see ADR-0030/`test_multi_app_settings_isolation`).
+    Cheap to rebuild per-request: `RateLimiter` holds no state of its own,
+    it's just a thin wrapper around a Redis key."""
+    settings = get_request_settings(request)
+    limiter = RateLimiter(
+        max_requests=settings.auth_rate_limit_max,
+        window_seconds=settings.auth_rate_limit_window_seconds,
+        scope="auth",
+    )
+    await limiter(request)
 
 
 def _issue_tokens(user: User, settings: Settings) -> TokenPair:

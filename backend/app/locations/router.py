@@ -9,8 +9,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db
-from app.core.config import Settings, get_settings
+from app.api.deps import get_current_user, get_db, get_request_settings
+from app.core.config import Settings
 from app.locations import service
 from app.locations.models import Location
 from app.locations.schemas import LocationCreate, LocationOut, LocationUpdate, SprayWindowOut
@@ -141,7 +141,7 @@ async def get_location_forecast(
     location_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_request_settings),
 ) -> Forecast:
     location = await _get_owned_or_404(session, user, location_id)
     provider = get_weather_provider(settings)
@@ -167,7 +167,7 @@ async def get_location_current(
     location_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_request_settings),
 ) -> CurrentConditions:
     location = await _get_owned_or_404(session, user, location_id)
     provider = get_weather_provider(settings)
@@ -189,7 +189,7 @@ async def get_location_spray_window(
     location_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_request_settings),
 ) -> SprayWindowOut:
     location = await _get_owned_or_404(session, user, location_id)
     provider = get_weather_provider(settings)
@@ -261,7 +261,7 @@ async def get_location_rain_forecast(
     location_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_request_settings),
 ) -> Forecast:
     """Same shape as ``/forecast``, but always asks Open-Meteo directly —
     the only source that ever gives numeric ``precipitation_mm`` (see
@@ -288,7 +288,7 @@ async def get_location_rainfall(
     location_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_request_settings),
     days: int = Query(default=15, ge=1, le=60),
 ) -> RainfallHistory:
     location = await _get_owned_or_404(session, user, location_id)

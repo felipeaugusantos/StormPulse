@@ -16,7 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from app import __version__
-from app.core.config import get_settings
+from app.api.deps import get_request_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
@@ -36,9 +36,10 @@ class ReadyResponse(BaseModel):
 
 
 @router.get("/health", response_model=HealthResponse, summary="Liveness probe")
-async def health() -> HealthResponse:
+async def health(request: Request) -> HealthResponse:
     """Return 200 whenever the process is alive."""
-    return HealthResponse(status="ok", service=get_settings().app_name, version=__version__)
+    settings = get_request_settings(request)
+    return HealthResponse(status="ok", service=settings.app_name, version=__version__)
 
 
 async def _check_database(engine: AsyncEngine, timeout: float) -> CheckState:
@@ -65,7 +66,7 @@ async def _check_redis(redis: object, timeout: float) -> CheckState:
 @router.get("/ready", response_model=ReadyResponse, summary="Readiness probe")
 async def ready(request: Request, response: Response) -> ReadyResponse:
     """Verify critical dependencies are reachable."""
-    settings = get_settings()
+    settings = get_request_settings(request)
     timeout = settings.readiness_timeout_seconds
 
     engine: AsyncEngine | None = getattr(request.app.state, "engine", None)

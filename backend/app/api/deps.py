@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 from app.core.enums import UserRole
 from app.core.security import TokenError, decode_token
 from app.users.models import User
@@ -41,7 +41,7 @@ async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
     session: AsyncSession = Depends(get_db),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_request_settings),
 ) -> User:
     """Resolve the authenticated user from a Bearer access token."""
     unauthorized = HTTPException(

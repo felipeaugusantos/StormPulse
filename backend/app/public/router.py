@@ -12,8 +12,8 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db
-from app.core.config import Settings, get_settings
+from app.api.deps import get_db, get_request_settings
+from app.core.config import Settings
 from app.lightning import service as lightning_service
 from app.lightning.schemas import LightningStrikeOut
 from app.satellite import service as satellite_service
@@ -134,7 +134,7 @@ async def public_lightning(
 async def public_warnings(
     lat: float = Query(ge=-90, le=90),
     lon: float = Query(ge=-180, le=180),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_request_settings),
 ) -> list[Warning]:
     provider = get_weather_provider(settings)
     try:
