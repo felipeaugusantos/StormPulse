@@ -1,6 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { API_URL } from './config'
-import type { AlertItem, LocationItem, StormRisk } from './types'
+import type {
+  AlertItem,
+  CreateLocationInput,
+  CurrentConditions,
+  Forecast,
+  LocationItem,
+  RainfallHistory,
+  SprayWindow,
+  StormRisk,
+} from './types'
 
 const V1 = `${API_URL}/api/v1`
 const TOKEN_KEY = 'stormpulse.access_token'
@@ -65,6 +74,32 @@ export async function login(email: string, password: string): Promise<string> {
 
 export const api = {
   locations: () => request<LocationItem[]>('/locations'),
+  createLocation: (data: CreateLocationInput) =>
+    request<LocationItem>('/locations', { method: 'POST', body: JSON.stringify(data) }),
+  deleteLocation: (locationId: string) =>
+    request<void>(`/locations/${locationId}`, { method: 'DELETE' }),
   alerts: () => request<AlertItem[]>('/alerts'),
   risk: (locationId: string) => request<StormRisk>(`/locations/${locationId}/risk`),
+  forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
+  // Always Open-Meteo, bypassing INMET/CPTEC (ADR-0020) — the only source
+  // with a real numeric rain forecast, needed for trafficability/water
+  // balance/CAPE/etc.
+  rainForecast: (locationId: string) =>
+    request<Forecast>(`/locations/${locationId}/agro/rain-forecast`),
+  currentConditions: (locationId: string) =>
+    request<CurrentConditions>(`/locations/${locationId}/current`),
+  sprayWindow: (locationId: string) =>
+    request<SprayWindow>(`/locations/${locationId}/agro/spray-window`),
+  rainfall: (locationId: string) =>
+    request<RainfallHistory>(`/locations/${locationId}/agro/rainfall`),
+  registerExpoPushToken: (expo_push_token: string) =>
+    request<void>('/users/me/push-subscription/expo', {
+      method: 'POST',
+      body: JSON.stringify({ expo_push_token }),
+    }),
+  deleteExpoPushToken: (expo_push_token: string) =>
+    request<void>('/users/me/push-subscription/expo', {
+      method: 'DELETE',
+      body: JSON.stringify({ expo_push_token }),
+    }),
 }

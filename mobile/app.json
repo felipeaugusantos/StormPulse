@@ -13,10 +13,23 @@
       "apiUrl": "http://localhost:8000"
     },
     "android": {
-      "package": "com.stormpulse.app"
+      "package": "com.stormpulse.app",
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "ios": {
-      "bundleIdentifier": "com.stormpulse.app"
-    }
+      "bundleIdentifier": "com.stormpulse.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Usado para preencher automaticamente a coordenada ao cadastrar um novo local monitorado."
+      }
+    },
+    "plugins": [
+      "expo-notifications",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Usado para preencher automaticamente a coordenada ao cadastrar um novo local monitorado."
+        }
+      ]
+    ]
   }
 }
