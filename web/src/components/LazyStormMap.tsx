@@ -1,7 +1,7 @@
 import { lazy, Suspense, forwardRef } from 'react'
 import type { StormMapHandle } from './StormMap'
 
-export type { StormMapHandle } from './StormMap'
+export type { PlotBoundary, StormMapHandle } from './StormMap'
 
 // MapLibre GL is by far the heaviest dependency in the bundle (it's the
 // reason `npm run build` warned about a 976KB chunk) and neither the login

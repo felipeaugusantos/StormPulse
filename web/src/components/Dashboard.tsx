@@ -26,12 +26,13 @@ import {
   type VpdLevel,
 } from '../agro'
 import { classifyCape, estimateStormEta, type CapeLevel } from '../storm'
+import { cropColor } from '../cropColors'
 import { timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { LocationSearchCard } from './LocationSearchCard'
 import { LocationWeatherCard } from './LocationWeatherCard'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
-import { StormMap, type StormMapHandle } from './LazyStormMap'
+import { StormMap, type PlotBoundary, type StormMapHandle } from './LazyStormMap'
 
 interface Props {
   onLogout: () => void
@@ -49,6 +50,12 @@ export function Dashboard({ onLogout }: Props) {
   const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
   const [lightning, setLightning] = useState<LightningStrike[]>([])
   const [showSatelliteImage, setShowSatelliteImage] = useState(true)
+  const [satelliteBasemap, setSatelliteBasemap] = useState(false)
+  const [showLegend, setShowLegend] = useState(true)
+  const [drawingActive, setDrawingActive] = useState(false)
+  const [drawError, setDrawError] = useState<string | null>(null)
+  const [pickingLocation, setPickingLocation] = useState(false)
+  const pendingBoundaryCallbackRef = useRef<((boundaryGeojson: string) => void) | null>(null)
   const [ready, setReady] = useState<ReadyStatus | null>(null)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -110,9 +117,53 @@ export function Dashboard({ onLogout }: Props) {
     setLocations((prev) => [...prev, created])
   }
 
+  function handleLocationUpdated(updated: LocationItem) {
+    setLocations((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))
+  }
+
   function handleLocationDeleted(id: string) {
     setLocations((prev) => prev.filter((l) => l.id !== id))
     setSelectedLocationId((prev) => (prev === id ? null : prev))
+  }
+
+  function handleStartDrawBoundary(onComplete: (boundaryGeojson: string) => void) {
+    pendingBoundaryCallbackRef.current = onComplete
+    setDrawError(null)
+    setDrawingActive(true)
+    mapRef.current?.startDrawing()
+  }
+
+  function handleFinishDrawing() {
+    const ring = mapRef.current?.finishDrawing() ?? null
+    setDrawingActive(false)
+    if (!ring) {
+      setDrawError('Desenhe pelo menos 3 pontos antes de concluir.')
+      pendingBoundaryCallbackRef.current = null
+      return
+    }
+    pendingBoundaryCallbackRef.current?.(
+      JSON.stringify({ type: 'Polygon', coordinates: [ring] }),
+    )
+    pendingBoundaryCallbackRef.current = null
+  }
+
+  function handleCancelDrawing() {
+    mapRef.current?.cancelDrawing()
+    setDrawingActive(false)
+    pendingBoundaryCallbackRef.current = null
+  }
+
+  function handleStartPickLocation(onPicked: (latitude: number, longitude: number) => void) {
+    setPickingLocation(true)
+    mapRef.current?.startPointPick((latitude, longitude) => {
+      setPickingLocation(false)
+      onPicked(latitude, longitude)
+    })
+  }
+
+  function handleCancelPickLocation() {
+    mapRef.current?.cancelPointPick()
+    setPickingLocation(false)
   }
 
   async function handleEnablePush() {
@@ -149,6 +200,22 @@ export function Dashboard({ onLogout }: Props) {
   const mock = storms.some((s) => s.is_mock)
   const selectedLocation = locations.find((l) => l.id === selectedLocationId) ?? null
   const { entries: agroEntries, activeLocations: agroActiveLocations } = useAgroEntries(locations)
+  const plotBoundaries: PlotBoundary[] = locations.flatMap((l) => {
+    if (!l.boundary_geojson) return []
+    try {
+      const parsed = JSON.parse(l.boundary_geojson) as { coordinates: [number, number][][] }
+      return [
+        {
+          id: l.id,
+          name: l.name,
+          color: l.color ?? cropColor(l.crop),
+          coordinates: parsed.coordinates,
+        },
+      ]
+    } catch {
+      return []
+    }
+  })
 
   return (
     <>
@@ -207,7 +274,10 @@ export function Dashboard({ onLogout }: Props) {
               if (loc) mapRef.current?.flyTo(loc.latitude, loc.longitude)
             }}
             onLocationCreated={handleLocationCreated}
+            onLocationUpdated={handleLocationUpdated}
             onLocationDeleted={handleLocationDeleted}
+            onStartDrawBoundary={handleStartDrawBoundary}
+            onStartPickLocation={handleStartPickLocation}
           />
           <LocationWeatherCard location={selectedLocation} />
         </div>
@@ -295,43 +365,92 @@ export function Dashboard({ onLogout }: Props) {
             satelliteWatches={satelliteWatches}
             satelliteImage={showSatelliteImage ? satelliteImage : null}
             lightning={lightning}
+            plotBoundaries={plotBoundaries}
+            satelliteBasemap={satelliteBasemap}
           />
-          <div className="map-legend">
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#37d39b' }} /> fraca
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#f2c14e' }} /> moderada
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#f59e5b' }} /> forte
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#ef6d6d' }} /> severa
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#4cc2e6' }} /> local
-            </span>
-            <span className="legend-item">
-              <span className="swatch" style={{ background: '#a78bfa' }} /> satélite
-            </span>
-            {lightning.length > 0 && (
-              <span className="legend-item">
-                <span className="swatch" style={{ background: '#fde047' }} /> raios (
-                {lightning.length})
-              </span>
-            )}
-            {satelliteImage && (
+          {drawingActive && (
+            <div className="draw-mode-bar">
+              <span>🖊️ Clique no mapa pra marcar os cantos do talhão</span>
+              <button className="btn small" onClick={handleFinishDrawing}>
+                Concluir
+              </button>
+              <button className="btn ghost small" onClick={handleCancelDrawing}>
+                Cancelar
+              </button>
+            </div>
+          )}
+          {drawError && !drawingActive && (
+            <div className="draw-mode-bar error">
+              ⚠️ {drawError}
+              <button className="btn ghost small" onClick={() => setDrawError(null)}>
+                ok
+              </button>
+            </div>
+          )}
+          {pickingLocation && (
+            <div className="draw-mode-bar">
+              <span>📍 Clique no mapa pra marcar o local</span>
+              <button className="btn ghost small" onClick={handleCancelPickLocation}>
+                Cancelar
+              </button>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="legend-toggle"
+            onClick={() => setShowLegend((v) => !v)}
+            title={showLegend ? 'Ocultar legenda' : 'Mostrar legenda'}
+          >
+            {showLegend ? '✕ legenda' : '☰ legenda'}
+          </button>
+
+          {showLegend && (
+            <div className="map-legend">
               <label className="legend-item satellite-image-toggle">
                 <input
                   type="checkbox"
-                  checked={showSatelliteImage}
-                  onChange={(e) => setShowSatelliteImage(e.target.checked)}
+                  checked={satelliteBasemap}
+                  onChange={(e) => setSatelliteBasemap(e.target.checked)}
                 />
-                imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
+                🛰️ imagem de satélite (mapa)
               </label>
-            )}
-          </div>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#37d39b' }} /> fraca
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#f2c14e' }} /> moderada
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#f59e5b' }} /> forte
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#ef6d6d' }} /> severa
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#4cc2e6' }} /> local
+              </span>
+              <span className="legend-item">
+                <span className="swatch" style={{ background: '#a78bfa' }} /> satélite
+              </span>
+              {lightning.length > 0 && (
+                <span className="legend-item">
+                  <span className="swatch" style={{ background: '#fde047' }} /> raios (
+                  {lightning.length})
+                </span>
+              )}
+              {satelliteImage && (
+                <label className="legend-item satellite-image-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showSatelliteImage}
+                    onChange={(e) => setShowSatelliteImage(e.target.checked)}
+                  />
+                  imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
+                </label>
+              )}
+            </div>
+          )}
         </div>
 
         {updatedAt && (

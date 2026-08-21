@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from geoalchemy2 import Geography
-from sqlalchemy import Boolean, Enum, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Enum, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.enums import AlertType
@@ -37,6 +37,17 @@ class Location(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     # plot, but not enforced at the DB level (a farm without plots may
     # still want to record what it grows).
     crop: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # Visual-only polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon
+    # geometry serialized as JSON text, e.g. drawn on the dashboard map for
+    # a talhão. Purely cosmetic: latitude/longitude above (not this) is what
+    # every weather/agro call still uses — never parsed for anything but
+    # rendering, so a plain Text column is enough (no PostGIS geometry type,
+    # no spatial queries against it).
+    boundary_geojson: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Manual color override (FASE 27, ADR-0025) — `#RRGGBB`. When unset, the
+    # frontend derives a color from `crop` instead (`cropColor()`); this
+    # lets the user pick their own instead of the automatic palette.
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     # PostGIS geography point (WGS84) for proximity queries (ST_DWithin).
     geom: Mapped[Any] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, api } from '../api'
+import { cropColor } from '../cropColors'
 import { reverseGeocodeCity, searchCity } from '../geocode'
 import type { CitySearchResult, LocationItem } from '../types'
 
@@ -10,7 +11,15 @@ interface Props {
   selectedLocationId: string | null
   onSelectLocation: (id: string) => void
   onLocationCreated: (location: LocationItem) => void
+  onLocationUpdated: (location: LocationItem) => void
   onLocationDeleted: (id: string) => void
+  /** Kicks off polygon drawing on the map (FASE 27, ADR-0024); `onComplete`
+   * fires with a GeoJSON Polygon JSON string once the user finishes. */
+  onStartDrawBoundary: (onComplete: (boundaryGeojson: string) => void) => void
+  /** Kicks off click-to-place-a-point mode on the map — e.g. marking the
+   * street where someone lives, when there's no city-level match to search
+   * for. `onPicked` fires once with the clicked coordinate. */
+  onStartPickLocation: (onPicked: (latitude: number, longitude: number) => void) => void
 }
 
 export function LocationSearchCard({
@@ -18,7 +27,10 @@ export function LocationSearchCard({
   selectedLocationId,
   onSelectLocation,
   onLocationCreated,
+  onLocationUpdated,
   onLocationDeleted,
+  onStartDrawBoundary,
+  onStartPickLocation,
 }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CitySearchResult[]>([])
@@ -40,7 +52,10 @@ export function LocationSearchCard({
   const [plotCrop, setPlotCrop] = useState('')
   const [plotLatitude, setPlotLatitude] = useState(0)
   const [plotLongitude, setPlotLongitude] = useState(0)
+  const [plotBoundaryGeojson, setPlotBoundaryGeojson] = useState<string | null>(null)
+  const [plotColor, setPlotColor] = useState(cropColor(null))
   const [creatingPlot, setCreatingPlot] = useState(false)
+  const [updatingColorFor, setUpdatingColorFor] = useState<string | null>(null)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -111,6 +126,18 @@ export function LocationSearchCard({
     }
   }
 
+  async function updatePlotColor(plot: LocationItem, color: string) {
+    setUpdatingColorFor(plot.id)
+    try {
+      const updated = await api.updateLocation(plot.id, { color })
+      onLocationUpdated(updated)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível atualizar a cor')
+    } finally {
+      setUpdatingColorFor(null)
+    }
+  }
+
   async function removeLocation(id: string) {
     try {
       await api.deleteLocation(id)
@@ -126,6 +153,8 @@ export function LocationSearchCard({
     setPlotCrop('')
     setPlotLatitude(farm.latitude)
     setPlotLongitude(farm.longitude)
+    setPlotBoundaryGeojson(null)
+    setPlotColor(cropColor(null))
     setError(null)
   }
 
@@ -139,10 +168,13 @@ export function LocationSearchCard({
         longitude: plotLongitude,
         parent_location_id: farmId,
         crop: plotCrop.trim() || undefined,
+        boundary_geojson: plotBoundaryGeojson ?? undefined,
+        color: plotColor,
       })
       onLocationCreated(created)
       onSelectLocation(created.id)
       setAddingPlotFor(null)
+      setPlotBoundaryGeojson(null)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Não foi possível criar o talhão')
     } finally {
@@ -191,6 +223,24 @@ export function LocationSearchCard({
               title="Usar minha localização"
             >
               {locating ? '…' : '📍 usar minha localização'}
+            </button>
+            <button
+              type="button"
+              className="btn ghost small"
+              onClick={() =>
+                onStartPickLocation((latitude, longitude) => {
+                  reverseGeocodeCity(latitude, longitude, (place) => {
+                    pick({
+                      label: place ?? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+                      latitude,
+                      longitude,
+                    })
+                  })
+                })
+              }
+              title="Marcar um ponto no mapa"
+            >
+              🖊️ marcar no mapa
             </button>
           </div>
           {searching && <p className="panel-hint">buscando…</p>}
@@ -256,6 +306,15 @@ export function LocationSearchCard({
                       <div>🌱 {plot.name}</div>
                       <div className="sub">{plot.crop ?? 'cultura não informada'}</div>
                     </div>
+                    <input
+                      type="color"
+                      className="color-swatch-input"
+                      value={plot.color ?? cropColor(plot.crop)}
+                      disabled={updatingColorFor === plot.id}
+                      title="Cor do talhão no mapa"
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => updatePlotColor(plot, e.target.value)}
+                    />
                     <button
                       className="btn ghost small"
                       onClick={(e) => {
@@ -275,8 +334,18 @@ export function LocationSearchCard({
                     <label>Cultura (opcional)</label>
                     <input
                       value={plotCrop}
-                      onChange={(e) => setPlotCrop(e.target.value)}
+                      onChange={(e) => {
+                        setPlotCrop(e.target.value)
+                        setPlotColor(cropColor(e.target.value))
+                      }}
                       placeholder="soja, milho, café…"
+                    />
+                    <label>Cor no mapa</label>
+                    <input
+                      type="color"
+                      className="color-swatch-input"
+                      value={plotColor}
+                      onChange={(e) => setPlotColor(e.target.value)}
                     />
                     <label>Latitude</label>
                     <input
@@ -292,6 +361,15 @@ export function LocationSearchCard({
                       value={plotLongitude}
                       onChange={(e) => setPlotLongitude(Number(e.target.value))}
                     />
+                    <button
+                      type="button"
+                      className="btn ghost small"
+                      onClick={() =>
+                        onStartDrawBoundary((geojson) => setPlotBoundaryGeojson(geojson))
+                      }
+                    >
+                      {plotBoundaryGeojson ? '✓ contorno desenhado — redesenhar' : '🖊️ Desenhar contorno no mapa'}
+                    </button>
                     <div className="location-create-actions">
                       <button
                         className="btn"

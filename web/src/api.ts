@@ -143,6 +143,23 @@ export interface CreateLocationInput {
   // the parent farm.
   parent_location_id?: string
   crop?: string
+  // Visual-only polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon
+  // serialized as a JSON string.
+  boundary_geojson?: string
+  // Manual color override (FASE 27, ADR-0025) — `#RRGGBB`.
+  color?: string
+}
+
+export interface UpdateLocationInput {
+  name?: string
+  kind?: string
+  latitude?: number
+  longitude?: number
+  radius_km?: number
+  is_active?: boolean
+  crop?: string
+  boundary_geojson?: string
+  color?: string
 }
 
 export const api = {
@@ -160,6 +177,11 @@ export const api = {
   locations: () => request<LocationItem[]>('/locations'),
   createLocation: (data: CreateLocationInput) =>
     request<LocationItem>('/locations', { method: 'POST', body: JSON.stringify(data) }),
+  updateLocation: (locationId: string, data: UpdateLocationInput) =>
+    request<LocationItem>(`/locations/${locationId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
   deleteLocation: (locationId: string) =>
     request<void>(`/locations/${locationId}`, { method: 'DELETE' }),
   alerts: () => request<AlertItem[]>('/alerts'),

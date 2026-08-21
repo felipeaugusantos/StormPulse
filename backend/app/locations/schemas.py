@@ -2,12 +2,55 @@
 
 from __future__ import annotations
 
+import json
+import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.enums import AlertType
+
+_MIN_POLYGON_RING_POINTS = 4
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _validate_color(value: str | None) -> str | None:
+    """Shared by ``LocationCreate``/``LocationUpdate`` — a manual override
+    for the talhão's map color (FASE 27, ADR-0025), replacing the
+    crop-name-derived default. `#RRGGBB` only — never used for anything but
+    rendering."""
+    if value is None:
+        return None
+    if not _HEX_COLOR_RE.match(value):
+        raise ValueError("color precisa ser um hex #RRGGBB")
+    return value
+
+
+def _validate_boundary_geojson(value: str | None) -> str | None:
+    """Shared by ``LocationCreate``/``LocationUpdate`` — only checked for
+    being *parseable* GeoJSON, never used for weather/agro lookups (those
+    keep using latitude/longitude)."""
+    if value is None:
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise ValueError("boundary_geojson não é um JSON válido") from exc
+    if not isinstance(parsed, dict) or parsed.get("type") != "Polygon":
+        raise ValueError("boundary_geojson precisa ser um GeoJSON Polygon")
+    coordinates = parsed.get("coordinates")
+    if (
+        not isinstance(coordinates, list)
+        or len(coordinates) == 0
+        or not isinstance(coordinates[0], list)
+        or len(coordinates[0]) < _MIN_POLYGON_RING_POINTS
+    ):
+        raise ValueError(
+            "boundary_geojson precisa de um anel com pelo menos "
+            f"{_MIN_POLYGON_RING_POINTS} pontos (incluindo o de fechamento)"
+        )
+    return value
 
 
 class AlertPreferenceIn(BaseModel):
@@ -33,6 +76,18 @@ class LocationBase(BaseModel):
     # isn't itself a plot) since that needs a DB lookup.
     parent_location_id: uuid.UUID | None = None
     crop: str | None = Field(default=None, max_length=60)
+    # Visual-only polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon
+    # serialized as a JSON string, e.g. {"type":"Polygon","coordinates":
+    # [[[lng,lat],...]]}. Never used for weather/agro lookups — those keep
+    # using latitude/longitude above — so it's stored and returned as an
+    # opaque string, only checked here for being *parseable* GeoJSON.
+    boundary_geojson: str | None = Field(default=None)
+    # Manual color override (FASE 27, ADR-0025) — when unset, the frontend
+    # derives a color from `crop` instead (see `web/src/cropColors.ts`).
+    color: str | None = Field(default=None)
+
+    _check_boundary_geojson = field_validator("boundary_geojson")(_validate_boundary_geojson)
+    _check_color = field_validator("color")(_validate_color)
 
 
 class LocationCreate(LocationBase):
@@ -49,6 +104,11 @@ class LocationUpdate(BaseModel):
     is_active: bool | None = None
     alert_preferences: list[AlertPreferenceIn] | None = None
     crop: str | None = Field(default=None, max_length=60)
+    boundary_geojson: str | None = Field(default=None)
+    color: str | None = Field(default=None)
+
+    _check_boundary_geojson = field_validator("boundary_geojson")(_validate_boundary_geojson)
+    _check_color = field_validator("color")(_validate_color)
 
 
 class LocationOut(LocationBase):

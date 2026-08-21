@@ -7,6 +7,7 @@ step already exercised via curl in ``.github/workflows/ci.yml``.
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import pytest
@@ -161,6 +162,102 @@ async def test_deleting_a_farm_cascades_to_its_plots(client: AsyncClient) -> Non
 
     resp = await client.get(f"/api/v1/locations/{plot['id']}", headers=headers)
     assert resp.status_code == 404
+
+
+async def test_create_plot_with_boundary_polygon(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    farm = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    boundary = {
+        "type": "Polygon",
+        "coordinates": [[[-47.81, -21.18], [-47.80, -21.18], [-47.80, -21.17], [-47.81, -21.18]]],
+    }
+
+    resp = await client.post(
+        "/api/v1/locations",
+        json={
+            **_PAYLOAD,
+            "name": "Talhão com contorno",
+            "parent_location_id": farm["id"],
+            "boundary_geojson": json.dumps(boundary),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert json.loads(body["boundary_geojson"]) == boundary
+
+
+async def test_create_location_rejects_malformed_boundary_geojson(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+
+    resp = await client.post(
+        "/api/v1/locations",
+        json={**_PAYLOAD, "boundary_geojson": "not json"},
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+    resp = await client.post(
+        "/api/v1/locations",
+        json={**_PAYLOAD, "boundary_geojson": '{"type": "Point", "coordinates": [1, 2]}'},
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+    resp = await client.post(
+        "/api/v1/locations",
+        json={
+            **_PAYLOAD,
+            "boundary_geojson": '{"type": "Polygon", "coordinates": [[[-47.8, -21.1]]]}',
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+
+async def test_create_plot_with_manual_color_override(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    farm = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    resp = await client.post(
+        "/api/v1/locations",
+        json={
+            **_PAYLOAD,
+            "name": "Talhão colorido",
+            "parent_location_id": farm["id"],
+            "crop": "soja",
+            "color": "#ff00aa",
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["color"] == "#ff00aa"
+
+
+async def test_create_location_rejects_malformed_color(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+
+    resp = await client.post(
+        "/api/v1/locations", json={**_PAYLOAD, "color": "not-a-color"}, headers=headers
+    )
+    assert resp.status_code == 422
+
+    resp = await client.post(
+        "/api/v1/locations", json={**_PAYLOAD, "color": "#fff"}, headers=headers
+    )
+    assert resp.status_code == 422
+
+
+async def test_update_location_color(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    created = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    resp = await client.put(
+        f"/api/v1/locations/{created['id']}", json={"color": "#00ff00"}, headers=headers
+    )
+    assert resp.status_code == 200
+    assert resp.json()["color"] == "#00ff00"
 
 
 async def test_risk_before_any_pipeline_cycle_returns_404(client: AsyncClient) -> None:
