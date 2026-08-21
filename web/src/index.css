@@ -480,6 +480,14 @@ button {
 .search-results {
   margin-top: 6px;
 }
+.plot-row {
+  margin-left: 20px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line-soft);
+}
+.plot-create-form {
+  margin-left: 20px;
+}
 .location-search-row {
   display: flex;
   gap: 8px;

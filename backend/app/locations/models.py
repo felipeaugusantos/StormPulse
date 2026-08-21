@@ -26,6 +26,17 @@ class Location(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     radius_km: Mapped[float] = mapped_column(Float, nullable=False, default=50.0)
+    # Talhão support (FASE 26): a location with a parent is a plot inside
+    # the parent farm — reuses every weather/agro endpoint as-is (they're
+    # all keyed by location id/lat-lon already). Only one level deep —
+    # a plot cannot itself have children (enforced in the router).
+    parent_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("locations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    # Free-form crop label (soja, milho, café...) — only meaningful for a
+    # plot, but not enforced at the DB level (a farm without plots may
+    # still want to record what it grows).
+    crop: Mapped[str | None] = mapped_column(String(60), nullable=True)
     # PostGIS geography point (WGS84) for proximity queries (ST_DWithin).
     geom: Mapped[Any] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

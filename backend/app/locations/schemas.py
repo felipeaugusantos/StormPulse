@@ -28,6 +28,11 @@ class LocationBase(BaseModel):
     latitude: float = Field(ge=-90, le=90)
     longitude: float = Field(ge=-180, le=180)
     radius_km: float = Field(default=50.0, gt=0, le=500)
+    # Talhão support (FASE 26): present → this location is a plot inside
+    # the parent farm. Validated in the router (same tenant/user, parent
+    # isn't itself a plot) since that needs a DB lookup.
+    parent_location_id: uuid.UUID | None = None
+    crop: str | None = Field(default=None, max_length=60)
 
 
 class LocationCreate(LocationBase):
@@ -43,6 +48,7 @@ class LocationUpdate(BaseModel):
     radius_km: float | None = Field(default=None, gt=0, le=500)
     is_active: bool | None = None
     alert_preferences: list[AlertPreferenceIn] | None = None
+    crop: str | None = Field(default=None, max_length=60)
 
 
 class LocationOut(LocationBase):

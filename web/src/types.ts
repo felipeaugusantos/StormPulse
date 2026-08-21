@@ -33,6 +33,11 @@ export interface LocationItem {
   is_active: boolean
   created_at: string
   alert_preferences: { alert_type: string; enabled: boolean }[]
+  // Talhão support (FASE 26) — present → this location is a plot inside
+  // the parent farm (`parent_location_id`), and `crop` is a free-form
+  // culture label (soja, milho, café...).
+  parent_location_id: string | null
+  crop: string | null
 }
 
 export interface AlertItem {

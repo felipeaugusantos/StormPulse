@@ -95,6 +95,74 @@ async def test_location_is_isolated_by_tenant(client: AsyncClient) -> None:
     assert resp.status_code == 404
 
 
+async def test_create_plot_under_a_farm(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    farm = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    plot_payload = {
+        **_PAYLOAD,
+        "name": "Talhão 1",
+        "parent_location_id": farm["id"],
+        "crop": "soja",
+    }
+    resp = await client.post("/api/v1/locations", json=plot_payload, headers=headers)
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["parent_location_id"] == farm["id"]
+    assert body["crop"] == "soja"
+
+
+async def test_plot_cannot_be_nested_under_another_plot(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    farm = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+    plot = (
+        await client.post(
+            "/api/v1/locations",
+            json={**_PAYLOAD, "name": "Talhão 1", "parent_location_id": farm["id"]},
+            headers=headers,
+        )
+    ).json()
+
+    resp = await client.post(
+        "/api/v1/locations",
+        json={**_PAYLOAD, "name": "Talhão 1.1", "parent_location_id": plot["id"]},
+        headers=headers,
+    )
+    assert resp.status_code == 400
+
+
+async def test_plot_cannot_use_another_tenants_location_as_parent(client: AsyncClient) -> None:
+    owner_headers = await _auth_headers(client)
+    farm = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=owner_headers)).json()
+
+    other_headers = await _auth_headers(client)
+    resp = await client.post(
+        "/api/v1/locations",
+        json={**_PAYLOAD, "name": "Talhão invasor", "parent_location_id": farm["id"]},
+        headers=other_headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_deleting_a_farm_cascades_to_its_plots(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    farm = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+    plot = (
+        await client.post(
+            "/api/v1/locations",
+            json={**_PAYLOAD, "name": "Talhão 1", "parent_location_id": farm["id"]},
+            headers=headers,
+        )
+    ).json()
+
+    delete_resp = await client.delete(f"/api/v1/locations/{farm['id']}", headers=headers)
+    assert delete_resp.status_code == 204
+
+    resp = await client.get(f"/api/v1/locations/{plot['id']}", headers=headers)
+    assert resp.status_code == 404
+
+
 async def test_risk_before_any_pipeline_cycle_returns_404(client: AsyncClient) -> None:
     # Deliberately far from the mock storm's fixed footprint (~-23.5,-46.6):
     # any pipeline cycle from an earlier local run — this session's pipeline

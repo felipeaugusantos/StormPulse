@@ -35,6 +35,25 @@ async def _get_owned_or_404(session: AsyncSession, user: User, location_id: uuid
     return location
 
 
+async def _validate_parent(
+    session: AsyncSession, user: User, parent_location_id: uuid.UUID | None
+) -> None:
+    """A talhão's parent must belong to the caller and not itself be a
+    talhão — only one level of nesting (farm → plots), not a tree."""
+    if parent_location_id is None:
+        return
+    parent = await service.get_location(session, user, parent_location_id)
+    if parent is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Fazenda (local pai) não encontrada"
+        )
+    if parent.parent_location_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Um talhão não pode ser filho de outro talhão",
+        )
+
+
 @router.post(
     "",
     response_model=LocationOut,
@@ -46,6 +65,7 @@ async def create_location(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Location:
+    await _validate_parent(session, user, data.parent_location_id)
     return await service.create_location(session, user, data)
 
 

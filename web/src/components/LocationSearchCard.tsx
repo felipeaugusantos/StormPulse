@@ -31,6 +31,17 @@ export function LocationSearchCard({
   const [error, setError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Talhão support (FASE 26): plot creation is a small inline form under
+  // its parent farm, not the city-search flow above — a plot's coordinate
+  // starts at the farm's own (editable), it's never a new place someone
+  // needs to search for.
+  const [addingPlotFor, setAddingPlotFor] = useState<string | null>(null)
+  const [plotName, setPlotName] = useState('')
+  const [plotCrop, setPlotCrop] = useState('')
+  const [plotLatitude, setPlotLatitude] = useState(0)
+  const [plotLongitude, setPlotLongitude] = useState(0)
+  const [creatingPlot, setCreatingPlot] = useState(false)
+
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (query.trim().length < 2) {
@@ -109,6 +120,36 @@ export function LocationSearchCard({
     }
   }
 
+  function startAddingPlot(farm: LocationItem) {
+    setAddingPlotFor(farm.id)
+    setPlotName('')
+    setPlotCrop('')
+    setPlotLatitude(farm.latitude)
+    setPlotLongitude(farm.longitude)
+    setError(null)
+  }
+
+  async function createPlot(farmId: string) {
+    setCreatingPlot(true)
+    setError(null)
+    try {
+      const created = await api.createLocation({
+        name: plotName.trim() || 'Talhão',
+        latitude: plotLatitude,
+        longitude: plotLongitude,
+        parent_location_id: farmId,
+        crop: plotCrop.trim() || undefined,
+      })
+      onLocationCreated(created)
+      onSelectLocation(created.id)
+      setAddingPlotFor(null)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível criar o talhão')
+    } finally {
+      setCreatingPlot(false)
+    }
+  }
+
   return (
     <section className="panel">
       <h2>📍 Locais monitorados</h2>
@@ -169,29 +210,109 @@ export function LocationSearchCard({
 
       <div className="list" style={{ marginTop: 12 }}>
         {locations.length === 0 && <p className="empty">Nenhum local cadastrado ainda.</p>}
-        {locations.map((l) => (
-          <div
-            className={`row clickable ${selectedLocationId === l.id ? 'selected' : ''}`}
-            key={l.id}
-            onClick={() => onSelectLocation(l.id)}
-          >
-            <div className="grow">
-              <div>{l.name}</div>
-              <div className="sub">
-                {l.kind} · raio {l.radius_km} km
+        {locations
+          .filter((l) => l.parent_location_id == null)
+          .map((farm) => {
+            const plots = locations.filter((l) => l.parent_location_id === farm.id)
+            return (
+              <div key={farm.id}>
+                <div
+                  className={`row clickable ${selectedLocationId === farm.id ? 'selected' : ''}`}
+                  onClick={() => onSelectLocation(farm.id)}
+                >
+                  <div className="grow">
+                    <div>{farm.name}</div>
+                    <div className="sub">
+                      {farm.kind} · raio {farm.radius_km} km
+                    </div>
+                  </div>
+                  <button
+                    className="btn ghost small"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      startAddingPlot(farm)
+                    }}
+                  >
+                    + talhão
+                  </button>
+                  <button
+                    className="btn ghost small"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeLocation(farm.id)
+                    }}
+                  >
+                    remover
+                  </button>
+                </div>
+
+                {plots.map((plot) => (
+                  <div
+                    className={`row clickable plot-row ${selectedLocationId === plot.id ? 'selected' : ''}`}
+                    key={plot.id}
+                    onClick={() => onSelectLocation(plot.id)}
+                  >
+                    <div className="grow">
+                      <div>🌱 {plot.name}</div>
+                      <div className="sub">{plot.crop ?? 'cultura não informada'}</div>
+                    </div>
+                    <button
+                      className="btn ghost small"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeLocation(plot.id)
+                      }}
+                    >
+                      remover
+                    </button>
+                  </div>
+                ))}
+
+                {addingPlotFor === farm.id && (
+                  <div className="location-create-form plot-create-form">
+                    <label>Nome do talhão</label>
+                    <input value={plotName} onChange={(e) => setPlotName(e.target.value)} />
+                    <label>Cultura (opcional)</label>
+                    <input
+                      value={plotCrop}
+                      onChange={(e) => setPlotCrop(e.target.value)}
+                      placeholder="soja, milho, café…"
+                    />
+                    <label>Latitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={plotLatitude}
+                      onChange={(e) => setPlotLatitude(Number(e.target.value))}
+                    />
+                    <label>Longitude</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={plotLongitude}
+                      onChange={(e) => setPlotLongitude(Number(e.target.value))}
+                    />
+                    <div className="location-create-actions">
+                      <button
+                        className="btn"
+                        disabled={creatingPlot}
+                        onClick={() => createPlot(farm.id)}
+                      >
+                        {creatingPlot ? 'Adicionando…' : 'Adicionar talhão'}
+                      </button>
+                      <button
+                        className="btn ghost"
+                        onClick={() => setAddingPlotFor(null)}
+                        disabled={creatingPlot}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-            <button
-              className="btn ghost small"
-              onClick={(e) => {
-                e.stopPropagation()
-                removeLocation(l.id)
-              }}
-            >
-              remover
-            </button>
-          </div>
-        ))}
+            )
+          })}
       </div>
     </section>
   )

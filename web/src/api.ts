@@ -139,6 +139,10 @@ export interface CreateLocationInput {
   latitude: number
   longitude: number
   radius_km?: number
+  // Talhão support (FASE 26) — present → this location is a plot inside
+  // the parent farm.
+  parent_location_id?: string
+  crop?: string
 }
 
 export const api = {

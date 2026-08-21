@@ -39,6 +39,8 @@ async def create_location(session: AsyncSession, user: User, data: LocationCreat
         longitude=data.longitude,
         radius_km=data.radius_km,
         geom=point_wkt(data.latitude, data.longitude),
+        parent_location_id=data.parent_location_id,
+        crop=data.crop,
     )
     _apply_preferences(location, data.alert_preferences)
     session.add(location)
