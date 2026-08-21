@@ -9,6 +9,7 @@ import type {
   RainfallHistory,
   SprayWindow,
   StormRisk,
+  UpdateLocationInput,
 } from './types'
 
 const V1 = `${API_URL}/api/v1`
@@ -76,6 +77,11 @@ export const api = {
   locations: () => request<LocationItem[]>('/locations'),
   createLocation: (data: CreateLocationInput) =>
     request<LocationItem>('/locations', { method: 'POST', body: JSON.stringify(data) }),
+  updateLocation: (locationId: string, data: UpdateLocationInput) =>
+    request<LocationItem>(`/locations/${locationId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
   deleteLocation: (locationId: string) =>
     request<void>(`/locations/${locationId}`, { method: 'DELETE' }),
   alerts: () => request<AlertItem[]>('/alerts'),

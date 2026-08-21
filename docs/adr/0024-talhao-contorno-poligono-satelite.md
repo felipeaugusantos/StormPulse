@@ -59,14 +59,22 @@ segunda fonte raster no estilo do MapLibre, alternável por um checkbox
 ("🛰️ imagem de satélite (mapa)") que troca a visibilidade entre essa e o
 basemap OSM de ruas — sem recriar o mapa, só troca de camada.
 
-### Mobile: mesma decisão, adiada por enquanto
+### Mobile: implementado numa rodada seguinte
 
-O app mobile ainda não tinha nenhum componente de mapa (só listas). Dado
-o volume já entregue nesta mesma rodada (paridade de Agro, talhão, push
-Expo — ver ADR-0023), a tela de mapa + desenho por toque no mobile fica
-para uma próxima fase — vai precisar de `react-native-maps` (que já
-suporta `mapType="satellite"` nativamente, sem tiles/chave) e um fluxo de
-"toque pra adicionar vértice" equivalente ao do MapLibre.
+Adiado inicialmente (o app mobile não tinha nenhum componente de mapa
+ainda), depois retomado: `react-native-maps` (`MapView`/`Polygon`,
+`mapType="satellite"` nativo — sem tiles/chave, ao contrário do Esri do
+web) numa tela nova, `mobile/src/screens/PlotBoundaryMapScreen.tsx` —
+toque no mapa adiciona vértice, "Desfazer"/"Cancelar"/"Concluir" mesma
+lógica do web, entregue de volta pra `LocationsScreen.tsx` como o mesmo
+JSON string de `boundary_geojson`. Sem biblioteca de navegação: a tela
+de mapa é uma troca de render condicional dentro de `LocationsScreen`,
+mesmo padrão do resto do app.
+
+Como o mobile não tem `<input type="color">`, a cor manual (ADR-0025)
+virou uma paleta de swatches tocáveis (`COLOR_PALETTE`, novo export em
+`cropColors.ts`) em vez do seletor nativo do navegador — mesma ideia,
+adaptada à plataforma.
 
 ## Consequências
 

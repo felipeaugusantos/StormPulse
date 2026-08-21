@@ -14,6 +14,8 @@ import * as Location from 'expo-location'
 import { ApiError, api, clearToken } from '../api'
 import { isPushSupported, subscribeToExpoPush } from '../push'
 import { reverseGeocodeCity, searchCity } from '../geocode'
+import { COLOR_PALETTE, cropColor } from '../cropColors'
+import { PlotBoundaryMapScreen } from './PlotBoundaryMapScreen'
 import type { CitySearchResult, LocationItem } from '../types'
 import { colors } from '../theme'
 
@@ -41,7 +43,12 @@ export function LocationsScreen({ onLogout }: Props) {
   const [addingPlotFor, setAddingPlotFor] = useState<string | null>(null)
   const [plotName, setPlotName] = useState('')
   const [plotCrop, setPlotCrop] = useState('')
+  const [plotColor, setPlotColor] = useState(cropColor(null))
+  const [plotBoundaryGeojson, setPlotBoundaryGeojson] = useState<string | null>(null)
   const [creatingPlot, setCreatingPlot] = useState(false)
+  const [drawingBoundaryFor, setDrawingBoundaryFor] = useState<LocationItem | null>(null)
+  const [pickingColorFor, setPickingColorFor] = useState<string | null>(null)
+  const [updatingColorFor, setUpdatingColorFor] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setRefreshing(true)
@@ -131,6 +138,8 @@ export function LocationsScreen({ onLogout }: Props) {
     setAddingPlotFor(farm.id)
     setPlotName('')
     setPlotCrop('')
+    setPlotColor(cropColor(null))
+    setPlotBoundaryGeojson(null)
   }
 
   async function createPlot(farm: LocationItem) {
@@ -143,13 +152,29 @@ export function LocationsScreen({ onLogout }: Props) {
         longitude: farm.longitude,
         parent_location_id: farm.id,
         crop: plotCrop.trim() || undefined,
+        color: plotColor,
+        boundary_geojson: plotBoundaryGeojson ?? undefined,
       })
       setLocations((prev) => [...prev, created])
       setAddingPlotFor(null)
+      setPlotBoundaryGeojson(null)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Não foi possível criar o talhão')
     } finally {
       setCreatingPlot(false)
+    }
+  }
+
+  async function updatePlotColor(plot: LocationItem, color: string) {
+    setUpdatingColorFor(plot.id)
+    try {
+      const updated = await api.updateLocation(plot.id, { color })
+      setLocations((prev) => prev.map((l) => (l.id === updated.id ? updated : l)))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível atualizar a cor')
+    } finally {
+      setUpdatingColorFor(null)
+      setPickingColorFor(null)
     }
   }
 
@@ -189,6 +214,22 @@ export function LocationsScreen({ onLogout }: Props) {
   }
 
   const farms = locations.filter((l) => l.parent_location_id == null)
+
+  if (drawingBoundaryFor) {
+    return (
+      <PlotBoundaryMapScreen
+        farm={drawingBoundaryFor}
+        existingPlots={locations.filter(
+          (l) => l.parent_location_id === drawingBoundaryFor.id && l.boundary_geojson,
+        )}
+        onComplete={(boundaryGeojson) => {
+          setPlotBoundaryGeojson(boundaryGeojson)
+          setDrawingBoundaryFor(null)
+        }}
+        onCancel={() => setDrawingBoundaryFor(null)}
+      />
+    )
+  }
 
   return (
     <ScrollView
@@ -290,14 +331,40 @@ export function LocationsScreen({ onLogout }: Props) {
             </View>
 
             {plots.map((plot) => (
-              <View key={plot.id} style={styles.plotRow}>
-                <View style={styles.grow}>
-                  <Text style={styles.plotName}>🌱 {plot.name}</Text>
-                  <Text style={styles.sub}>{plot.crop ?? 'cultura não informada'}</Text>
+              <View key={plot.id}>
+                <View style={styles.plotRow}>
+                  <View style={styles.grow}>
+                    <Text style={styles.plotName}>🌱 {plot.name}</Text>
+                    <Text style={styles.sub}>{plot.crop ?? 'cultura não informada'}</Text>
+                  </View>
+                  <TouchableOpacity
+                    disabled={updatingColorFor === plot.id}
+                    onPress={() =>
+                      setPickingColorFor((prev) => (prev === plot.id ? null : plot.id))
+                    }
+                  >
+                    <View
+                      style={[
+                        styles.colorDot,
+                        { backgroundColor: plot.color ?? cropColor(plot.crop) },
+                      ]}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => removeLocation(plot)}>
+                    <Text style={styles.smallBtnDanger}>remover</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => removeLocation(plot)}>
-                  <Text style={styles.smallBtnDanger}>remover</Text>
-                </TouchableOpacity>
+                {pickingColorFor === plot.id && (
+                  <View style={styles.colorPaletteRow}>
+                    {COLOR_PALETTE.map((c) => (
+                      <TouchableOpacity
+                        key={c}
+                        onPress={() => updatePlotColor(plot, c)}
+                        style={[styles.colorSwatch, { backgroundColor: c }]}
+                      />
+                    ))}
+                  </View>
+                )}
               </View>
             ))}
 
@@ -309,10 +376,37 @@ export function LocationsScreen({ onLogout }: Props) {
                 <TextInput
                   style={styles.input}
                   value={plotCrop}
-                  onChangeText={setPlotCrop}
+                  onChangeText={(text) => {
+                    setPlotCrop(text)
+                    setPlotColor(cropColor(text))
+                  }}
                   placeholder="soja, milho, café…"
                   placeholderTextColor={colors.inkMute}
                 />
+                <Text style={styles.label}>Cor no mapa</Text>
+                <View style={styles.colorPaletteRow}>
+                  {COLOR_PALETTE.map((c) => (
+                    <TouchableOpacity
+                      key={c}
+                      onPress={() => setPlotColor(c)}
+                      style={[
+                        styles.colorSwatch,
+                        { backgroundColor: c },
+                        plotColor === c && styles.colorSwatchSelected,
+                      ]}
+                    />
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={styles.btnGhostSmall}
+                  onPress={() => setDrawingBoundaryFor(farm)}
+                >
+                  <Text style={styles.btnGhostText}>
+                    {plotBoundaryGeojson
+                      ? '✓ contorno desenhado — redesenhar'
+                      : '🖊️ Desenhar contorno no mapa'}
+                  </Text>
+                </TouchableOpacity>
                 <View style={styles.formActions}>
                   <TouchableOpacity
                     style={styles.btn}
@@ -421,4 +515,29 @@ const styles = StyleSheet.create({
   },
   plotName: { color: colors.ink, fontSize: 14, fontWeight: '600' },
   plotForm: { marginTop: 10, marginLeft: 16 },
+  colorDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  colorPaletteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  colorSwatch: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  colorSwatchSelected: { borderColor: colors.ink, borderWidth: 2 },
+  btnGhostSmall: {
+    borderColor: colors.line,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
 })

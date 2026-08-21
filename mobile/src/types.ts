@@ -14,6 +14,12 @@ export interface LocationItem {
   // free-form culture label (soja, milho, café...).
   parent_location_id: string | null
   crop: string | null
+  // Visual-only polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon
+  // serialized as a JSON string. Never used for weather/agro lookups.
+  boundary_geojson: string | null
+  // Manual color override (FASE 27, ADR-0025) — when `null`, the map
+  // derives a color from `crop` instead (`cropColor()`).
+  color: string | null
 }
 
 export interface StormRisk {
@@ -117,4 +123,18 @@ export interface CreateLocationInput {
   radius_km?: number
   parent_location_id?: string
   crop?: string
+  boundary_geojson?: string
+  color?: string
+}
+
+export interface UpdateLocationInput {
+  name?: string
+  kind?: string
+  latitude?: number
+  longitude?: number
+  radius_km?: number
+  is_active?: boolean
+  crop?: string
+  boundary_geojson?: string
+  color?: string
 }
