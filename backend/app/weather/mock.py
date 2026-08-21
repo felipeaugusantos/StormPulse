@@ -109,6 +109,12 @@ class MockWeatherProvider(WeatherProvider):
                 temperature_min_c=round(7 + 15 * self._wave(latitude, longitude, h * 0.2), 1),
                 precipitation_probability=int(100 * self._wave(latitude, longitude, h * 0.3)),
                 precipitation_mm=round(10 * self._wave(latitude, longitude, h * 0.4), 1),
+                temperature_mean_c=round(11 + 15 * self._wave(latitude, longitude, h * 0.2), 1),
+                humidity_mean_percent=round(30 + 60 * self._wave(latitude, longitude, h * 0.6), 1),
+                humidity_max_percent=round(50 + 45 * self._wave(latitude, longitude, h * 0.6), 1),
+                wind_gusts_max_kmh=round(10 + 60 * self._wave(latitude, longitude, h * 0.5), 1),
+                evapotranspiration_mm=round(2 + 5 * self._wave(latitude, longitude, h * 0.7), 1),
+                cape_max_jkg=round(4000 * self._wave(latitude, longitude, h * 0.35), 0),
             )
             for h in range(12)
         ]

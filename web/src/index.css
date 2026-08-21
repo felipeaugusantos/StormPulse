@@ -453,6 +453,9 @@ button {
 .agro-row.warn {
   color: var(--orange);
 }
+.eta-warn {
+  color: var(--orange);
+}
 
 .location-create-form {
   display: flex;

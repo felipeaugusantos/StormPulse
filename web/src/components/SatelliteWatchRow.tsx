@@ -16,9 +16,14 @@ interface Props {
   watch: ConvectiveWatch
   /** Present → the row is clickable and centers the map on the watch. */
   onSelect?: (latitude: number, longitude: number) => void
+  /** "chegada estimada em X min em <local>" — computed by the caller from
+   * ``estimateStormEta`` (FASE 25, ADR-0021), against the nearest monitored
+   * location this cell is actually heading toward. Omitted when the cell
+   * isn't heading anywhere being watched. */
+  etaLabel?: string | null
 }
 
-export function SatelliteWatchRow({ watch, onSelect }: Props) {
+export function SatelliteWatchRow({ watch, onSelect, etaLabel }: Props) {
   const intensity = convectiveIntensity(watch.min_brightness_temp_k)
   const city = useCityName(watch.latitude, watch.longitude)
   const place = city ?? `${watch.latitude.toFixed(2)}, ${watch.longitude.toFixed(2)}`
@@ -39,6 +44,7 @@ export function SatelliteWatchRow({ watch, onSelect }: Props) {
             : ''}
         </div>
         <div className="sub">📍 {place}</div>
+        {etaLabel && <div className="sub eta-warn">⏱️ {etaLabel}</div>}
       </div>
     </div>
   )

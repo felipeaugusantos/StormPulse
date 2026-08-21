@@ -13,11 +13,19 @@ import type {
   StormCell,
 } from '../types'
 import {
+  classifyDiseaseRisk,
   classifyFrostDays,
+  classifyVpd,
   evaluateTrafficability,
   formatFrostDays,
+  growingDegreeDays,
+  vaporPressureDeficitKpa,
+  waterBalanceMm,
+  type DiseaseRisk,
   type Trafficability,
+  type VpdLevel,
 } from '../agro'
+import { classifyCape, estimateStormEta, type CapeLevel } from '../storm'
 import { timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { LocationSearchCard } from './LocationSearchCard'
@@ -231,10 +239,16 @@ export function Dashboard({ onLogout }: Props) {
             <StormsPanel storms={storms} />
             <SatelliteWatchesPanel
               watches={satelliteWatches}
+              locations={locations.filter((l) => l.is_active)}
               onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
             />
             <LightningPanel
               strikes={lightning}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+            <InstabilityPanel
+              activeLocations={agroActiveLocations}
+              entries={agroEntries}
               onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
             />
           </div>
@@ -256,6 +270,16 @@ export function Dashboard({ onLogout }: Props) {
               onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
             />
             <TrafficabilityPanel
+              activeLocations={agroActiveLocations}
+              entries={agroEntries}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+            <WaterBalancePanel
+              activeLocations={agroActiveLocations}
+              entries={agroEntries}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+            <DiseaseRiskPanel
               activeLocations={agroActiveLocations}
               entries={agroEntries}
               onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
@@ -403,11 +427,37 @@ function StormsPanel({ storms }: { storms: StormCell[] }) {
   )
 }
 
+/** Among the watched locations, picks the one this cell is heading toward
+ * and closest to (if any), for the "chegada estimada" label. */
+function bestStormEtaLabel(watch: ConvectiveWatch, locations: LocationItem[]): string | null {
+  let best: { name: string; etaMinutes: number } | null = null
+  for (const loc of locations) {
+    const eta = estimateStormEta(
+      watch.latitude,
+      watch.longitude,
+      watch.speed_kmh,
+      watch.direction_deg,
+      loc.latitude,
+      loc.longitude,
+    )
+    if (eta && (best == null || eta.etaMinutes < best.etaMinutes)) {
+      best = { name: loc.name, etaMinutes: eta.etaMinutes }
+    }
+  }
+  if (!best) return null
+  const minutes = Math.round(best.etaMinutes)
+  return minutes < 60
+    ? `chegada estimada em ~${minutes} min em ${best.name}`
+    : `chegada estimada em ~${(minutes / 60).toFixed(1)}h em ${best.name}`
+}
+
 function SatelliteWatchesPanel({
   watches,
+  locations,
   onSelect,
 }: {
   watches: ConvectiveWatch[]
+  locations: LocationItem[]
   onSelect: (latitude: number, longitude: number) => void
 }) {
   return (
@@ -426,8 +476,70 @@ function SatelliteWatchesPanel({
           </p>
         )}
         {watches.map((w) => (
-          <SatelliteWatchRow key={w.id} watch={w} onSelect={onSelect} />
+          <SatelliteWatchRow
+            key={w.id}
+            watch={w}
+            onSelect={onSelect}
+            etaLabel={bestStormEtaLabel(w, locations)}
+          />
         ))}
+      </div>
+    </section>
+  )
+}
+
+function InstabilityPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
+  return (
+    <section className="panel">
+      <h2>
+        🌩️ Instabilidade <span className="count">{activeLocations.length}</span>
+      </h2>
+      <p className="panel-hint">
+        CAPE (energia disponível para tempestade formar), por local — não é uma previsão por si
+        só, é um ingrediente.
+      </p>
+      <div className="list">
+        {activeLocations.length === 0 && <p className="empty">Nenhum local monitorado ativo.</p>}
+        {activeLocations.map((l) => {
+          const entry = entries[l.id]
+          const label: Record<CapeLevel, string> = {
+            weak: 'fraca',
+            moderate: 'moderada',
+            strong: 'forte',
+            extreme: 'extrema',
+          }
+          return (
+            <div
+              className="row clickable"
+              key={l.id}
+              onClick={() => onSelect(l.latitude, l.longitude)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                {!entry && <div className="sub">carregando…</div>}
+                {entry?.error && <div className="sub">⚠️ {entry.error}</div>}
+                {entry && !entry.error && (
+                  <div className="agro-section">
+                    {entry.capeJkg != null && entry.capeLevel != null ? (
+                      <div
+                        className={`agro-row ${entry.capeLevel === 'strong' || entry.capeLevel === 'extreme' ? 'warn' : ''}`}
+                      >
+                        CAPE {entry.capeJkg.toFixed(0)} J/kg — instabilidade {label[entry.capeLevel]}
+                        {entry.windGustMaxKmh != null
+                          ? ` · rajada prevista ${entry.windGustMaxKmh.toFixed(0)} km/h`
+                          : ''}
+                      </div>
+                    ) : (
+                      <div className="agro-row sub">CAPE indisponível no momento.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </section>
   )
@@ -484,6 +596,11 @@ const FROST_LIGHT_THRESHOLD_C = 6
 const TRAFFICABILITY_DRY_DAYS = 2
 const TRAFFICABILITY_RAIN_THRESHOLD_MM = 1
 const TRAFFICABILITY_LOOKAHEAD_DAYS = 2
+// Generic base temperature for GDD (not crop-specific — same philosophy as
+// the frost/dry-spell thresholds above) and the fungal disease-risk proxy
+// thresholds (FASE 25, ADR-0021): humid + mild favors fungal growth.
+const GDD_BASE_TEMP_C = 10
+const DISEASE_RISK_THRESHOLDS = { humidityThresholdPercent: 80, minTempC: 15, maxTempC: 30 }
 
 interface AgroEntry {
   severeFrostDays: ForecastPoint[]
@@ -492,7 +609,55 @@ interface AgroEntry {
   rainfallTotalMm: number | null
   rainfallDays: number
   trafficability: Trafficability | null
+  capeJkg: number | null
+  capeLevel: CapeLevel | null
+  windGustMaxKmh: number | null
+  waterBalanceMm: number | null
+  gddC: number | null
+  diseaseRisk: DiseaseRisk
+  vpdKpa: number | null
+  vpdLevel: VpdLevel
   error: string | null
+}
+
+const EMPTY_AGRO_DERIVED = {
+  capeJkg: null,
+  capeLevel: null,
+  windGustMaxKmh: null,
+  waterBalanceMm: null,
+  gddC: null,
+  diseaseRisk: 'unknown' as DiseaseRisk,
+  vpdKpa: null,
+  vpdLevel: 'unknown' as VpdLevel,
+}
+
+/** Derives the CAPE/water-balance/GDD/disease-risk/VPD/gust signals
+ * (FASE 25, ADR-0021) from today's Open-Meteo-exclusive forecast point —
+ * `rainForecast` is always Open-Meteo (ADR-0020), so this is the one place
+ * these fields are reliably populated regardless of which source answers
+ * the general `/forecast` call. */
+function deriveAgroSignals(todayPoint: ForecastPoint | null) {
+  if (!todayPoint) return EMPTY_AGRO_DERIVED
+  const capeJkg = todayPoint.cape_max_jkg
+  const et0Mm = todayPoint.evapotranspiration_mm
+  const rainTodayMm = todayPoint.precipitation_mm
+  const tempMeanC = todayPoint.temperature_mean_c
+  const humidityMeanPercent = todayPoint.humidity_mean_percent
+  const vpdKpa =
+    tempMeanC != null && humidityMeanPercent != null
+      ? vaporPressureDeficitKpa(tempMeanC, humidityMeanPercent)
+      : null
+  return {
+    capeJkg,
+    capeLevel: capeJkg != null ? classifyCape(capeJkg) : null,
+    windGustMaxKmh: todayPoint.wind_gusts_max_kmh,
+    waterBalanceMm:
+      et0Mm != null && rainTodayMm != null ? waterBalanceMm(rainTodayMm, et0Mm) : null,
+    gddC: tempMeanC != null ? growingDegreeDays(tempMeanC, GDD_BASE_TEMP_C) : null,
+    diseaseRisk: classifyDiseaseRisk(humidityMeanPercent, tempMeanC, DISEASE_RISK_THRESHOLDS),
+    vpdKpa,
+    vpdLevel: vpdKpa != null ? classifyVpd(vpdKpa) : ('unknown' as VpdLevel),
+  }
 }
 
 function useAgroEntries(locations: LocationItem[]): {
@@ -549,6 +714,7 @@ function useAgroEntries(locations: LocationItem[]): {
                       lookaheadDays: TRAFFICABILITY_LOOKAHEAD_DAYS,
                     })
                   : null,
+                ...deriveAgroSignals(upcomingRain[0] ?? null),
                 error:
                   forecast == null && sprayWindow == null && rainfall == null
                     ? 'Dados agro indisponíveis no momento'
@@ -565,6 +731,7 @@ function useAgroEntries(locations: LocationItem[]): {
                 rainfallTotalMm: null,
                 rainfallDays: 0,
                 trafficability: null,
+                ...EMPTY_AGRO_DERIVED,
                 error: 'Dados agro indisponíveis no momento',
               },
             ]
@@ -732,6 +899,114 @@ function RainfallPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
                     ) : (
                       <div className="agro-row sub">Histórico de chuva indisponível.</div>
                     )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function WaterBalancePanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
+  return (
+    <section className="panel">
+      <h2>
+        💧 Balanço hídrico <span className="count">{activeLocations.length}</span>
+      </h2>
+      <p className="panel-hint">
+        Chuva menos evapotranspiração de hoje (ET0), e graus-dia acumulados (base {GDD_BASE_TEMP_C}
+        °C), por local.
+      </p>
+      <div className="list">
+        {activeLocations.length === 0 && <p className="empty">Nenhum local monitorado ativo.</p>}
+        {activeLocations.map((l) => {
+          const entry = entries[l.id]
+          return (
+            <div
+              className="row clickable"
+              key={l.id}
+              onClick={() => onSelect(l.latitude, l.longitude)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                {!entry && <div className="sub">carregando…</div>}
+                {entry?.error && <div className="sub">⚠️ {entry.error}</div>}
+                {entry && !entry.error && (
+                  <div className="agro-section">
+                    {entry.waterBalanceMm != null ? (
+                      <div className={`agro-row ${entry.waterBalanceMm < 0 ? 'warn' : ''}`}>
+                        {entry.waterBalanceMm >= 0 ? '+' : ''}
+                        {entry.waterBalanceMm.toFixed(1)}mm hoje
+                      </div>
+                    ) : (
+                      <div className="agro-row sub">Balanço hídrico indisponível.</div>
+                    )}
+                    {entry.gddC != null ? (
+                      <div className="agro-row">{entry.gddC.toFixed(1)} graus-dia hoje</div>
+                    ) : (
+                      <div className="agro-row sub">Graus-dia indisponível.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function DiseaseRiskPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
+  return (
+    <section className="panel">
+      <h2>
+        🦠 Risco de doença <span className="count">{activeLocations.length}</span>
+      </h2>
+      <p className="panel-hint">
+        Umidade alta + temperatura amena favorecem fungos (estimativa diária simplificada); déficit
+        de pressão de vapor (VPD) indica estresse hídrico da planta.
+      </p>
+      <div className="list">
+        {activeLocations.length === 0 && <p className="empty">Nenhum local monitorado ativo.</p>}
+        {activeLocations.map((l) => {
+          const entry = entries[l.id]
+          const vpdLabel: Record<VpdLevel, string> = {
+            low: 'baixo (transpiração reduzida)',
+            ideal: 'ideal',
+            high: 'alto (estresse hídrico)',
+            unknown: 'indisponível',
+          }
+          return (
+            <div
+              className="row clickable"
+              key={l.id}
+              onClick={() => onSelect(l.latitude, l.longitude)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                {!entry && <div className="sub">carregando…</div>}
+                {entry?.error && <div className="sub">⚠️ {entry.error}</div>}
+                {entry && !entry.error && (
+                  <div className="agro-section">
+                    <div className={`agro-row ${entry.diseaseRisk === 'high' ? 'warn' : ''}`}>
+                      {entry.diseaseRisk === 'high'
+                        ? 'risco elevado de doença fúngica'
+                        : entry.diseaseRisk === 'low'
+                          ? 'risco baixo de doença fúngica'
+                          : 'risco de doença indisponível'}
+                    </div>
+                    <div className={`agro-row ${entry.vpdLevel === 'high' ? 'warn' : ''}`}>
+                      VPD {entry.vpdKpa != null ? `${entry.vpdKpa.toFixed(2)} kPa — ` : ''}
+                      {vpdLabel[entry.vpdLevel]}
+                    </div>
                   </div>
                 )}
               </div>

@@ -58,6 +58,62 @@ export function dryStreakDays(daily: DailyRainfall[], thresholdMm: number): numb
   return streak
 }
 
+/** Growing Degree Days for a single day: heat accumulated above a base
+ * temperature below which the crop doesn't develop. Generic base (not
+ * crop-specific), same threshold philosophy as the frost/dry-spell logic
+ * above — a simple, honest signal rather than a crop model. */
+export function growingDegreeDays(temperatureMeanC: number, baseTempC: number): number {
+  return Math.max(0, temperatureMeanC - baseTempC)
+}
+
+/** Water balance for a day: rain in minus reference evapotranspiration out
+ * (mm). Positive = net water gain, negative = net water deficit. */
+export function waterBalanceMm(rainMm: number, et0Mm: number): number {
+  return rainMm - et0Mm
+}
+
+export type DiseaseRisk = 'low' | 'high' | 'unknown'
+
+/** Simplified daily proxy for fungal disease pressure: high humidity in a
+ * mild temperature band favors fungal growth. A real model needs
+ * consecutive-hours-above-threshold tracking, which the daily-granularity
+ * forecast doesn't have — this is an approximation, not a diagnosis. */
+export function classifyDiseaseRisk(
+  humidityMeanPercent: number | null,
+  temperatureMeanC: number | null,
+  { humidityThresholdPercent, minTempC, maxTempC }: DiseaseRiskThresholds,
+): DiseaseRisk {
+  if (humidityMeanPercent == null || temperatureMeanC == null) return 'unknown'
+  const humid = humidityMeanPercent >= humidityThresholdPercent
+  const mildTemp = temperatureMeanC >= minTempC && temperatureMeanC <= maxTempC
+  return humid && mildTemp ? 'high' : 'low'
+}
+
+export interface DiseaseRiskThresholds {
+  humidityThresholdPercent: number
+  minTempC: number
+  maxTempC: number
+}
+
+export type VpdLevel = 'low' | 'ideal' | 'high' | 'unknown'
+
+/** Vapor Pressure Deficit (kPa) — Tetens/FAO-56 saturation vapor pressure
+ * formula. Low VPD (<0.4 kPa) means reduced transpiration/nutrient uptake;
+ * high (>1.6 kPa) means plant stress from excessive water loss. */
+export function vaporPressureDeficitKpa(
+  temperatureMeanC: number,
+  humidityMeanPercent: number,
+): number {
+  const svp = 0.6108 * Math.exp((17.27 * temperatureMeanC) / (temperatureMeanC + 237.3))
+  return svp * (1 - humidityMeanPercent / 100)
+}
+
+export function classifyVpd(vpdKpa: number): VpdLevel {
+  if (vpdKpa < 0.4) return 'low'
+  if (vpdKpa <= 1.6) return 'ideal'
+  return 'high'
+}
+
 export type Trafficability = 'trafficable' | 'not_trafficable' | 'unknown'
 
 /** Whether the soil is dry enough for machinery/harvest: a real dry streak

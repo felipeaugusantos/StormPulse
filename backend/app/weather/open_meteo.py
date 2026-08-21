@@ -14,11 +14,20 @@ Two endpoints confirmed live for Ribeirão Preto (2026-08-20):
 - ``GET https://api.open-meteo.com/v1/forecast?latitude=..&longitude=..
   &current=temperature_2m,wind_speed_10m,wind_gusts_10m,precipitation,
   relative_humidity_2m
-  &daily=temperature_2m_max,temperature_2m_min,precipitation_sum,
-  precipitation_probability_max&timezone=UTC`` — current conditions +
+  &daily=temperature_2m_max,temperature_2m_min,temperature_2m_mean,
+  precipitation_sum,precipitation_probability_max,
+  relative_humidity_2m_mean,relative_humidity_2m_max,wind_gusts_10m_max,
+  et0_fao_evapotranspiration,cape_max&timezone=UTC`` — current conditions +
   7-day daily forecast. ``relative_humidity_2m`` feeds the spray-window
   thermal-inversion check (FASE 22, ADR-0018) — calm wind + high humidity
   is the classic dawn-inversion signature that causes spray drift.
+  ``cape_max``/``et0_fao_evapotranspiration``/humidity/gust-max daily
+  aggregates confirmed live for Ribeirão Preto (2026-08-21) — all free,
+  same endpoint, no extra call (FASE 25, ADR-0021): storm instability
+  (CAPE, same index REDEMET itself uses alongside K/Totals/Lifted),
+  water-balance and disease-risk signals (ET0/humidity), and forecast
+  wind gusts (today's gust in ``CurrentConditions`` was already there —
+  this is the multi-day version).
 - ``GET https://archive-api.open-meteo.com/v1/archive?latitude=..
   &longitude=..&start_date=..&end_date=..&daily=precipitation_sum
   &timezone=UTC`` — historical daily rainfall, any date range (unlike
@@ -96,8 +105,10 @@ class OpenMeteoWeatherProvider(WeatherProvider):
                     "relative_humidity_2m"
                 ),
                 "daily": (
-                    "temperature_2m_max,temperature_2m_min,precipitation_sum,"
-                    "precipitation_probability_max"
+                    "temperature_2m_max,temperature_2m_min,temperature_2m_mean,"
+                    "precipitation_sum,precipitation_probability_max,"
+                    "relative_humidity_2m_mean,relative_humidity_2m_max,"
+                    "wind_gusts_10m_max,et0_fao_evapotranspiration,cape_max"
                 ),
                 "timezone": "UTC",
             },
@@ -149,8 +160,17 @@ class OpenMeteoWeatherProvider(WeatherProvider):
         days = daily.get("time") or []
         maxima = daily.get("temperature_2m_max") or []
         minima = daily.get("temperature_2m_min") or []
+        means = daily.get("temperature_2m_mean") or []
         precip_sum = daily.get("precipitation_sum") or []
         precip_prob = daily.get("precipitation_probability_max") or []
+        humidity_mean = daily.get("relative_humidity_2m_mean") or []
+        humidity_max = daily.get("relative_humidity_2m_max") or []
+        gusts_max = daily.get("wind_gusts_10m_max") or []
+        et0 = daily.get("et0_fao_evapotranspiration") or []
+        cape_max = daily.get("cape_max") or []
+
+        def _at(series: list[Any], i: int) -> Any:
+            return series[i] if i < len(series) else None
 
         points: list[ForecastPoint] = []
         for i, day_str in enumerate(days):
@@ -158,16 +178,22 @@ class OpenMeteoWeatherProvider(WeatherProvider):
                 day: date = datetime.strptime(day_str, "%Y-%m-%d").date()
             except (ValueError, TypeError):
                 continue
-            prob = precip_prob[i] if i < len(precip_prob) else None
+            prob = _at(precip_prob, i)
             points.append(
                 ForecastPoint(
                     time=datetime.combine(day, datetime.min.time(), tzinfo=UTC),
-                    temperature_c=maxima[i] if i < len(maxima) else None,
-                    temperature_min_c=minima[i] if i < len(minima) else None,
+                    temperature_c=_at(maxima, i),
+                    temperature_min_c=_at(minima, i),
                     # Unlike INMET/CPTEC, Open-Meteo genuinely gives numeric
                     # precipitation figures — not invented here, read as-is.
                     precipitation_probability=int(prob) if prob is not None else None,
-                    precipitation_mm=precip_sum[i] if i < len(precip_sum) else None,
+                    precipitation_mm=_at(precip_sum, i),
+                    temperature_mean_c=_at(means, i),
+                    humidity_mean_percent=_at(humidity_mean, i),
+                    humidity_max_percent=_at(humidity_max, i),
+                    wind_gusts_max_kmh=_at(gusts_max, i),
+                    evapotranspiration_mm=_at(et0, i),
+                    cape_max_jkg=_at(cape_max, i),
                 )
             )
 

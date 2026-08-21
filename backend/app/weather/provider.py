@@ -68,6 +68,23 @@ class ForecastPoint(BaseModel):
     temperature_min_c: float | None = None
     precipitation_probability: int | None = None
     precipitation_mm: float | None = None
+    # Everything below is Open-Meteo-exclusive (FASE 25, ADR-0021) — same
+    # honesty rule as precipitation_mm above: INMET/CPTEC leave these
+    # unset, never approximated from something else.
+    temperature_mean_c: float | None = None
+    humidity_mean_percent: float | None = None
+    humidity_max_percent: float | None = None
+    wind_gusts_max_kmh: float | None = None
+    # Daily reference evapotranspiration (FAO-56 Penman-Monteith, mm) —
+    # water lost to the atmosphere from a reference crop surface; paired
+    # with precipitation_mm for a real water-balance calculation.
+    evapotranspiration_mm: float | None = None
+    # Peak Convective Available Potential Energy for the day (J/kg) — a
+    # standard atmospheric-instability index (used by REDEMET's own severe
+    # weather forecasting alongside K/Totals/Lifted indices); higher means
+    # more energy available for a storm to draw on if one forms. Not a
+    # storm forecast by itself — an ingredient, not a verdict.
+    cape_max_jkg: float | None = None
 
 
 class Forecast(BaseModel):

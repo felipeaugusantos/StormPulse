@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { classifyFrostDays, evaluateTrafficability, formatFrostDays } from '../agro'
+import { classifyCape } from '../storm'
 import type {
   CurrentConditions,
   DailyRainfall,
@@ -97,6 +98,7 @@ export function LocationWeatherCard({ location }: Props) {
     FROST_LIGHT_THRESHOLD_C,
   )
   const upcomingRain = (rainForecast ?? []).filter((p) => new Date(p.time) >= today)
+  const todayRain = upcomingRain[0] ?? null
   const trafficability = rainfall
     ? evaluateTrafficability(rainfall, upcomingRain, {
         requiredDryDays: TRAFFICABILITY_DRY_DAYS,
@@ -180,6 +182,25 @@ export function LocationWeatherCard({ location }: Props) {
               : trafficability === 'not_trafficable'
                 ? 'solo úmido ou chuva prevista — evitar manejo pesado/colheita'
                 : 'chuva prevista indisponível no momento (fonte ativa não fornece número)'}
+          </div>
+        )}
+        {todayRain?.wind_gusts_max_kmh != null && (
+          <div className="agro-row">
+            💨 Rajada máxima prevista hoje: {todayRain.wind_gusts_max_kmh.toFixed(0)} km/h
+          </div>
+        )}
+        {todayRain?.cape_max_jkg != null && (
+          <div
+            className={`agro-row ${
+              ['strong', 'extreme'].includes(classifyCape(todayRain.cape_max_jkg)) ? 'warn' : ''
+            }`}
+          >
+            🌩️ CAPE hoje: {todayRain.cape_max_jkg.toFixed(0)} J/kg — instabilidade{' '}
+            {
+              { weak: 'fraca', moderate: 'moderada', strong: 'forte', extreme: 'extrema' }[
+                classifyCape(todayRain.cape_max_jkg)
+              ]
+            }
           </div>
         )}
       </div>

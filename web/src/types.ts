@@ -57,6 +57,14 @@ export interface ForecastPoint {
   temperature_min_c: number | null
   precipitation_probability: number | null
   precipitation_mm: number | null
+  // Open-Meteo-exclusive (FASE 25, ADR-0021) — INMET/CPTEC leave these
+  // `null`, never approximated from something else.
+  temperature_mean_c: number | null
+  humidity_mean_percent: number | null
+  humidity_max_percent: number | null
+  wind_gusts_max_kmh: number | null
+  evapotranspiration_mm: number | null
+  cape_max_jkg: number | null
 }
 
 export interface Forecast {

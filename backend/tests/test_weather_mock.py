@@ -41,6 +41,22 @@ async def test_forecast_has_points(provider: MockWeatherProvider) -> None:
     assert all(p.temperature_min_c is not None for p in forecast.points)
 
 
+async def test_forecast_populates_open_meteo_exclusive_fields(
+    provider: MockWeatherProvider,
+) -> None:
+    """The 6 fields added for CAPE/GDD/water-balance/disease-risk/VPD/gust
+    features (FASE 25, ADR-0021) must be populated in mock mode too — the
+    UI shouldn't only see these when a real provider is configured."""
+    forecast = await provider.get_forecast(-23.5, -46.6)
+    for point in forecast.points:
+        assert point.temperature_mean_c is not None
+        assert point.humidity_mean_percent is not None
+        assert point.humidity_max_percent is not None
+        assert point.wind_gusts_max_kmh is not None
+        assert point.evapotranspiration_mm is not None
+        assert point.cape_max_jkg is not None
+
+
 async def test_recent_rainfall_is_flagged_mock(provider: MockWeatherProvider) -> None:
     rainfall = await provider.get_recent_rainfall(-23.5, -46.6, days=10)
     assert rainfall.provenance.is_mock is True
