@@ -44,6 +44,32 @@ def _with_fallback_chain(primary: WeatherProvider, settings: Settings) -> Weathe
     return provider
 
 
+def get_numeric_rain_forecast_provider(settings: Settings) -> WeatherProvider:
+    """Open-Meteo, directly — bypassing INMET/CPTEC entirely.
+
+    The normal fallback chain (``get_weather_provider``) only advances to
+    the next tier when the current one *raises* — CPTEC's ``get_forecast``
+    always succeeds, it just never populates ``precipitation_mm`` (it only
+    gives condition codes/text, see ADR-0011/0014). So whenever CPTEC is
+    the one answering (INMET down, which it was for most of this project's
+    development), any feature needing real numeric rain — the spray window
+    and soil trafficability signal — would otherwise get every day back
+    with ``precipitation_mm=None`` and have to call it "unknown", even
+    though a source that *does* have the number (Open-Meteo) is right
+    there. Open-Meteo is the only one of the three that ever gives numeric
+    precipitation at all (ADR-0015) — asking it directly, instead of
+    hoping the chain happens to reach it, is what actually fixes that
+    (FASE 24, ADR-0020).
+
+    Still respects ``weather_provider=mock`` — tests/local dev in mock mode
+    must never make a real network call just because this bypasses the
+    normal chain.
+    """
+    if settings.weather_provider.lower() == "mock":
+        return MockWeatherProvider()
+    return _build_open_meteo(settings)
+
+
 def get_weather_provider(settings: Settings) -> WeatherProvider:
     provider = settings.weather_provider.lower()
     if provider == "mock":

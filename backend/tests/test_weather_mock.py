@@ -7,7 +7,7 @@ import pytest
 from app.core.config import Settings
 from app.core.enums import WeatherSourceKind
 from app.weather.cptec import CptecWeatherProvider
-from app.weather.factory import get_weather_provider
+from app.weather.factory import get_numeric_rain_forecast_provider, get_weather_provider
 from app.weather.fallback import FallbackWeatherProvider
 from app.weather.inmet import InmetWeatherProvider
 from app.weather.mock import MockWeatherProvider
@@ -99,3 +99,21 @@ def test_factory_returns_cptec_standalone() -> None:
 def test_factory_returns_open_meteo_standalone() -> None:
     provider = get_weather_provider(Settings(environment="test", weather_provider="open_meteo"))
     assert isinstance(provider, OpenMeteoWeatherProvider)
+
+
+def test_numeric_rain_forecast_provider_is_open_meteo_for_real_providers() -> None:
+    """Regardless of ``weather_provider`` (inmet/cptec/open_meteo) — CPTEC
+    never gives a rain number (ADR-0011/0014), so anything needing one must
+    bypass the chain and go straight to Open-Meteo."""
+    for main_provider in ("inmet", "cptec", "open_meteo"):
+        settings = Settings(environment="test", weather_provider=main_provider)
+        provider = get_numeric_rain_forecast_provider(settings)
+        assert isinstance(provider, OpenMeteoWeatherProvider)
+
+
+def test_numeric_rain_forecast_provider_stays_mock_in_mock_mode() -> None:
+    """Mock mode must never make a real network call — bypassing the chain
+    doesn't mean bypassing the mock/real switch too."""
+    settings = Settings(environment="test", weather_provider="mock")
+    provider = get_numeric_rain_forecast_provider(settings)
+    assert isinstance(provider, MockWeatherProvider)

@@ -160,6 +160,12 @@ export const api = {
     request<void>(`/locations/${locationId}`, { method: 'DELETE' }),
   alerts: () => request<AlertItem[]>('/alerts'),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
+  // Always Open-Meteo, bypassing INMET/CPTEC — the only source with a real
+  // numeric rain forecast (backend: get_numeric_rain_forecast_provider,
+  // ADR-0020). Used specifically where the *amount* of rain coming matters
+  // (soil trafficability), not just the temperature strip.
+  rainForecast: (locationId: string) =>
+    request<Forecast>(`/locations/${locationId}/agro/rain-forecast`),
   currentConditions: (locationId: string) =>
     request<CurrentConditions>(`/locations/${locationId}/current`),
   satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),

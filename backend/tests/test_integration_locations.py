@@ -144,6 +144,18 @@ async def test_spray_window_returns_live_wind_check(client: AsyncClient) -> None
     assert body["max_wind_kmh"] > 0
 
 
+async def test_rain_forecast_returns_live_points(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    created = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    resp = await client.get(
+        f"/api/v1/locations/{created['id']}/agro/rain-forecast", headers=headers
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["points"]) > 0
+
+
 async def test_rainfall_history_returns_daily_totals(client: AsyncClient) -> None:
     headers = await _auth_headers(client)
     created = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()

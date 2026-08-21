@@ -27,6 +27,7 @@ export function LocationWeatherCard({ location }: Props) {
   const [forecast, setForecast] = useState<ForecastPoint[] | null>(null)
   const [sprayWindow, setSprayWindow] = useState<SprayWindow | null>(null)
   const [rainfall, setRainfall] = useState<DailyRainfall[] | null>(null)
+  const [rainForecast, setRainForecast] = useState<ForecastPoint[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -36,6 +37,7 @@ export function LocationWeatherCard({ location }: Props) {
       setForecast(null)
       setSprayWindow(null)
       setRainfall(null)
+      setRainForecast(null)
       setError(null)
       return
     }
@@ -44,17 +46,24 @@ export function LocationWeatherCard({ location }: Props) {
     setError(null)
 
     async function load() {
-      const [currentRes, forecastRes, sprayRes, rainfallRes] = await Promise.all([
-        api.currentConditions(location!.id).catch(() => null),
-        api.forecast(location!.id).catch(() => null),
-        api.sprayWindow(location!.id).catch(() => null),
-        api.rainfall(location!.id).catch(() => null),
-      ])
+      const [currentRes, forecastRes, sprayRes, rainfallRes, rainForecastRes] = await Promise.all(
+        [
+          api.currentConditions(location!.id).catch(() => null),
+          api.forecast(location!.id).catch(() => null),
+          api.sprayWindow(location!.id).catch(() => null),
+          api.rainfall(location!.id).catch(() => null),
+          // Always Open-Meteo (ADR-0020) — the general forecast above often
+          // comes from CPTEC instead (whenever INMET is down), which never
+          // has a rain number at all.
+          api.rainForecast(location!.id).catch(() => null),
+        ],
+      )
       if (cancelled) return
       setCurrent(currentRes)
       setForecast(forecastRes?.points ?? null)
       setSprayWindow(sprayRes)
       setRainfall(rainfallRes?.daily ?? null)
+      setRainForecast(rainForecastRes?.points ?? null)
       setLoading(false)
       if (currentRes == null && forecastRes == null) {
         setError('Dados indisponíveis para este local no momento')
@@ -87,8 +96,9 @@ export function LocationWeatherCard({ location }: Props) {
     FROST_THRESHOLD_C,
     FROST_LIGHT_THRESHOLD_C,
   )
+  const upcomingRain = (rainForecast ?? []).filter((p) => new Date(p.time) >= today)
   const trafficability = rainfall
-    ? evaluateTrafficability(rainfall, upcoming, {
+    ? evaluateTrafficability(rainfall, upcomingRain, {
         requiredDryDays: TRAFFICABILITY_DRY_DAYS,
         rainThresholdMm: TRAFFICABILITY_RAIN_THRESHOLD_MM,
         lookaheadDays: TRAFFICABILITY_LOOKAHEAD_DAYS,
@@ -162,12 +172,14 @@ export function LocationWeatherCard({ location }: Props) {
                   : 'condições desfavoráveis'}
           </div>
         )}
-        {trafficability && trafficability !== 'unknown' && (
+        {trafficability && (
           <div className={`agro-row ${trafficability === 'not_trafficable' ? 'warn' : ''}`}>
             🚜{' '}
             {trafficability === 'trafficable'
               ? 'solo seco — condições favoráveis para manejo/colheita'
-              : 'solo úmido ou chuva prevista — evitar manejo pesado/colheita'}
+              : trafficability === 'not_trafficable'
+                ? 'solo úmido ou chuva prevista — evitar manejo pesado/colheita'
+                : 'chuva prevista indisponível no momento (fonte ativa não fornece número)'}
           </div>
         )}
       </div>

@@ -17,7 +17,7 @@ from app.locations.schemas import LocationCreate, LocationOut, LocationUpdate, S
 from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
-from app.weather.factory import get_weather_provider
+from app.weather.factory import get_numeric_rain_forecast_provider, get_weather_provider
 from app.weather.provider import (
     CurrentConditions,
     Forecast,
@@ -181,13 +181,18 @@ async def get_location_spray_window(
             detail="Condições atuais indisponíveis para este local no momento",
         ) from exc
 
-    # Rain is a bonus signal — only INMET/CPTEC's forecast lacking it
-    # (ADR-0014) must never block reporting wind status, so a forecast
-    # failure here degrades gracefully instead of 404ing the endpoint.
+    # Rain is a bonus signal — only INMET/CPTEC never give a numeric
+    # forecast at all (ADR-0011/0014), so this asks Open-Meteo directly
+    # (ADR-0020) instead of the general provider chain, which would
+    # otherwise stop at CPTEC (it "succeeds", just with no rain number) and
+    # never actually reach Open-Meteo. A failure here still degrades
+    # gracefully instead of 404ing the whole endpoint — wind alone is still
+    # useful.
     rain_probability: int | None = None
     rain_mm: float | None = None
     try:
-        forecast = await provider.get_forecast(location.latitude, location.longitude)
+        rain_provider = get_numeric_rain_forecast_provider(settings)
+        forecast = await rain_provider.get_forecast(location.latitude, location.longitude)
         today = datetime.now(UTC).date()
         today_point = next((p for p in forecast.points if p.time.date() == today), None)
         if today_point is not None:
@@ -225,6 +230,33 @@ async def get_location_spray_window(
         inversion_risk=inversion_risk,
         safe=safe,
     )
+
+
+@router.get(
+    "/{location_id}/agro/rain-forecast",
+    response_model=Forecast,
+    summary="Previsão de chuva numérica — Open-Meteo direto (FASE 24, ADR-0020)",
+)
+async def get_location_rain_forecast(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> Forecast:
+    """Same shape as ``/forecast``, but always asks Open-Meteo directly —
+    the only source that ever gives numeric ``precipitation_mm`` (see
+    ``get_numeric_rain_forecast_provider``). Used by anything that needs to
+    know *how much* rain is coming, not just the temperature — trafficability
+    among them (see ``web/src/agro.ts``)."""
+    location = await _get_owned_or_404(session, user, location_id)
+    provider = get_numeric_rain_forecast_provider(settings)
+    try:
+        return await provider.get_forecast(location.latitude, location.longitude)
+    except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Previsão de chuva indisponível para este local no momento",
+        ) from exc
 
 
 @router.get(

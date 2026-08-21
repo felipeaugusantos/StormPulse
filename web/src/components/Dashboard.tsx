@@ -511,15 +511,26 @@ function useAgroEntries(locations: LocationItem[]): {
       const results = await Promise.all(
         active.map(async (l): Promise<[string, AgroEntry]> => {
           try {
-            const [forecast, sprayWindow, rainfall] = await Promise.all([
+            const [forecast, sprayWindow, rainfall, rainForecast] = await Promise.all([
               api.forecast(l.id).catch(() => null),
               api.sprayWindow(l.id).catch(() => null),
               api.rainfall(l.id).catch(() => null),
+              // Always Open-Meteo (bypasses INMET/CPTEC, ADR-0020) — the
+              // general forecast above often comes from CPTEC instead
+              // (whenever INMET is down), which never has a rain number at
+              // all, so trafficability would otherwise almost always come
+              // back "unknown" even when Open-Meteo has the answer.
+              api.rainForecast(l.id).catch(() => null),
             ])
             const { severe, light } = classifyFrostDays(
               forecast?.points ?? [],
               FROST_THRESHOLD_C,
               FROST_LIGHT_THRESHOLD_C,
+            )
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const upcomingRain = (rainForecast?.points ?? []).filter(
+              (p) => new Date(p.time) >= today,
             )
             return [
               l.id,
@@ -531,14 +542,13 @@ function useAgroEntries(locations: LocationItem[]): {
                   ? rainfall.daily.reduce((sum, d) => sum + d.total_mm, 0)
                   : null,
                 rainfallDays: rainfall?.daily.length ?? 0,
-                trafficability:
-                  rainfall && forecast
-                    ? evaluateTrafficability(rainfall.daily, forecast.points, {
-                        requiredDryDays: TRAFFICABILITY_DRY_DAYS,
-                        rainThresholdMm: TRAFFICABILITY_RAIN_THRESHOLD_MM,
-                        lookaheadDays: TRAFFICABILITY_LOOKAHEAD_DAYS,
-                      })
-                    : null,
+                trafficability: rainfall
+                  ? evaluateTrafficability(rainfall.daily, upcomingRain, {
+                      requiredDryDays: TRAFFICABILITY_DRY_DAYS,
+                      rainThresholdMm: TRAFFICABILITY_RAIN_THRESHOLD_MM,
+                      lookaheadDays: TRAFFICABILITY_LOOKAHEAD_DAYS,
+                    })
+                  : null,
                 error:
                   forecast == null && sprayWindow == null && rainfall == null
                     ? 'Dados agro indisponíveis no momento'
@@ -767,7 +777,12 @@ function TrafficabilityPanel({ activeLocations, entries, onSelect }: AgroPanelPr
                         Solo úmido ou chuva prevista — evitar manejo pesado.
                       </div>
                     )}
-                    {(trafficability == null || trafficability === 'unknown') && (
+                    {trafficability === 'unknown' && (
+                      <div className="agro-row sub">
+                        Chuva prevista indisponível no momento (fonte ativa não fornece número).
+                      </div>
+                    )}
+                    {trafficability == null && (
                       <div className="agro-row sub">Sem dado suficiente pra avaliar.</div>
                     )}
                   </div>
