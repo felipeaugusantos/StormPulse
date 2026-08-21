@@ -45,6 +45,7 @@ export function Dashboard({ onLogout }: Props) {
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'storm' | 'agro'>('storm')
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [pushStatus, setPushStatus] = useState<'idle' | 'subscribing' | 'on' | 'error'>('idle')
   const [pushError, setPushError] = useState<string | null>(null)
@@ -139,6 +140,7 @@ export function Dashboard({ onLogout }: Props) {
 
   const mock = storms.some((s) => s.is_mock)
   const selectedLocation = locations.find((l) => l.id === selectedLocationId) ?? null
+  const { entries: agroEntries, activeLocations: agroActiveLocations } = useAgroEntries(locations)
 
   return (
     <>
@@ -202,18 +204,64 @@ export function Dashboard({ onLogout }: Props) {
           <LocationWeatherCard location={selectedLocation} />
         </div>
 
-        <div className="top-cards secondary">
-          <AlertsPanel alerts={alerts} />
-          <AgroPanel
-            locations={locations}
-            onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
-          />
-          <SatelliteWatchesPanel
-            watches={satelliteWatches}
-            onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
-          />
-          <StormsPanel storms={storms} />
+        <div className="tab-switcher" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'storm'}
+            className={`tab-button ${activeTab === 'storm' ? 'active' : ''}`}
+            onClick={() => setActiveTab('storm')}
+          >
+            ⛈️ Tempestade
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'agro'}
+            className={`tab-button ${activeTab === 'agro' ? 'active' : ''}`}
+            onClick={() => setActiveTab('agro')}
+          >
+            🌾 Agro
+          </button>
         </div>
+
+        {activeTab === 'storm' ? (
+          <div className="top-cards secondary">
+            <AlertsPanel alerts={alerts} />
+            <StormsPanel storms={storms} />
+            <SatelliteWatchesPanel
+              watches={satelliteWatches}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+            <LightningPanel
+              strikes={lightning}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+          </div>
+        ) : (
+          <div className="top-cards secondary">
+            <FrostPanel
+              activeLocations={agroActiveLocations}
+              entries={agroEntries}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+            <SprayWindowPanel
+              activeLocations={agroActiveLocations}
+              entries={agroEntries}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+            <RainfallPanel
+              activeLocations={agroActiveLocations}
+              entries={agroEntries}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+            <TrafficabilityPanel
+              activeLocations={agroActiveLocations}
+              entries={agroEntries}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+          </div>
+        )}
 
         <div className="map-card">
           <StormMap
@@ -385,6 +433,47 @@ function SatelliteWatchesPanel({
   )
 }
 
+const LIGHTNING_PREVIEW_SIZE = 8
+
+function LightningPanel({
+  strikes,
+  onSelect,
+}: {
+  strikes: LightningStrike[]
+  onSelect: (latitude: number, longitude: number) => void
+}) {
+  return (
+    <section className="panel">
+      <h2>
+        ⚡ Raios <span className="count">{strikes.length}</span>
+      </h2>
+      <p className="panel-hint">
+        Descargas atmosféricas detectadas nos últimos ~30 minutos (API-REDEMET). Clique num raio
+        para ver no mapa.
+      </p>
+      <div className="list">
+        {strikes.length === 0 && <p className="empty">Nenhum raio detectado no momento.</p>}
+        {strikes.slice(0, LIGHTNING_PREVIEW_SIZE).map((s) => (
+          <div
+            className="row clickable"
+            key={s.id}
+            onClick={() => onSelect(s.latitude, s.longitude)}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="grow">
+              <div>
+                {s.latitude.toFixed(2)}, {s.longitude.toFixed(2)}
+              </div>
+              <div className="sub">{timeAgo(s.detected_at)}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 // Mirrors the backend defaults (AGRO_FROST_THRESHOLD_C/
 // AGRO_FROST_LIGHT_THRESHOLD_C) for the client-side derivation below —
 // generic agronomic references, not crop-specific; see ADR-0014/ADR-0018.
@@ -406,18 +495,13 @@ interface AgroEntry {
   error: string | null
 }
 
-function AgroPanel({
-  locations,
-  onSelect,
-}: {
-  locations: LocationItem[]
-  onSelect: (latitude: number, longitude: number) => void
-}) {
+function useAgroEntries(locations: LocationItem[]): {
+  entries: Record<string, AgroEntry>
+  activeLocations: LocationItem[]
+} {
   const [entries, setEntries] = useState<Record<string, AgroEntry>>({})
-  const activeIds = locations
-    .filter((l) => l.is_active)
-    .map((l) => l.id)
-    .join(',')
+  const activeLocations = locations.filter((l) => l.is_active)
+  const activeIds = activeLocations.map((l) => l.id).join(',')
 
   useEffect(() => {
     let cancelled = false
@@ -489,21 +573,132 @@ function AgroPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIds])
 
-  const activeLocations = locations.filter((l) => l.is_active)
+  return { entries, activeLocations }
+}
 
+interface AgroPanelProps {
+  activeLocations: LocationItem[]
+  entries: Record<string, AgroEntry>
+  onSelect: (latitude: number, longitude: number) => void
+}
+
+function FrostPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
   return (
     <section className="panel">
       <h2>
-        🌾 Agro <span className="count">{activeLocations.length}</span>
+        ❄️ Geada <span className="count">{activeLocations.length}</span>
       </h2>
       <p className="panel-hint">
-        Geada (previsão), pulverização (vento + chuva prevista quando disponível) e chuva
-        acumulada, por local monitorado.
+        Forte (≤{FROST_THRESHOLD_C}°C) e risco leve (≤{FROST_LIGHT_THRESHOLD_C}°C), por local.
       </p>
       <div className="list">
-        {activeLocations.length === 0 && (
-          <p className="empty">Nenhum local monitorado ativo.</p>
-        )}
+        {activeLocations.length === 0 && <p className="empty">Nenhum local monitorado ativo.</p>}
+        {activeLocations.map((l) => {
+          const entry = entries[l.id]
+          const hasFrost =
+            entry && (entry.severeFrostDays.length > 0 || entry.lightFrostDays.length > 0)
+          return (
+            <div
+              className="row clickable"
+              key={l.id}
+              onClick={() => onSelect(l.latitude, l.longitude)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                {!entry && <div className="sub">carregando…</div>}
+                {entry?.error && <div className="sub">⚠️ {entry.error}</div>}
+                {entry && !entry.error && (
+                  <div className="agro-section">
+                    {entry.severeFrostDays.length > 0 && (
+                      <div className="agro-row warn">Forte: {formatFrostDays(entry.severeFrostDays)}</div>
+                    )}
+                    {entry.lightFrostDays.length > 0 && (
+                      <div className="agro-row warn">Leve: {formatFrostDays(entry.lightFrostDays)}</div>
+                    )}
+                    {!hasFrost && <div className="agro-row sub">Sem risco de geada previsto.</div>}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function SprayWindowPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
+  return (
+    <section className="panel">
+      <h2>
+        🌬️ Pulverização <span className="count">{activeLocations.length}</span>
+      </h2>
+      <p className="panel-hint">Vento, umidade e chuva prevista, por local.</p>
+      <div className="list">
+        {activeLocations.length === 0 && <p className="empty">Nenhum local monitorado ativo.</p>}
+        {activeLocations.map((l) => {
+          const entry = entries[l.id]
+          const sprayWindow = entry?.sprayWindow ?? null
+          return (
+            <div
+              className="row clickable"
+              key={l.id}
+              onClick={() => onSelect(l.latitude, l.longitude)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                {!entry && <div className="sub">carregando…</div>}
+                {entry?.error && <div className="sub">⚠️ {entry.error}</div>}
+                {entry && !entry.error && (
+                  <div className="agro-section">
+                    {sprayWindow ? (
+                      <div className={`agro-row ${sprayWindow.safe === false ? 'warn' : ''}`}>
+                        {sprayWindow.wind_kmh != null
+                          ? `vento ${sprayWindow.wind_kmh.toFixed(0)} km/h`
+                          : 'vento indisponível'}
+                        {sprayWindow.wind_gusts_kmh != null
+                          ? ` (rajada ${sprayWindow.wind_gusts_kmh.toFixed(0)} km/h)`
+                          : ''}{' '}
+                        —{' '}
+                        {sprayWindow.safe == null
+                          ? 'não avaliável'
+                          : sprayWindow.safe
+                            ? 'janela segura pra pulverizar'
+                            : sprayWindow.inversion_risk
+                              ? 'risco de inversão térmica (vento calmo + umidade alta)'
+                              : sprayWindow.rain_probability_percent != null &&
+                                  sprayWindow.rain_probability_percent >=
+                                    sprayWindow.max_rain_probability_percent
+                                ? `chuva provável (${sprayWindow.rain_probability_percent}%)`
+                                : `vento acima do limite de ${sprayWindow.max_wind_kmh.toFixed(0)} km/h`}
+                      </div>
+                    ) : (
+                      <div className="agro-row sub">Dado de vento indisponível.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function RainfallPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
+  return (
+    <section className="panel">
+      <h2>
+        🌧️ Chuva acumulada <span className="count">{activeLocations.length}</span>
+      </h2>
+      <p className="panel-hint">Total dos últimos dias, por local.</p>
+      <div className="list">
+        {activeLocations.length === 0 && <p className="empty">Nenhum local monitorado ativo.</p>}
         {activeLocations.map((l) => {
           const entry = entries[l.id]
           return (
@@ -520,62 +715,61 @@ function AgroPanel({
                 {entry?.error && <div className="sub">⚠️ {entry.error}</div>}
                 {entry && !entry.error && (
                   <div className="agro-section">
-                    {entry.severeFrostDays.length > 0 && (
-                      <div className="agro-row warn">
-                        ❄️ Geada forte (≤{FROST_THRESHOLD_C}°C): {formatFrostDays(entry.severeFrostDays)}
-                      </div>
-                    )}
-                    {entry.lightFrostDays.length > 0 && (
-                      <div className="agro-row warn">
-                        🌡️ Risco leve de geada (≤{FROST_LIGHT_THRESHOLD_C}°C):{' '}
-                        {formatFrostDays(entry.lightFrostDays)}
-                      </div>
-                    )}
-                    {entry.sprayWindow && (
-                      <div className={`agro-row ${entry.sprayWindow.safe === false ? 'warn' : ''}`}>
-                        🌬️{' '}
-                        {entry.sprayWindow.wind_kmh != null
-                          ? `vento ${entry.sprayWindow.wind_kmh.toFixed(0)} km/h`
-                          : 'vento indisponível'}
-                        {entry.sprayWindow.wind_gusts_kmh != null
-                          ? ` (rajada ${entry.sprayWindow.wind_gusts_kmh.toFixed(0)} km/h)`
-                          : ''}{' '}
-                        —{' '}
-                        {entry.sprayWindow.safe == null
-                          ? 'não avaliável'
-                          : entry.sprayWindow.safe
-                            ? 'janela segura pra pulverizar'
-                            : entry.sprayWindow.inversion_risk
-                              ? 'risco de inversão térmica (vento calmo + umidade alta)'
-                              : entry.sprayWindow.rain_probability_percent != null &&
-                                  entry.sprayWindow.rain_probability_percent >=
-                                    entry.sprayWindow.max_rain_probability_percent
-                                ? `chuva provável (${entry.sprayWindow.rain_probability_percent}%)`
-                                : `vento acima do limite de ${entry.sprayWindow.max_wind_kmh.toFixed(0)} km/h`}
-                      </div>
-                    )}
-                    {entry.rainfallTotalMm != null && (
+                    {entry.rainfallTotalMm != null ? (
                       <div className="agro-row">
-                        🌧️ {entry.rainfallTotalMm.toFixed(0)}mm acumulados ({entry.rainfallDays}{' '}
-                        dias)
+                        {entry.rainfallTotalMm.toFixed(0)}mm acumulados ({entry.rainfallDays} dias)
+                      </div>
+                    ) : (
+                      <div className="agro-row sub">Histórico de chuva indisponível.</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function TrafficabilityPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
+  return (
+    <section className="panel">
+      <h2>
+        🚜 Trafegabilidade <span className="count">{activeLocations.length}</span>
+      </h2>
+      <p className="panel-hint">Solo seco o bastante para manejo/colheita, por local.</p>
+      <div className="list">
+        {activeLocations.length === 0 && <p className="empty">Nenhum local monitorado ativo.</p>}
+        {activeLocations.map((l) => {
+          const entry = entries[l.id]
+          const trafficability = entry?.trafficability ?? null
+          return (
+            <div
+              className="row clickable"
+              key={l.id}
+              onClick={() => onSelect(l.latitude, l.longitude)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                {!entry && <div className="sub">carregando…</div>}
+                {entry?.error && <div className="sub">⚠️ {entry.error}</div>}
+                {entry && !entry.error && (
+                  <div className="agro-section">
+                    {trafficability === 'trafficable' && (
+                      <div className="agro-row">Solo seco — favorável para manejo/colheita.</div>
+                    )}
+                    {trafficability === 'not_trafficable' && (
+                      <div className="agro-row warn">
+                        Solo úmido ou chuva prevista — evitar manejo pesado.
                       </div>
                     )}
-                    {entry.trafficability && entry.trafficability !== 'unknown' && (
-                      <div
-                        className={`agro-row ${entry.trafficability === 'not_trafficable' ? 'warn' : ''}`}
-                      >
-                        🚜{' '}
-                        {entry.trafficability === 'trafficable'
-                          ? 'solo seco — favorável para manejo/colheita'
-                          : 'solo úmido/chuva prevista — evitar manejo pesado'}
-                      </div>
+                    {(trafficability == null || trafficability === 'unknown') && (
+                      <div className="agro-row sub">Sem dado suficiente pra avaliar.</div>
                     )}
-                    {entry.severeFrostDays.length === 0 &&
-                      entry.lightFrostDays.length === 0 &&
-                      !entry.sprayWindow &&
-                      entry.rainfallTotalMm == null && (
-                        <div className="agro-row sub">Sem sinais no momento.</div>
-                      )}
                   </div>
                 )}
               </div>
