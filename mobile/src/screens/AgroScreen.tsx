@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { ApiError, api, clearToken } from '../api'
+import { ApiError, api, logout } from '../api'
 import {
   classifyDiseaseRisk,
   classifyFrostDays,
@@ -78,7 +78,7 @@ export function AgroScreen({ onLogout }: Props) {
       setEntries(results)
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        await clearToken()
+        await logout()
         onLogout()
         return
       }

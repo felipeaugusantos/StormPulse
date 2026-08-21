@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { ApiError, api, clearToken } from '../api'
+import { ApiError, api, logout } from '../api'
 import type { AlertItem, LocationItem, RiskLevel, StormRisk } from '../types'
 import { LEVEL_COLOR, LEVEL_LABEL, colors } from '../theme'
 
@@ -44,7 +44,7 @@ export function HomeScreen({ onLogout }: Props) {
       setAlerts(alertList)
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        await clearToken()
+        await logout()
         onLogout()
         return
       }
@@ -59,7 +59,7 @@ export function HomeScreen({ onLogout }: Props) {
   }, [load])
 
   async function handleLogout() {
-    await clearToken()
+    await logout()
     onLogout()
   }
 

@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { ActivityIndicator } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
-import { loadToken } from './src/api'
+import { hasSession } from './src/api'
 import { colors } from './src/theme'
 import { LoginScreen } from './src/screens/LoginScreen'
 import { HomeScreen } from './src/screens/HomeScreen'
@@ -54,7 +54,7 @@ export default function App() {
   const [authed, setAuthed] = useState<boolean | null>(null)
 
   useEffect(() => {
-    loadToken().then((token) => setAuthed(token !== null))
+    hasSession().then(setAuthed)
   }, [])
 
   return (

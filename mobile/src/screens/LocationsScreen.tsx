@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native'
 import * as Location from 'expo-location'
-import { ApiError, api, clearToken } from '../api'
+import { ApiError, api, logout } from '../api'
 import { isPushSupported, subscribeToExpoPush } from '../push'
 import { reverseGeocodeCity, searchCity } from '../geocode'
 import { COLOR_PALETTE, cropColor } from '../cropColors'
@@ -57,7 +57,7 @@ export function LocationsScreen({ onLogout }: Props) {
       setLocations(await api.locations())
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        await clearToken()
+        await logout()
         onLogout()
         return
       }

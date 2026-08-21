@@ -1,5 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { API_URL } from './config'
+import * as authStorage from './authStorage'
 import type {
   AlertItem,
   CreateLocationInput,
@@ -13,25 +13,6 @@ import type {
 } from './types'
 
 const V1 = `${API_URL}/api/v1`
-const TOKEN_KEY = 'stormpulse.access_token'
-
-let cachedToken: string | null = null
-
-export async function loadToken(): Promise<string | null> {
-  if (cachedToken) return cachedToken
-  cachedToken = await AsyncStorage.getItem(TOKEN_KEY)
-  return cachedToken
-}
-
-export async function saveToken(token: string): Promise<void> {
-  cachedToken = token
-  await AsyncStorage.setItem(TOKEN_KEY, token)
-}
-
-export async function clearToken(): Promise<void> {
-  cachedToken = null
-  await AsyncStorage.removeItem(TOKEN_KEY)
-}
 
 export class ApiError extends Error {
   constructor(
@@ -42,8 +23,52 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await loadToken()
+interface TokenPair {
+  access_token: string
+  refresh_token: string
+}
+
+// The access token expires every 15 minutes (ACCESS_TOKEN_EXPIRE_MINUTES) —
+// without this, the app would silently log the user out mid-session. On a
+// 401, exchange the refresh token (7-day expiry) for a new pair and retry
+// the request once; only surface the 401 (and let the caller log out) if
+// the refresh itself fails — meaning the refresh token is gone/expired too,
+// a real "please log in again." Mirrors web/src/api.ts's same pattern.
+let refreshInFlight: Promise<string> | null = null
+
+async function refreshAccessToken(): Promise<string> {
+  // Shared lock: concurrent 401s (e.g. several screens' parallel requests
+  // all expiring at once) must trigger exactly one /auth/refresh call, not
+  // one per failed request — every caller awaits the same in-flight promise.
+  if (refreshInFlight) return refreshInFlight
+
+  refreshInFlight = (async () => {
+    const refreshToken = await authStorage.getRefreshToken()
+    if (!refreshToken) throw new ApiError(401, 'Sessão expirada')
+
+    const res = await fetch(`${V1}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    })
+    if (!res.ok) {
+      await authStorage.clearTokens()
+      throw new ApiError(401, 'Sessão expirada')
+    }
+    const data = (await res.json()) as TokenPair
+    await authStorage.setTokenPair(data.access_token, data.refresh_token)
+    return data.access_token
+  })()
+
+  try {
+    return await refreshInFlight
+  } finally {
+    refreshInFlight = null
+  }
+}
+
+async function request<T>(path: string, init: RequestInit = {}, isRetry = false): Promise<T> {
+  const token = await authStorage.getAccessToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string> | undefined),
@@ -52,25 +77,40 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const res = await fetch(`${V1}${path}`, { ...init, headers })
   if (!res.ok) {
+    // Never try to refresh the refresh call itself, or a plain login
+    // attempt (a real bad password is a 401 too, not an expired session) —
+    // that would recurse into /auth/refresh from inside /auth/refresh.
+    const isAuthEndpoint = path.startsWith('/auth/')
+    if (res.status === 401 && !isRetry && !isAuthEndpoint) {
+      await refreshAccessToken()
+      return request<T>(path, init, true)
+    }
     let detail = `HTTP ${res.status}`
     try {
       const body = (await res.json()) as { detail?: string }
       if (body?.detail) detail = body.detail
     } catch {
-      /* ignore */
+      /* ignore non-JSON errors */
     }
     throw new ApiError(res.status, detail)
   }
   return (res.status === 204 ? undefined : await res.json()) as T
 }
 
-export async function login(email: string, password: string): Promise<string> {
-  const data = await request<{ access_token: string }>('/auth/login', {
+/** Whether there's a session to resume — checked at app boot, independent
+ * of whether the (short-lived) access token has already expired. */
+export const hasSession = authStorage.hasSession
+
+export async function login(email: string, password: string): Promise<void> {
+  const data = await request<TokenPair>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
-  await saveToken(data.access_token)
-  return data.access_token
+  await authStorage.setTokenPair(data.access_token, data.refresh_token)
+}
+
+export async function logout(): Promise<void> {
+  await authStorage.clearTokens()
 }
 
 export const api = {
