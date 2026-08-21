@@ -1,12 +1,13 @@
-"""Notification model — delivery record for an alert, and the browser Web
-Push subscriptions those deliveries fan out to (FASE 22)."""
+"""Notification model — delivery record for an alert, and the push
+registrations (browser Web Push, FASE 22; mobile Expo push, FASE 26) those
+deliveries fan out to."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import NotificationChannel, NotificationStatus
@@ -38,14 +39,22 @@ class Notification(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
 
 
 class PushSubscription(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
-    """A browser's Web Push subscription (one per device/browser a user opted
-    in from — ``PushManager.subscribe()`` on the frontend)."""
+    """A device's push registration — either a browser's Web Push
+    subscription (``PushManager.subscribe()``, FASE 22) or the mobile app's
+    Expo push token (FASE 26). ``platform`` picks which pair of columns is
+    populated; the delivery pipeline branches on it (``pywebpush`` for
+    "web", Expo's push API for "expo") rather than guessing from which
+    columns happen to be set."""
 
     __tablename__ = "push_subscriptions"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    endpoint: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    p256dh: Mapped[str] = mapped_column(Text, nullable=False)
-    auth: Mapped[str] = mapped_column(Text, nullable=False)
+    platform: Mapped[str] = mapped_column(String(20), nullable=False, default="web")
+    # Web Push (platform="web") — all three always set together.
+    endpoint: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)
+    p256dh: Mapped[str | None] = mapped_column(Text, nullable=True)
+    auth: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Expo push (platform="expo") — one opaque token per device.
+    expo_push_token: Mapped[str | None] = mapped_column(Text, nullable=True, unique=True)

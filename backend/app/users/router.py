@@ -7,7 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.notifications import service as push_service
-from app.notifications.schemas import PushSubscriptionDeleteIn, PushSubscriptionIn
+from app.notifications.schemas import (
+    ExpoPushTokenDeleteIn,
+    ExpoPushTokenIn,
+    PushSubscriptionDeleteIn,
+    PushSubscriptionIn,
+)
 from app.users import service
 from app.users.models import User
 from app.users.schemas import DeleteAccountIn, UserOut
@@ -62,3 +67,29 @@ async def unregister_push_subscription(
     current_user: User = Depends(get_current_user),
 ) -> None:
     await push_service.delete_subscription(session, current_user, data.endpoint)
+
+
+@router.post(
+    "/me/push-subscription/expo",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Registrar (ou renovar) o token de push Expo do app mobile",
+)
+async def register_expo_push_token(
+    data: ExpoPushTokenIn,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    await push_service.upsert_expo_token(session, current_user, data.expo_push_token)
+
+
+@router.delete(
+    "/me/push-subscription/expo",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Remover o token de push Expo do app mobile",
+)
+async def unregister_expo_push_token(
+    data: ExpoPushTokenDeleteIn,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    await push_service.delete_expo_token(session, current_user, data.expo_push_token)

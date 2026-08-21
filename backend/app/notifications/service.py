@@ -9,6 +9,9 @@ from app.notifications.models import PushSubscription
 from app.notifications.schemas import PushSubscriptionIn
 from app.users.models import User
 
+_WEB_PLATFORM = "web"
+_EXPO_PLATFORM = "expo"
+
 
 async def upsert_subscription(
     session: AsyncSession, user: User, data: PushSubscriptionIn
@@ -34,6 +37,7 @@ async def upsert_subscription(
     subscription = PushSubscription(
         tenant_id=user.tenant_id,
         user_id=user.id,
+        platform=_WEB_PLATFORM,
         endpoint=data.endpoint,
         p256dh=data.keys.p256dh,
         auth=data.keys.auth,
@@ -47,6 +51,44 @@ async def delete_subscription(session: AsyncSession, user: User, endpoint: str) 
     await session.execute(
         delete(PushSubscription).where(
             PushSubscription.endpoint == endpoint,
+            PushSubscription.user_id == user.id,
+        )
+    )
+    await session.commit()
+
+
+async def upsert_expo_token(
+    session: AsyncSession, user: User, expo_push_token: str
+) -> PushSubscription:
+    """Register (or re-associate) a mobile device's Expo push token
+    (FASE 26) — same idempotency reasoning as ``upsert_subscription``: the
+    token is stable per device/app-install, so re-registering it is a
+    normal occurrence (app reopen, token refresh), not an error."""
+    result = await session.execute(
+        select(PushSubscription).where(PushSubscription.expo_push_token == expo_push_token)
+    )
+    existing = result.scalar_one_or_none()
+    if existing is not None:
+        existing.user_id = user.id
+        existing.tenant_id = user.tenant_id
+        await session.commit()
+        return existing
+
+    subscription = PushSubscription(
+        tenant_id=user.tenant_id,
+        user_id=user.id,
+        platform=_EXPO_PLATFORM,
+        expo_push_token=expo_push_token,
+    )
+    session.add(subscription)
+    await session.commit()
+    return subscription
+
+
+async def delete_expo_token(session: AsyncSession, user: User, expo_push_token: str) -> None:
+    await session.execute(
+        delete(PushSubscription).where(
+            PushSubscription.expo_push_token == expo_push_token,
             PushSubscription.user_id == user.id,
         )
     )

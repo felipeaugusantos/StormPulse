@@ -76,11 +76,118 @@ def _make_user_and_alert(session: Session) -> tuple[User, Alert]:
     return user, alert
 
 
-def test_cycle_is_a_noop_without_vapid_key() -> None:
+def test_cycle_reports_web_push_not_configured_without_vapid_key() -> None:
     with session_scope() as session:
         summary = run_notification_delivery_cycle(session, settings=Settings(environment="test"))
         assert summary.configured is False
-        assert summary.attempted == 0
+        session.rollback()
+
+
+def test_web_subscription_fails_without_vapid_configured() -> None:
+    """Expo needs no server credential, but Web Push does — a web
+    subscription without VAPID configured must fail loudly, not silently
+    no-op the whole cycle (FASE 26 changed this from an early return)."""
+    with session_scope() as session:
+        user, alert = _make_user_and_alert(session)
+        session.add(
+            PushSubscription(
+                tenant_id=user.tenant_id,
+                user_id=user.id,
+                platform="web",
+                endpoint="https://push.example.com/no-vapid",
+                p256dh="fake-p256dh",
+                auth="fake-auth",
+            )
+        )
+        notification = Notification(tenant_id=user.tenant_id, alert_id=alert.id, user_id=user.id)
+        session.add(notification)
+        session.flush()
+
+        run_notification_delivery_cycle(session, settings=Settings(environment="test"))
+
+        assert notification.status == NotificationStatus.FAILED
+        session.rollback()
+
+
+def test_expo_subscription_delivers_without_vapid_configured(monkeypatch: Any) -> None:
+    """Mobile-only deployments (no VAPID at all) must still deliver."""
+
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {"data": {"status": "ok"}}
+
+    class _FakeClient:
+        def post(self, *args: Any, **kwargs: Any) -> _FakeResponse:
+            return _FakeResponse()
+
+    with session_scope() as session:
+        user, alert = _make_user_and_alert(session)
+        session.add(
+            PushSubscription(
+                tenant_id=user.tenant_id,
+                user_id=user.id,
+                platform="expo",
+                expo_push_token=f"ExponentPushToken[{uuid.uuid4().hex}]",
+            )
+        )
+        notification = Notification(tenant_id=user.tenant_id, alert_id=alert.id, user_id=user.id)
+        session.add(notification)
+        session.flush()
+
+        run_notification_delivery_cycle(
+            session,
+            settings=Settings(environment="test"),
+            expo_client=_FakeClient(),  # type: ignore[arg-type]
+        )
+
+        assert notification.status == NotificationStatus.SENT
+        session.rollback()
+
+
+def test_expo_device_not_registered_deletes_subscription(monkeypatch: Any) -> None:
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return {
+                "data": {
+                    "status": "error",
+                    "message": "not registered",
+                    "details": {"error": "DeviceNotRegistered"},
+                }
+            }
+
+    class _FakeClient:
+        def post(self, *args: Any, **kwargs: Any) -> _FakeResponse:
+            return _FakeResponse()
+
+    with session_scope() as session:
+        user, alert = _make_user_and_alert(session)
+        token = f"ExponentPushToken[{uuid.uuid4().hex}]"
+        session.add(
+            PushSubscription(
+                tenant_id=user.tenant_id, user_id=user.id, platform="expo", expo_push_token=token
+            )
+        )
+        notification = Notification(tenant_id=user.tenant_id, alert_id=alert.id, user_id=user.id)
+        session.add(notification)
+        session.flush()
+
+        run_notification_delivery_cycle(
+            session,
+            settings=Settings(environment="test"),
+            expo_client=_FakeClient(),  # type: ignore[arg-type]
+        )
+
+        assert notification.status == NotificationStatus.FAILED
+        remaining = session.scalars(
+            select(PushSubscription).where(PushSubscription.expo_push_token == token)
+        ).first()
+        assert remaining is None
         session.rollback()
 
 

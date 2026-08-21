@@ -18,3 +18,14 @@ class PushSubscriptionIn(BaseModel):
 
 class PushSubscriptionDeleteIn(BaseModel):
     endpoint: str = Field(min_length=1)
+
+
+class ExpoPushTokenIn(BaseModel):
+    """The mobile app's Expo push token (FASE 26) — ``ExponentPushToken[...]``,
+    obtained from ``expo-notifications``' ``getExpoPushTokenAsync()``."""
+
+    expo_push_token: str = Field(min_length=1)
+
+
+class ExpoPushTokenDeleteIn(BaseModel):
+    expo_push_token: str = Field(min_length=1)
