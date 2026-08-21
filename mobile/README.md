@@ -1,6 +1,6 @@
 # Mobile — Aplicativo
 
-App do StormPulse em **React Native + TypeScript + Expo** (SDK 51).
+App do StormPulse em **React Native + TypeScript + Expo** (SDK 57).
 
 Três abas, paridade com o dashboard web:
 

@@ -6,15 +6,15 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "scheme": "stormpulse",
-    "splash": {
-      "backgroundColor": "#0b1120"
-    },
     "extra": {
       "apiUrl": "http://localhost:8000"
     },
     "android": {
       "package": "com.stormpulse.app",
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.stormpulse.app",
@@ -28,6 +28,12 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "Usado para preencher automaticamente a coordenada ao cadastrar um novo local monitorado."
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0b1120"
         }
       ]
     ]
