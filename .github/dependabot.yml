@@ -5,6 +5,13 @@ updates:
     schedule:
       interval: "weekly"
 
+  # App raiz (público, publicado no GitHub Pages) — não tinha cobertura de
+  # Dependabot até aqui, mesma lacuna encontrada na auditoria de hardening.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:

@@ -58,9 +58,9 @@ jobs:
       POSTGRES_PASSWORD: stormpulse
       POSTGRES_DB: stormpulse
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -90,6 +90,28 @@ jobs:
         run: pytest --cov --cov-report=term-missing --cov-fail-under=85
 
   # -----------------------------------------------------------------------
+  # Root app: the original public-facing weather widget (published to
+  # GitHub Pages by deploy.yml) — separate product from web/ (admin
+  # dashboard) and mobile/. Not exercised anywhere else in CI until now.
+  # -----------------------------------------------------------------------
+  root:
+    name: Root app (typecheck · build · audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: npm audit (runtime deps — blocking on high/critical)
+        run: npm audit --omit=dev --audit-level=high
+      - name: npm audit (incl. build tools — informational only)
+        if: always()
+        run: npm audit --audit-level=high || true
+
+  # -----------------------------------------------------------------------
   # Web admin dashboard: type-check and production build.
   # -----------------------------------------------------------------------
   web:
@@ -99,14 +121,19 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run build
+      - name: npm audit (runtime deps — blocking on high/critical)
+        run: npm audit --omit=dev --audit-level=high
+      - name: npm audit (incl. build tools — informational only)
+        if: always()
+        run: npm audit --audit-level=high || true
 
   # -----------------------------------------------------------------------
   # Mobile app (Expo / React Native): type-check.
@@ -118,14 +145,19 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - name: npm audit (runtime deps — blocking on high/critical)
+        run: npm audit --omit=dev --audit-level=high
+      - name: npm audit (incl. build tools — informational only)
+        if: always()
+        run: npm audit --audit-level=high || true
 
   # -----------------------------------------------------------------------
   # Docker: build the image, boot the full stack and smoke-test the API
@@ -135,7 +167,7 @@ jobs:
     name: Docker build & stack smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Create .env from example
         run: cp .env.example .env
