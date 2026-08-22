@@ -31,3 +31,8 @@ htmlcov/
 .env
 .env.*
 !.env.example
+
+# --- TLS (infra ADR-0039): server-local, switched between
+# infra/tls/nginx-http.conf and nginx-https.conf by infra/setup-tls.sh —
+# never itself a source file to commit. ---
+infra/tls/nginx.conf.active

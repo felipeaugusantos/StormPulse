@@ -24,6 +24,13 @@
 # - Log rotation on every service — the default `json-file` driver has no
 #   limit at all otherwise, and a t3.small's 30GB (free-tier) EBS volume
 #   filling up with logs is a real way to take the whole box down.
+# - `web`'s nginx.conf is mounted from infra/tls/nginx.conf.active (NOT
+#   baked into the image) instead of the image's own default — this file
+#   is what infra/setup-tls.sh switches between the HTTP-only and HTTPS
+#   configs once a Let's Encrypt certificate exists (infra ADR-0039). It
+#   must exist before the first `up` — bootstrap it with
+#   `cp infra/tls/nginx-http.conf infra/tls/nginx.conf.active` (see
+#   infra/README.md).
 
 x-logging: &default-logging
   driver: json-file
@@ -77,14 +84,34 @@ services:
     logging: *default-logging
     depends_on:
       - api
+    volumes:
+      - ./infra/tls/nginx.conf.active:/etc/nginx/nginx.conf:ro
+      - certbot-etc:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot:ro
     ports:
       - "80:80"
+      - "443:443"
     networks:
       stormpulse:
         ipv4_address: 172.28.0.10
+
+  # Not a long-running service — invoked via `docker compose run --rm
+  # certbot ...` by infra/setup-tls.sh and infra/renew-tls.sh, never
+  # started by a plain `up -d`.
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-webroot:/var/www/certbot
+    networks:
+      - stormpulse
 
 networks:
   stormpulse:
     ipam:
       config:
         - subnet: 172.28.0.0/24
+
+volumes:
+  certbot-etc:
+  certbot-webroot:

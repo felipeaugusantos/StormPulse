@@ -182,21 +182,52 @@ de alta disponibilidade do beat, use `celery beat` com um lock distribuído
 (ex.: `celerybeat-redis`) — não implementado, não necessário numa instância
 única.
 
-## Adicionando TLS depois (quando houver domínio)
+## TLS via Let's Encrypt (sem domínio próprio — [nip.io](https://nip.io))
 
-Sem domínio hoje, o deploy fica em HTTP simples — `ENVIRONMENT=production`
-continua seguro mesmo assim (o header HSTS só é honrado pelo navegador
-sobre HTTPS de verdade; sobre HTTP ele é simplesmente ignorado). Quando
-houver um domínio (ou mesmo sem comprar um, usando um serviço como
-[nip.io](https://nip.io) que resolve `<ip-com-hifen>.nip.io` pro próprio
-IP, o suficiente pra emitir um certificado Let's Encrypt real):
+[nip.io](https://nip.io) resolve `<ip-com-hifens>.nip.io` pro próprio IP —
+suficiente pra emitir um certificado Let's Encrypt real sem comprar
+domínio. Ver [ADR-0039](../docs/adr/0039-tls-lets-encrypt-nip-io.md) para
+os detalhes da implementação (fluxo de 2 fases: HTTP-only pro desafio
+ACME, depois HTTPS).
 
-1. Rodar [certbot](https://certbot.eff.org/) num container separado
-   (ou adicioná-lo ao `web/Dockerfile`) pra emitir/renovar o certificado.
-2. `listen 443 ssl` em `web/nginx.conf`, redirect 80→443.
-3. Decidir a topologia de domínio (mesmo domínio pro `web/` e pra API, ou
-   subdomínios diferentes) — isso é exatamente a decisão que faltava pra
-   fechar a Fase 4 do hardening
-   ([ADR-0029](../docs/adr/0029-hardening-fase-4-cookie-refresh-token-opt-in.md)):
-   same-origin permite `SameSite=Lax` sem CSRF token; cross-site exige
-   `SameSite=None` + CSRF token obrigatório.
+**Bootstrap** (só na primeira vez, antes do primeiro `docker compose up`
+com esses arquivos — se a stack já estava rodando sem eles, rode isso e
+suba de novo):
+
+```bash
+cp infra/tls/nginx-http.conf infra/tls/nginx.conf.active
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+**Emitir o certificado** (troque pelo seu IP público com hífens no lugar
+de pontos, e um e-mail real — o Let's Encrypt manda aviso de expiração
+nele):
+
+```bash
+chmod +x infra/setup-tls.sh
+./infra/setup-tls.sh 100-48-193-126.nip.io voce@example.com
+```
+
+Confirme em `https://100-48-193-126.nip.io/health`.
+
+### Renovação do certificado
+
+Certificados do Let's Encrypt duram 90 dias. `infra/renew-tls.sh` roda
+`certbot renew` (só renova de fato quando faltam <30 dias) e recarrega o
+nginx. Crontab (`crontab -e`) — uma vez por semana já é sobra de margem:
+
+```cron
+0 4 * * 0 cd /home/ubuntu/StormPulse && ./infra/renew-tls.sh >> /var/log/stormpulse-tls-renew.log 2>&1
+```
+
+### Topologia same-origin já decidida
+
+Com o `web/` e a API na mesma origem (mesmo domínio/IP, mesmo nginx —
+[ADR-0038](../docs/adr/0038-dashboard-web-mesma-origem-ec2.md)), a decisão
+que faltava pra fechar a Fase 4 do hardening
+([ADR-0029](../docs/adr/0029-hardening-fase-4-cookie-refresh-token-opt-in.md))
+já está resolvida: same-origin permite `SameSite=Lax` sem exigir CSRF
+token — não há necessidade de `SameSite=None`. Ativar o cookie HttpOnly de
+refresh (`REFRESH_COOKIE_ENABLED=true` no `.env`) agora é seguro nessa
+topologia; ainda desligado por padrão, ativar é uma escolha do dono do
+produto, não algo automático.
