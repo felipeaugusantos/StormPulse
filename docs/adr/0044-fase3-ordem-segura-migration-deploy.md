@@ -61,6 +61,36 @@ confirmado que o rollback disparou, restaurou as imagens anteriores, e a
 stack continuou saudável (`/health`/`/ready` respondendo) depois do
 "incidente" simulado.
 
+### Bug real encontrado no primeiro deploy contra o servidor de verdade
+
+O primeiro push desta fase **falhou em produção** — não por causa da
+lógica do script, mas por uma interação com a Fase de TLS
+([ADR-0039](docs/adr/0039-tls-lets-encrypt-nip-io.md)): uma vez com HTTPS
+configurado, a porta 80 do servidor passa a **redirecionar tudo pra
+HTTPS** (301), exceto o desafio ACME. `curl -fsS http://localhost/ready`
+recebia esse 301 como resposta — `-f` só considera falha um status
+≥ 400, então `curl` "tinha sucesso" com um corpo HTML de redirecionamento
+em vez do JSON esperado, e o `grep -q '"status":"ready"'` nunca
+encontrava nada. O laço de espera girava os 60s inteiros sem nunca
+detectar prontidão — mas a API estava, na verdade, funcionando
+perfeitamente o tempo todo (confirmado pelos próprios logs de tracing do
+`api-1`, mostrando requisições reais sendo atendidas com sucesso durante
+a "espera").
+
+**O rollback automático funcionou exatamente como desenhado**: restaurou
+a imagem anterior (`sha-ec50427`, a da Fase 2), produção nunca ficou fora
+do ar, e o log da Action mostrou claramente o que aconteceu.
+
+Corrigido com um helper `curl_local()` que tenta HTTPS primeiro
+(`curl -k` — a validação de certificado não importa numa checagem de
+prontidão local, feita de dentro do próprio servidor) e cai pra HTTP
+simples se a porta 443 não responder (servidor que ainda não rodou
+`setup-tls.sh`). Reproduzido o cenário exato localmente (certificado de
+teste autoassinado instalado no volume `certbot-etc`, `nginx.conf.active`
+trocado pra config HTTPS) antes de confirmar a correção — sem essa
+reprodução deliberada, a mesma classe de erro poderia ter passado
+despercebida de novo.
+
 ## Consequências
 
 - Nunca mais há uma janela onde API/workers novos rodam contra schema

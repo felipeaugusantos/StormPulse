@@ -22,6 +22,19 @@ cd "$(dirname "$0")/.."
 
 COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
 
+# Once TLS is set up (infra/setup-tls.sh, ADR-0039), port 80 redirects
+# everything to HTTPS except the ACME challenge path — a plain `curl
+# http://localhost/...` then just gets a 301 with no JSON body, which
+# `curl -fsS` treats as a "success" (that flag only fails on 4xx/5xx), so
+# a naive HTTP-only check silently never finds what it's grepping for.
+# Try HTTPS first (self-signed-tolerant: the cert here is for the site's
+# real hostname, not literally `localhost`), fall back to plain HTTP for
+# a server that hasn't run setup-tls.sh yet.
+curl_local() {
+  local path="$1"
+  curl -k -fsS "https://localhost${path}" 2>/dev/null || curl -fsS "http://localhost${path}" 2>/dev/null
+}
+
 PREV_API_IMAGE="$(docker inspect --format='{{.Config.Image}}' stormpulse-api-1 2>/dev/null || echo "")"
 PREV_WEB_IMAGE="$(docker inspect --format='{{.Config.Image}}' stormpulse-web-1 2>/dev/null || echo "")"
 echo "Previous images (kept for rollback): api=${PREV_API_IMAGE:-<none, first deploy>} web=${PREV_WEB_IMAGE:-<none>}"
@@ -65,11 +78,12 @@ echo "==> Migrations applied — updating api/worker/beat/web"
 "${COMPOSE[@]}" up -d api worker beat web
 
 echo "==> Waiting for /ready"
-timeout 60 bash -c 'until curl -fsS http://localhost/ready 2>/dev/null | grep -q "\"status\":\"ready\""; do sleep 2; done'
+export -f curl_local
+timeout 60 bash -c 'until curl_local /ready | grep -q "\"status\":\"ready\""; do sleep 2; done'
 
 echo "==> Functional smoke test"
-curl -fsS http://localhost/health | grep -q '"status":"ok"'
-curl -fsS http://localhost/api/v1/public/storms > /dev/null
+curl_local /health | grep -q '"status":"ok"'
+curl_local /api/v1/public/storms > /dev/null
 "${COMPOSE[@]}" ps worker | grep -q "Up"
 "${COMPOSE[@]}" ps beat | grep -q "Up"
 
