@@ -174,13 +174,19 @@ limit) é todo recriável, nunca é a fonte de verdade de nada.
 
 ## 7. Rollback
 
-**App**: `STORMPULSE_IMAGE=ghcr.io/felipeaugusantos/stormpulse:sha-<commit-anterior>
+**Automático**: `infra/deploy.sh` (hardening Fase 3, [ADR-0044](../docs/adr/0044-fase3-ordem-segura-migration-deploy.md))
+já grava qual imagem estava rodando antes de mexer em qualquer coisa — se
+a migração ou o smoke test falharem, ele mesmo restaura essas imagens
+automaticamente e sai com erro (nunca faz `alembic downgrade` sozinho —
+isso continua decisão humana, ver abaixo).
+
+**Manual — app**: `STORMPULSE_IMAGE=ghcr.io/felipeaugusantos/stormpulse:sha-<commit-anterior>
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` —
 troca pra uma imagem anterior já publicada (tags disponíveis: ver
 [README.md § Opção C](../README.md)).
 
-**Banco**: `alembic downgrade -1` reverte a migração mais recente (testado
-migração-a-migração desde a Fase 6, [ADR-0031](../docs/adr/0031-hardening-fase-6-baseline-alembic-ddl-congelado.md))
+**Manual — banco**: `alembic downgrade -1` reverte a migração mais recente
+(testado migração-a-migração desde a Fase 6, [ADR-0031](../docs/adr/0031-hardening-fase-6-baseline-alembic-ddl-congelado.md))
 — ou restaurar de um backup (passo 5), se o rollback de schema sozinho não
 bastar.
 

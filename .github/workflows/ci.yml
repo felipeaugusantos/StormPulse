@@ -491,6 +491,11 @@ jobs:
         run: echo "tag=sha-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy via SSH (pinned to this commit's published images)
+        # The actual sequencing (Postgres/Redis health -> pre-deploy
+        # backup -> one-shot migration -> app tier -> /ready -> smoke test
+        # -> rollback on any failure) lives in infra/deploy.sh, versioned
+        # and reviewable like any other script — not inlined here. Fase 3,
+        # ADR-0044.
         uses: appleboy/ssh-action@v1.2.5
         env:
           IMAGE_TAG: ${{ steps.image.outputs.tag }}
@@ -500,6 +505,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 30s
+          command_timeout: 10m
           envs: IMAGE_TAG,COMMIT_SHA
           script: |
             set -euo pipefail
@@ -517,8 +523,5 @@ jobs:
               export STORMPULSE_WORKER_IMAGE="ghcr.io/felipeaugusantos/stormpulse:${IMAGE_TAG}-satellite"
             fi
 
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T api alembic upgrade head
-            docker image prune -f
-            curl -fsS http://localhost/health
+            chmod +x infra/deploy.sh
+            ./infra/deploy.sh
