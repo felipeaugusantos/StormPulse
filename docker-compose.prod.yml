@@ -12,11 +12,13 @@
 #   them for local `psql`/`redis-cli` access; production has no reason to
 #   reach them from outside the Docker network, and every published port
 #   is a port a misconfigured security group could accidentally expose).
-# - nginx fronts the API on port 80, at a fixed, known internal IP
-#   (172.28.0.10) — that fixed IP is exactly what TRUSTED_PROXY_IPS in the
-#   server's .env should be set to (see .env.example). Nothing else can
-#   present as that IP: it only exists inside this Docker network, and TCP
-#   source IPs can't be spoofed across a real connection.
+# - `web` (built from web/Dockerfile, published as stormpulse-web —
+#   infra ADR-0038) serves the dashboard SPA and reverse-proxies API calls
+#   to `api`, both on port 80, at a fixed, known internal IP (172.28.0.10)
+#   — that fixed IP is exactly what TRUSTED_PROXY_IPS in the server's .env
+#   should be set to (see .env.example). Nothing else can present as that
+#   IP: it only exists inside this Docker network, and TCP source IPs
+#   can't be spoofed across a real connection.
 # - `restart: unless-stopped` everywhere — survives an EC2 reboot without
 #   needing a systemd unit.
 # - Log rotation on every service — the default `json-file` driver has no
@@ -69,14 +71,12 @@ services:
     networks:
       - stormpulse
 
-  nginx:
-    image: nginx:1.27-alpine
+  web:
+    image: ${STORMPULSE_WEB_IMAGE:-ghcr.io/felipeaugusantos/stormpulse-web:latest}
     restart: unless-stopped
     logging: *default-logging
     depends_on:
       - api
-    volumes:
-      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "80:80"
     networks:

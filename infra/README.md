@@ -3,7 +3,8 @@
 Runbook para subir o StormPulse num único EC2 `t3.small` (2 vCPU, 2GiB —
 elegível ao free tier), sem domínio próprio ainda (decisão registrada,
 hardening ADR-0037). Tudo num único servidor via `docker compose`:
-Postgres+PostGIS, Redis, API, worker, beat e nginx como reverse proxy.
+Postgres+PostGIS, Redis, API, worker, beat e o serviço `web` (dashboard
+SPA + nginx como reverse proxy da API, mesma origem — ADR-0038).
 
 > **Antes de tudo**: nenhum comando abaixo cria recursos cobrados na AWS
 > automaticamente — cada passo é pra você rodar deliberadamente, revisando
@@ -190,10 +191,9 @@ houver um domínio (ou mesmo sem comprar um, usando um serviço como
 [nip.io](https://nip.io) que resolve `<ip-com-hifen>.nip.io` pro próprio
 IP, o suficiente pra emitir um certificado Let's Encrypt real):
 
-1. Trocar `nginx:1.27-alpine` por uma imagem com
-   [certbot](https://certbot.eff.org/) (ou rodar certbot num container
-   separado) pra emitir/renovar o certificado.
-2. `listen 443 ssl` no `nginx.conf`, redirect 80→443.
+1. Rodar [certbot](https://certbot.eff.org/) num container separado
+   (ou adicioná-lo ao `web/Dockerfile`) pra emitir/renovar o certificado.
+2. `listen 443 ssl` em `web/nginx.conf`, redirect 80→443.
 3. Decidir a topologia de domínio (mesmo domínio pro `web/` e pra API, ou
    subdomínios diferentes) — isso é exatamente a decisão que faltava pra
    fechar a Fase 4 do hardening
