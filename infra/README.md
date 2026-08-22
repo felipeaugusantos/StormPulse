@@ -118,6 +118,16 @@ curl http://localhost/ready
 
 De fora, `http://<IP_PUBLICO_DO_EC2>/health` deve responder `{"status":"ok",...}`.
 
+### Deploy contínuo (opcional)
+
+Depois desse primeiro deploy manual, `.github/workflows/deploy-prod.yml`
+(hardening [ADR-0040](../docs/adr/0040-deploy-continuo-ec2.md)) reimplanta
+sozinho a cada push que passa no CI — via uma chave SSH dedicada
+(`~/.ssh/authorized_keys` na instância + secret `EC2_SSH_KEY` no
+repositório), nunca a chave pessoal de ninguém. Redeploy manual sob
+demanda: aba Actions do GitHub → "Deploy to production (EC2)" → "Run
+workflow".
+
 ## 5. Backup do Postgres
 
 `backup-postgres.sh` faz `pg_dump` + gzip, mantém os últimos 14 dias
