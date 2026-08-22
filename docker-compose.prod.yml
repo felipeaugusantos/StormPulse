@@ -64,7 +64,12 @@ services:
 
   worker:
     build: !reset null
-    image: ${STORMPULSE_IMAGE:-ghcr.io/felipeaugusantos/stormpulse:latest}
+    # Only `worker` ever imports GDAL/TATHU (workers/satellite_pipeline.py
+    # — `api` only reads already-rendered results from the DB, see ADR-0041),
+    # so it's the only service with its own image variable: set
+    # STORMPULSE_WORKER_IMAGE to the `-satellite` tag when
+    # SATELLITE_ENABLED=true, leave api/beat on the smaller runtime-base.
+    image: ${STORMPULSE_WORKER_IMAGE:-${STORMPULSE_IMAGE:-ghcr.io/felipeaugusantos/stormpulse:latest}}
     restart: unless-stopped
     logging: *default-logging
     networks:
