@@ -60,13 +60,28 @@ def _issue_tokens(user: User, settings: Settings) -> TokenPair:
     )
 
 
-def _apply_token_response(tokens: TokenPair, response: Response, settings: Settings) -> TokenPair:
-    """When the refresh-token cookie is enabled (ADR-0029, off by default —
-    no production domain topology decided yet), sets it as an HttpOnly
+def _is_mobile_client(request: Request) -> bool:
+    """The mobile app explicitly identifies itself (`mobile/src/api.ts`
+    sends this on every auth call) so the backend can keep serving it the
+    body-based refresh token flow (SecureStore) even with the web cookie
+    flow (Fase 4) on by default — an unrecognized/absent header is always
+    treated as "web", never the other way around, so a client can't opt
+    itself *out* of the safer cookie behavior by omitting a header."""
+    return request.headers.get("x-client-platform", "").strip().lower() == "mobile"
+
+
+def _apply_token_response(
+    tokens: TokenPair, request: Request, response: Response, settings: Settings
+) -> TokenPair:
+    """Web (default): when the refresh-token cookie is enabled (ADR-0029,
+    completed in the hardening Fase 4 — ADR-0045), sets it as an HttpOnly
     cookie and strips it from the JSON body, so it's never readable from
-    JS. With the cookie disabled, returns `tokens` untouched — identical to
-    the pre-ADR-0029 behavior."""
-    if not settings.refresh_cookie_enabled:
+    JS. Mobile (`X-Client-Platform: mobile`): always returns `tokens`
+    untouched, regardless of the cookie setting — it keeps using the
+    body-based refresh token, stored in `expo-secure-store` (ADR-0028),
+    never a cookie. Never both at once for the same request: a client
+    identifying as mobile never gets a cookie set on it."""
+    if _is_mobile_client(request) or not settings.refresh_cookie_enabled:
         return tokens
     assert tokens.refresh_token is not None  # always set here, before stripping
     response.set_cookie(
@@ -123,6 +138,7 @@ async def register(
 )
 async def login(
     data: LoginIn,
+    request: Request,
     response: Response,
     session: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_request_settings),
@@ -133,7 +149,7 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas",
         )
-    return _apply_token_response(_issue_tokens(user, settings), response, settings)
+    return _apply_token_response(_issue_tokens(user, settings), request, response, settings)
 
 
 @router.post(
@@ -144,6 +160,7 @@ async def login(
 )
 async def login_google(
     data: GoogleAuthIn,
+    request: Request,
     response: Response,
     session: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_request_settings),
@@ -189,7 +206,7 @@ async def login_google(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Conta desativada",
         )
-    return _apply_token_response(_issue_tokens(user, settings), response, settings)
+    return _apply_token_response(_issue_tokens(user, settings), request, response, settings)
 
 
 @router.post("/refresh", response_model=TokenPair, summary="Renovar tokens")
@@ -227,7 +244,7 @@ async def refresh(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário inválido",
         )
-    return _apply_token_response(_issue_tokens(user, settings), response, settings)
+    return _apply_token_response(_issue_tokens(user, settings), request, response, settings)
 
 
 @router.post(

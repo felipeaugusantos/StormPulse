@@ -231,6 +231,19 @@ class Settings(BaseSettings):
                 "REFRESH_COOKIE_SECURE must be true in production (a "
                 "non-Secure cookie would be sent over plain HTTP)."
             )
+        # Not just a production concern — every modern browser rejects a
+        # `SameSite=None` cookie outright unless `Secure` is also set,
+        # regardless of environment. Fail at startup rather than silently
+        # shipping a cookie no browser will ever actually store.
+        if (
+            self.refresh_cookie_enabled
+            and self.refresh_cookie_samesite == "none"
+            and not self.refresh_cookie_secure
+        ):
+            raise ValueError(
+                "REFRESH_COOKIE_SAMESITE=none requires REFRESH_COOKIE_SECURE=true "
+                "(browsers reject SameSite=None cookies that aren't Secure)."
+            )
         return self
 
     @computed_field  # type: ignore[prop-decorator]
