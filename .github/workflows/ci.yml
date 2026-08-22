@@ -1,14 +1,35 @@
 name: CI
 
+# Hardening (ADR-0043): this single workflow now owns test → publish →
+# deploy end to end, via `needs`. Before this, `docker-publish.yml` and
+# `deploy-prod.yml` were separate workflows triggered independently off
+# `push` / `workflow_run` — a commit that failed CI could still have its
+# image built and published (build succeeding is not the same as tests
+# passing), and that same published image would then deploy to
+# production automatically. Putting everything in one workflow makes
+# `needs` do the gating: publish/deploy jobs below literally cannot start
+# unless every test job succeeded first, for this exact commit.
 on:
   push:
     branches: ["**"]
+    tags: ["v*.*.*"]
   pull_request:
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+permissions:
+  contents: read
+
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # PRs: cancel stale runs of the same PR (fast feedback, never deploys).
+  # Pushes: queue instead of cancelling — a push landing while a previous
+  # one's deploy job is mid-flight must never have that deploy yanked out
+  # from under it; it waits its turn instead.
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # -----------------------------------------------------------------------
@@ -335,3 +356,169 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  # -----------------------------------------------------------------------
+  # Publish: only reachable once every test job above has succeeded.
+  # Build-only (no push) on PRs — still catches a broken Dockerfile early
+  # without ever putting an unreviewed image in the registry.
+  # -----------------------------------------------------------------------
+  publish-backend:
+    name: Publish backend image
+    needs: [backend, root, web, mobile, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Hardening ADR-0032: two published variants. "runtime-base" (no
+      # GDAL/TATHU, matches the project's SATELLITE_ENABLED=false default)
+      # is untagged/plain — the variant most deployments want. "satellite"
+      # gets a "-satellite" tag suffix and maps to the runtime-satellite
+      # Docker stage.
+      matrix:
+        include:
+          - target: runtime-base
+            suffix: ""
+          - target: runtime-satellite
+            suffix: "-satellite"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags/labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=${{ matrix.suffix }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build (and push on non-PR events)
+        uses: docker/build-push-action@v7
+        with:
+          context: backend
+          target: ${{ matrix.target }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+  publish-web:
+    name: Publish web image
+    needs: [backend, root, web, mobile, docker]
+    # Dashboard SPA + nginx reverse proxy (infra ADR-0038) — separate image,
+    # separate repository name (`stormpulse-web`), same-origin deploy: this
+    # image's own nginx serves the built SPA and proxies /api/* etc. to the
+    # `api` service (see docker-compose.prod.yml).
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tags/labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-web
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build (and push on non-PR events)
+        uses: docker/build-push-action@v7
+        with:
+          context: web
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  # -----------------------------------------------------------------------
+  # Deploy: only reachable once both publish jobs succeeded (which in turn
+  # required every test job to succeed) — never on a PR, never on a commit
+  # whose tests didn't pass, and always the exact SHA `github.sha` refers
+  # to in this same run (no race with a later push landing in between).
+  # -----------------------------------------------------------------------
+  deploy:
+    name: Deploy to production (EC2)
+    needs: [publish-backend, publish-web]
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/claude/stormpulse-project-5a5mij')
+    runs-on: ubuntu-latest
+    environment: production
+    # Separate from the workflow-level group above — this one has no
+    # cancel-in-progress at all, at any event type: two deploys must never
+    # run concurrently against the same server, they queue.
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Compute this commit's immutable image tag
+        id: image
+        run: echo "tag=sha-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy via SSH (pinned to this commit's published images)
+        uses: appleboy/ssh-action@v1.2.5
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+          COMMIT_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 30s
+          envs: IMAGE_TAG,COMMIT_SHA
+          script: |
+            set -euo pipefail
+            cd ~/StormPulse
+            echo "Deploying commit $COMMIT_SHA (images tagged $IMAGE_TAG)"
+            git fetch origin
+            git checkout "$COMMIT_SHA"
+
+            export STORMPULSE_IMAGE="ghcr.io/felipeaugusantos/stormpulse:${IMAGE_TAG}"
+            export STORMPULSE_WEB_IMAGE="ghcr.io/felipeaugusantos/stormpulse-web:${IMAGE_TAG}"
+            # Preserve this server's satellite-mode choice (ADR-0041) if
+            # already set — re-pin it to this exact commit's satellite
+            # image instead of leaving it on whatever floating tag it had.
+            if grep -q '^STORMPULSE_WORKER_IMAGE=.*-satellite' .env 2>/dev/null; then
+              export STORMPULSE_WORKER_IMAGE="ghcr.io/felipeaugusantos/stormpulse:${IMAGE_TAG}-satellite"
+            fi
+
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T api alembic upgrade head
+            docker image prune -f
+            curl -fsS http://localhost/health

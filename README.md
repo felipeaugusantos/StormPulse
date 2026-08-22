@@ -238,9 +238,10 @@ uvicorn app.main:app --reload
 
 ### Opção C — Imagem publicada (GHCR)
 
-O workflow [`docker-publish.yml`](.github/workflows/docker-publish.yml) builda
-a imagem do backend e publica no GitHub Container Registry a cada push em
-`main` (e em tags `vX.Y.Z`). Não requer build local:
+O workflow [`ci.yml`](.github/workflows/ci.yml) (jobs `publish-backend`/
+`publish-web`, hardening ADR-0043) builda as imagens e publica no GitHub
+Container Registry a cada push em `main` (e em tags `vX.Y.Z`) — só depois
+que todos os testes passarem para aquele commit. Não requer build local:
 
 ```bash
 docker pull ghcr.io/felipeaugusantos/stormpulse:latest

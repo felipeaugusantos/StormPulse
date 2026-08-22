@@ -4,7 +4,8 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 #
 # Differences from the dev compose file:
-# - Pulls the pre-built image from GHCR (docker-publish.yml) instead of
+# - Pulls the pre-built image from GHCR (ci.yml's publish-backend/
+#   publish-web jobs, hardening ADR-0043) instead of
 #   building locally — a t3.small has no spare RAM/CPU to build the
 #   satellite variant, and there's no reason to rebuild what CI already
 #   built and tested.
