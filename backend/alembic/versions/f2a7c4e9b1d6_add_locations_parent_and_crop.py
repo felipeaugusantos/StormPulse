@@ -53,7 +53,19 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Hardening ADR-0031: on a database bootstrapped from the frozen-DDL
+    # baseline (0001_bootstrap), this FK was created by the ORM relationship
+    # and got Postgres's own auto-generated name
+    # (``locations_parent_location_id_fkey``), not the hand-picked name this
+    # migration's upgrade() used to create it
+    # (``fk_locations_parent_location_id_locations``) — that branch of
+    # upgrade() is skipped entirely whenever the column already exists. Look
+    # the FK up by column instead of assuming either fixed name.
+    inspector = inspect(op.get_bind())
     op.drop_index(op.f("ix_locations_parent_location_id"), table_name="locations")
     op.drop_column("locations", "crop")
-    op.drop_constraint("fk_locations_parent_location_id_locations", "locations", type_="foreignkey")
+    for fk in inspector.get_foreign_keys("locations"):
+        if fk["constrained_columns"] == ["parent_location_id"]:
+            op.drop_constraint(fk["name"], "locations", type_="foreignkey")
+            break
     op.drop_column("locations", "parent_location_id")

@@ -52,11 +52,21 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Hardening ADR-0031: on a database bootstrapped from the frozen-DDL
+    # baseline (0001_bootstrap), this column's unique constraint was created
+    # by the ORM's ``unique=True`` and got Postgres's own auto-generated
+    # name (``push_subscriptions_expo_push_token_key``), not the hand-picked
+    # name this migration's upgrade() used to create it
+    # (``uq_push_subscriptions_expo_push_token``) — that branch of upgrade()
+    # is skipped entirely whenever the column already exists. Look the
+    # constraint up by column instead of assuming either fixed name.
+    inspector = inspect(op.get_bind())
     op.alter_column("push_subscriptions", "auth", nullable=False)
     op.alter_column("push_subscriptions", "p256dh", nullable=False)
     op.alter_column("push_subscriptions", "endpoint", nullable=False)
-    op.drop_constraint(
-        "uq_push_subscriptions_expo_push_token", "push_subscriptions", type_="unique"
-    )
+    for constraint in inspector.get_unique_constraints("push_subscriptions"):
+        if constraint["column_names"] == ["expo_push_token"]:
+            op.drop_constraint(constraint["name"], "push_subscriptions", type_="unique")
+            break
     op.drop_column("push_subscriptions", "expo_push_token")
     op.drop_column("push_subscriptions", "platform")

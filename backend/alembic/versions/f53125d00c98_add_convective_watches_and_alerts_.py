@@ -106,7 +106,19 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint("fk_alerts_convective_watch_id", "alerts", type_="foreignkey")
+    # Hardening ADR-0031: on a database bootstrapped from the frozen-DDL
+    # baseline (0001_bootstrap), this FK was created by the ORM relationship
+    # and got Postgres's own auto-generated name
+    # (``alerts_convective_watch_id_fkey``), not the hand-picked name this
+    # migration's upgrade() used to create it (``fk_alerts_convective_watch_id``)
+    # — that branch of upgrade() is skipped entirely whenever the column
+    # already exists. Look the FK up by column instead of assuming either
+    # fixed name.
+    inspector = inspect(op.get_bind())
+    for fk in inspector.get_foreign_keys("alerts"):
+        if fk["constrained_columns"] == ["convective_watch_id"]:
+            op.drop_constraint(fk["name"], "alerts", type_="foreignkey")
+            break
     op.drop_index(op.f("ix_alerts_convective_watch_id"), table_name="alerts")
     op.drop_column("alerts", "convective_watch_id")
     op.drop_table("convective_watches")
