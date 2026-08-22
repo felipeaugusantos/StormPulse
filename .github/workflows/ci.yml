@@ -173,6 +173,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Verify env var passthrough (api/worker/beat get every Settings field)
+        # Hardening: catches the class of bug where a variable is
+        # documented in .env.example/Settings but never actually reaches
+        # any container (TRUSTED_PROXY_IPS, REFRESH_COOKIE_*, OTEL_*,
+        # INMET_*/CPTEC_*/OPEN_METEO_*/AGRO_*, SATELLITE_EXTENT were all
+        # silently dropped before env_file replaced the old hand-enumerated
+        # list). Writes its own throwaway sentinel .env, never touches
+        # real secrets.
+        run: python3 infra/verify_compose_env.py
+
       - name: Create .env from example
         run: cp .env.example .env
 

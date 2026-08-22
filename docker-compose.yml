@@ -40,33 +40,24 @@ services:
       # (alongside SATELLITE_ENABLED=true) to build the satellite-capable
       # variant — see backend/Dockerfile and ADR-0032.
       target: ${API_DOCKER_TARGET:-runtime-base}
-    environment:
-      ENVIRONMENT: ${ENVIRONMENT:-local}
-      DEBUG: ${DEBUG:-false}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      LOG_JSON: ${LOG_JSON:-true}
+    # Hardening (env var passthrough audit): every Settings field
+    # (app/core/config.py) that has an entry in .env.example is loaded from
+    # the project's own .env — `${VAR:-default}` substitution in this file
+    # only covers whatever variable someone remembered to enumerate here by
+    # hand, which is how TRUSTED_PROXY_IPS, REFRESH_COOKIE_*, OTEL_*,
+    # INMET_*/CPTEC_*/OPEN_METEO_*/AGRO_* and SATELLITE_EXTENT silently
+    # never reached any container. `env_file` passes the whole file at
+    # once; `environment:` below still wins over it for the handful of
+    # values that must differ inside the Docker network (service DNS names,
+    # not the `localhost` a human uses outside Docker).
+    env_file:
+      - path: .env
+        required: false
+    environment: &service_env_overrides
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-stormpulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stormpulse}
-      POSTGRES_DB: ${POSTGRES_DB:-stormpulse}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_DB: ${REDIS_DB:-0}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-insecure-change-me}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-15}
-      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-      WEATHER_PROVIDER: ${WEATHER_PROVIDER:-mock}
-      SATELLITE_ENABLED: ${SATELLITE_ENABLED:-false}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
-      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@stormpulse.example}
-      LIGHTNING_ENABLED: ${LIGHTNING_ENABLED:-false}
-      REDEMET_API_KEY: ${REDEMET_API_KEY:-}
-      REDEMET_BASE_URL: ${REDEMET_BASE_URL:-https://api-redemet.decea.mil.br}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
@@ -84,33 +75,10 @@ services:
       # service above for the full explanation.
       target: ${API_DOCKER_TARGET:-runtime-base}
     command: ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info"]
-    environment: &worker_env
-      ENVIRONMENT: ${ENVIRONMENT:-local}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      LOG_JSON: ${LOG_JSON:-true}
-      # Never actually used for token operations here (workers don't issue
-      # or verify JWTs) — but `get_settings()` validates this field
-      # unconditionally at import time (`workers/celery_app.py`), and
-      # refuses the dev default when ENVIRONMENT=production. Without this,
-      # worker/beat crash-loop in any real production deploy — this was
-      # missing until a real ENVIRONMENT=production run first exercised it.
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-insecure-change-me}
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-stormpulse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stormpulse}
-      POSTGRES_DB: ${POSTGRES_DB:-stormpulse}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: ${REDIS_DB:-0}
-      WEATHER_PROVIDER: ${WEATHER_PROVIDER:-mock}
-      SATELLITE_ENABLED: ${SATELLITE_ENABLED:-false}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
-      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:contato@stormpulse.example}
-      LIGHTNING_ENABLED: ${LIGHTNING_ENABLED:-false}
-      REDEMET_API_KEY: ${REDEMET_API_KEY:-}
-      REDEMET_BASE_URL: ${REDEMET_BASE_URL:-https://api-redemet.decea.mil.br}
+    env_file:
+      - path: .env
+        required: false
+    environment: *service_env_overrides
     depends_on:
       db:
         condition: service_healthy
@@ -130,7 +98,10 @@ services:
     command:
       ["celery", "-A", "workers.celery_app", "beat", "--schedule",
        "/tmp/celerybeat-schedule", "--loglevel=info"]
-    environment: *worker_env
+    env_file:
+      - path: .env
+        required: false
+    environment: *service_env_overrides
     depends_on:
       db:
         condition: service_healthy
