@@ -99,6 +99,30 @@ uma das duas sozinha — e quebraria o Swagger UI.
   introduzida pela CSP. Fora de escopo desta fase (não foi pedido para
   investigar o comportamento do MapLibre em si).
 
+### Bug real encontrado no primeiro deploy contra o servidor de verdade
+
+O primeiro push desta fase passou no CI e no deploy automático (rollback
+não disparou, `/health`/`/ready` respondiam), mas `curl -sI` contra a
+produção real não trazia nenhum header novo. Causa: `infra/tls/
+nginx.conf.active` — o arquivo que o `web` de produção realmente monta
+(`docker-compose.prod.yml`) — é gerado **uma única vez** por
+`infra/setup-tls.sh` (a partir de `nginx-https.conf`, com o domínio real
+substituído) e é git-ignorado, porque contém esse domínio. `infra/
+deploy.sh` nunca o regenerava — cada deploy normal só troca as imagens
+`api`/`worker`/`beat`/`web`, então o conteúdo do CSP editado nesta fase
+ficava só no repositório e na imagem publicada, sem nunca chegar ao
+arquivo que o Nginx de produção de fato lê.
+
+Corrigido adicionando um passo em `infra/deploy.sh`, logo antes de subir
+`api worker beat web`: detecta se o `nginx.conf.active` atual está em
+modo HTTPS (`grep "listen 443 ssl"`), extrai o domínio já gravado nele
+(`server_name`) e regera o arquivo a partir do `nginx-https.conf`
+rastreado no commit que está sendo implantado — sem precisar perguntar o
+domínio de novo nem depender de rodar `setup-tls.sh` outra vez. Testado
+localmente simulando o arquivo `nginx.conf.active` de produção (com o
+domínio real da instância) e confirmando que a regeneração produz
+exatamente os novos headers.
+
 ## Consequências
 
 - A SPA ganha defesa em profundidade contra XSS (CSP restringe onde

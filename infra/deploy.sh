@@ -74,6 +74,30 @@ POSTGRES_USER="${POSTGRES_USER:-stormpulse}" POSTGRES_DB="${POSTGRES_DB:-stormpu
 echo "==> Running migrations in a one-shot container — never inside the currently-serving API"
 timeout 120 "${COMPOSE[@]}" run --rm api alembic upgrade head
 
+echo "==> Refreshing infra/tls/nginx.conf.active from the tracked config (Fase 5, ADR-0046)"
+# nginx.conf.active is generated once by infra/setup-tls.sh and is
+# git-ignored (it bakes in the server's real domain) — without this step,
+# any change to infra/tls/nginx-http.conf/nginx-https.conf in the repo
+# would be built into new images but never actually reach the file Nginx
+# has bind-mounted on this server, silently going stale deploy after
+# deploy. Detects which mode is currently active from the file itself
+# (HTTPS iff it has a "listen 443 ssl" server block) and re-derives the
+# domain from its own server_name — never asks for it again.
+if [ -f infra/tls/nginx.conf.active ] && grep -q "listen 443 ssl" infra/tls/nginx.conf.active; then
+  DOMAIN="$(grep -m1 -oP '(?<=server_name )[^;]+' infra/tls/nginx.conf.active || true)"
+  if [ -n "$DOMAIN" ]; then
+    sed "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" infra/tls/nginx-https.conf > infra/tls/nginx.conf.active
+    echo "Refreshed nginx.conf.active (HTTPS mode, domain=$DOMAIN)"
+  else
+    echo "WARNING: HTTPS mode detected but couldn't parse the domain out of the existing nginx.conf.active — leaving it untouched this deploy"
+  fi
+elif [ -f infra/tls/nginx.conf.active ]; then
+  cp infra/tls/nginx-http.conf infra/tls/nginx.conf.active
+  echo "Refreshed nginx.conf.active (HTTP-only mode — no certificate yet)"
+else
+  echo "No nginx.conf.active yet on this server — run infra/setup-tls.sh first."
+fi
+
 echo "==> Migrations applied — updating api/worker/beat/web"
 "${COMPOSE[@]}" up -d api worker beat web
 
