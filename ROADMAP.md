@@ -27,6 +27,66 @@ automaticamente para a próxima.
 | **19** | Sinais agronômicos | Alerta de geada e sequência-sem-chuva (`FROST_WARNING`/`DRY_SPELL_WARNING`, ciclo a cada 6h), janela de pulverização (vento) e chuva acumulada via `GET /locations/{id}/agro/{spray-window,rainfall}` — ver [ADR-0014](docs/adr/0014-sinais-agronomicos.md) | ✅ Concluída |
 | **20** | Terceira redundância (Open-Meteo) | `OpenMeteoWeatherProvider` — agregador internacional sem chave, único com previsão numérica real de chuva; cadeia INMET → CPTEC → Open-Meteo; janela de pulverização passa a considerar chuva quando disponível — ver [ADR-0015](docs/adr/0015-open-meteo-terceiro-fallback.md) | ✅ Concluída |
 
+## Funcionalidades adicionais (fases 21–27)
+
+Depois da FASE 20, o desenvolvimento continuou em fases menores e mais
+rápidas (evolução guiada por feedback direto de uso, não um plano
+sequencial fixo como as fases 1–20). Cada uma tem sua própria ADR:
+
+- **Sinais adicionais do Open-Meteo** — CAPE, ETA de chuva, balanço
+  hídrico, GDD (graus-dia de crescimento), risco de doença fúngica e VPD
+  (déficit de pressão de vapor) — ver [ADR-0021](docs/adr/0021-instabilidade-cape-eta-balanco-hidrico-gdd-doenca-vpd.md).
+- **Notificação push real (Web Push/VAPID), CSP e exclusão de conta
+  (LGPD)** — RLS (Row-Level Security no Postgres) avaliado e **adiado**
+  (isolamento por tenant continua só em nível de aplicação) — ver
+  [ADR-0016](docs/adr/0016-push-real-csp-exclusao-conta.md).
+- **Comparação com o Agritempo** (Embrapa/INMET) — validação dos sinais
+  agronômicos contra uma fonte de referência — ver
+  [ADR-0018](docs/adr/0018-comparacao-agritempo.md).
+- **Raios/descargas atmosféricas** via API-REDEMET (DECEA/Aeronáutica),
+  desligado por padrão (precisa de cadastro) — ver
+  [ADR-0019](docs/adr/0019-raios-api-redemet.md).
+- **Chuva numérica direto do Open-Meteo** (correção de um bug real no
+  card de Trafegabilidade) — ver
+  [ADR-0020](docs/adr/0020-chuva-numerica-open-meteo-direto.md).
+- **Talhão / sub-local dentro da fazenda** — locais podem ter um
+  `parent_location_id` e uma `crop` (cultura) própria — ver
+  [ADR-0022](docs/adr/0022-talhao-sub-local-dentro-da-fazenda.md).
+- **Paridade do app mobile** — Agro, cadastro de local/talhão, push
+  nativa (Expo) — ver
+  [ADR-0023](docs/adr/0023-mobile-parity-agro-talhao-push-expo.md).
+- **Talhão com contorno real (polígono) no mapa**, colorido por cultura,
+  usando a imagem de satélite como referência visual — ver
+  [ADR-0024](docs/adr/0024-talhao-contorno-poligono-satelite.md).
+- **Ajustes de mapa** — zoom não reseta mais a cada ciclo, legenda pode
+  ser escondida, marcar ponto no mapa pra criar local, cor de cultura
+  editável — ver [ADR-0025](docs/adr/0025-mapa-fixes-marcar-ponto-cor-manual.md).
+
+## Ciclo de hardening técnico (em andamento)
+
+Revisão técnica focada em segurança/operação, sem mudar regras ou modelos
+meteorológicos (ver princípio inviolável no topo do README). Cada fase tem
+sua própria ADR; fases não listadas aqui ainda não começaram.
+
+| Fase | Nome | Entregável principal | Status |
+|-----:|------|------------------------|:------:|
+| **1** | Branches, CI, deploy | Actions atualizadas, job `root` novo no CI, auditoria npm em 2 camadas — [ADR-0026](docs/adr/0026-hardening-fase-1-branches-ci.md) | ✅ Concluída |
+| **2** | Dependências do app mobile | Upgrade coordenado Expo SDK 51→57 via `expo install` — [ADR-0027](docs/adr/0027-hardening-fase-2-expo-sdk-57.md) | ✅ Concluída |
+| **3** | Renovação de sessão (mobile) | Tokens em `expo-secure-store`, refresh com lock compartilhado — [ADR-0028](docs/adr/0028-hardening-fase-3-renovacao-sessao-mobile.md) | ✅ Concluída |
+| **4** | Segurança de sessão (web) | Cookie HttpOnly opcional pro refresh token — **implementação parcial**, bloqueada por decisão de domínio de produção ainda não tomada — [ADR-0029](docs/adr/0029-hardening-fase-4-cookie-refresh-token-opt-in.md) | 🟡 Parcial |
+| **5** | Configuração consistente do FastAPI | `Depends(get_settings)` → `Depends(get_request_settings)` em todos os pontos, rate limiter de auth corrigido — [ADR-0030](docs/adr/0030-hardening-fase-5-configuracao-por-instancia.md) | ✅ Concluída |
+| **6** | Migrations Alembic reproduzíveis | Baseline com DDL congelado substitui `Base.metadata.create_all()` — [ADR-0031](docs/adr/0031-hardening-fase-6-baseline-alembic-ddl-congelado.md) | ✅ Concluída |
+| **7** | Docker reproduzível | TATHU pinado por SHA, imagem base por digest, variantes `runtime-base`/`runtime-satellite` — [ADR-0032](docs/adr/0032-hardening-fase-7-docker-reproducivel.md) | ✅ Concluída |
+| **8** | Rate limiting atrás de proxy | Política de proxy confiável, chave por tenant+usuário+IP — [ADR-0033](docs/adr/0033-hardening-fase-8-rate-limit-proxy.md) | ✅ Concluída |
+| **9** | Documentação, licença, estrutura frontend | README/ARCHITECTURE/ROADMAP sincronizados, distinção entre os dois frontends, SECURITY.md com canal de reporte privado — [ADR-0034](docs/adr/0034-hardening-fase-9-documentacao-licenca-estrutura.md) | ✅ Concluída |
+| **10** | Frontend e observabilidade | Code-splitting, testes mínimos de frontend, métricas operacionais | ⏳ Planejada |
+| **11** | Validação meteorológica | Infra de avaliação forecast vs. observação real, ADR sobre adequação a alertas de segurança | ⏳ Planejada |
+
+Preparação de infraestrutura de produção (proxy reverso/TLS, backup do
+Postgres, política do Redis, rotação de segredos, retenção de logs,
+Celery Beat único) ainda **não começou** — depende de decisões de
+infraestrutura que o dono do produto ainda não tomou (ver ADR-0029/0031).
+
 ## Escopo do MVP (fases 1–10)
 
 O MVP entrega o fluxo ponta-a-ponta com **fonte simulada**:

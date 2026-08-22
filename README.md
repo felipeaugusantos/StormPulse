@@ -17,20 +17,28 @@ acompanhamento de células de tempestade**.
 
 ## Estado atual
 
-Este repositório está nas **FASE 0 (arquitetura)** e **FASE 1 (fundação)**.
-As demais fases (banco/modelos, auth, PostGIS, storm engine, alertas, workers,
-dashboard, app, integração real) estão planejadas no [ROADMAP.md](ROADMAP.md)
-e **ainda não implementadas**.
+O MVP ponta-a-ponta está implementado e em produção de desenvolvimento:
+cadastro, auth (JWT + Google), locais monitorados com PostGIS, motor de
+detecção/tracking/risco, alertas, workers (Celery), dashboard web, app
+mobile (Expo), três fontes meteorológicas reais em cadeia de fallback
+(INMET → CPTEC → Open-Meteo), observação via satélite (opcional) e sinais
+agronômicos. Histórico completo fase a fase em [ROADMAP.md](ROADMAP.md).
 
-O que já funciona nesta fase:
+Desde então, o projeto está em um **ciclo de hardening técnico**
+(segurança, CI/CD, reprodutibilidade, sem mudar nenhuma regra ou modelo
+meteorológico) — ver a seção "Ciclo de hardening técnico" do
+[ROADMAP.md](ROADMAP.md#ciclo-de-hardening-técnico-em-andamento) pro
+status fase a fase e os ADRs correspondentes.
 
 - Backend **FastAPI** com OpenAPI, configuração 12-factor e logging estruturado
   (JSON) com `request_id`/`correlation_id`.
 - **Health/Readiness:** `GET /health` (liveness) e `GET /ready` (checa Postgres
   e Redis).
-- Camadas de **DB async** (SQLAlchemy 2.0 + asyncpg) e **Redis async** prontas.
-- **Docker/Compose** com Postgres+PostGIS e Redis.
-- **pytest** (9 testes), **ruff** (lint+format) e **mypy strict** verdes.
+- **DB async** (SQLAlchemy 2.0 + asyncpg + GeoAlchemy2/PostGIS) e **Redis
+  async** (cache, broker do Celery, rate limiting).
+- **Docker/Compose** com Postgres+PostGIS, Redis, API, worker e beat.
+- Suíte de testes do backend com cobertura ≥85% (CI), `ruff` (lint+format)
+  e `mypy --strict` verdes.
 
 ## Endpoints (FASES 1–5)
 
@@ -161,6 +169,38 @@ atual + chuva prevista quando a fonte ativa der previsão numérica, ver
 limitações documentadas no
 [ADR-0014](docs/adr/0014-sinais-agronomicos.md).
 
+## ⚠️ Limitações — leia antes de usar em decisões reais
+
+Resumo consolidado do que já está detalhado nas seções acima e nos ADRs
+referenciados — junte tudo aqui porque é a parte que mais importa entender
+antes de confiar no sistema:
+
+- **StormPulse não substitui alertas oficiais** (INMET, Defesa Civil,
+  CEMADEN). É uma camada de conveniência que agrega e simplifica sinais —
+  em qualquer situação de risco real, siga os canais oficiais.
+- **Não há radar meteorológico real integrado.** Células de tempestade são
+  **aproximadas a partir da taxa de chuva** das estações INMET, convertida
+  para refletividade estimada via relação de Marshall–Palmer — não é uma
+  medição direta de radar (ver [ADR-0006](docs/adr/0006-integracao-real-inmet.md)).
+- **Avisos oficiais são casados por estado (UF)**, não por polígono
+  geográfico exato — um aviso pode aparecer para todo o estado mesmo que
+  afete só uma região dele.
+- **Observação por satélite é um sinal precoce, não uma confirmação.**
+  Detecta nuvem esfriando no topo (indicativo de convecção crescendo) via
+  infravermelho do GOES-19 — sempre nível amarelo, nunca promovido a
+  "tempestade confirmada" só por esse sinal (ver
+  [ADR-0009](docs/adr/0009-satelite-goes19-tathu.md)). A imagem IR ao vivo
+  no mapa é a imagem real do satélite, mas **não é um produto de radar**.
+- **Fontes com fallback em cadeia** (INMET → CPTEC → Open-Meteo) — cada
+  uma tem cobertura/granularidade diferentes; a previsão pode variar de
+  5-6 dias reais a numérica com probabilidade, dependendo de qual fonte
+  respondeu.
+- **Dados marcados `is_mock`/`experimental`** na API nunca devem ser
+  tratados como reais — a resposta sempre indica explicitamente quando um
+  valor vem do provider mock ou de um algoritmo ainda experimental.
+- **Sinais agronômicos usam limiares genéricos**, não calibrados por
+  cultura específica (ver [ADR-0014](docs/adr/0014-sinais-agronomicos.md)).
+
 ## Documentação
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — visão, estilo, estrutura, riscos, execução.
@@ -260,7 +300,7 @@ dependências não estiverem acessíveis. Para rodá-los:
 ```bash
 docker compose up -d db redis
 cd backend && alembic upgrade head
-pytest --cov --cov-report=term-missing   # cobertura medida: 91%
+pytest --cov --cov-report=term-missing   # cobertura mínima exigida no CI: 85%
 ```
 
 ### Observabilidade (OpenTelemetry, FASE 14)
@@ -306,29 +346,52 @@ credencial no `alembic.ini`.
 
 ---
 
-## Estrutura
+## Estrutura — dois produtos frontend distintos, não confunda
+
+Este repositório tem **dois apps React separados**, com propósitos
+diferentes — é fácil confundir os dois porque ambos falam de "tempo":
+
+- **App raiz** (`src/`, `index.html`, `package.json` da raiz, nome
+  `stormpulse`) — protótipo standalone que consulta o
+  [Open-Meteo](https://open-meteo.com) **diretamente do navegador**, sem
+  passar pelo backend FastAPI, sem login, sem locais monitorados
+  persistidos. **É este que o [`deploy.yml`](.github/workflows/deploy.yml)
+  publica no GitHub Pages** — não é o produto StormPulse completo, é uma
+  demo pública sem backend.
+- **`web/`** (nome `stormpulse-web`) — o dashboard admin de verdade:
+  fala com a API FastAPI (`VITE_API_URL`), tem login, locais monitorados
+  persistidos, mapa com camadas de tempestade/satélite/raios, talhões.
+  Este é o painel que os usuários reais do StormPulse usam. **Não é
+  publicado automaticamente em lugar nenhum ainda** — rode localmente
+  (`cd web && npm run dev`) ou faça deploy manual.
 
 ```
 stormpulse/
-├── backend/
+├── src/                    # App raiz — demo Open-Meteo standalone,
+│                            # publicada no GitHub Pages (ver acima)
+├── index.html, package.json (raiz)
+│
+├── backend/                 # API FastAPI + Storm Engine + workers (produto real)
 │   ├── app/
-│   │   ├── core/          # config, logging, middleware, contexto
-│   │   ├── db/            # engine/sessão async, base, redis
-│   │   └── api/           # routers (health/ready)
-│   ├── engine/            # Storm Engine (placeholder — FASE 6+)
-│   ├── workers/           # Celery (placeholder — FASE 10)
-│   ├── alembic/           # migrations
-│   ├── tests/             # pytest
-│   ├── Dockerfile
+│   │   ├── core/            # config, logging, middleware, segurança, rate limit
+│   │   ├── db/               # engine/sessão async, base, redis
+│   │   ├── auth/, users/, locations/, storms/, alerts/, notifications/, public/
+│   │   └── api/               # routers HTTP, health/ready
+│   ├── engine/               # Storm Engine (detecção, tracking, trajetória, risco)
+│   ├── workers/               # Celery (worker + beat) — pipeline e notificações
+│   ├── alembic/               # migrations (baseline com DDL congelado — ver ADR-0031)
+│   ├── tests/                 # pytest
+│   ├── Dockerfile              # runtime-base / runtime-satellite — ver ADR-0032
 │   └── pyproject.toml
-├── web/                   # dashboard admin (FASE 11)
-├── mobile/                # app Expo (FASE 12)
-├── infra/                 # nginx e deploy
-├── docs/adr/              # decisões arquiteturais
+├── web/                      # dashboard admin real (produto StormPulse) — ver acima
+├── mobile/                   # app Expo (React Native) — paridade com o web
+├── infra/                    # nginx, exemplos de deploy
+├── docs/adr/                 # decisões arquiteturais (ADRs)
 ├── docker-compose.yml
 ├── .env.example
 ├── ARCHITECTURE.md
-└── ROADMAP.md
+├── ROADMAP.md
+└── SECURITY.md
 ```
 
 ---
