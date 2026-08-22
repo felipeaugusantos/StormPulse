@@ -59,6 +59,13 @@ body {
   color: var(--ink-mute);
   font-size: 0.85rem;
 }
+.safety-disclaimer {
+  color: var(--ink-mute);
+  font-size: 0.8rem;
+  padding: 10px 12px;
+  margin-top: 10px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
 label {
   display: block;
   font-size: 0.8rem;

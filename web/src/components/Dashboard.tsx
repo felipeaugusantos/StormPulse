@@ -31,6 +31,7 @@ import { timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { LocationSearchCard } from './LocationSearchCard'
 import { LocationWeatherCard } from './LocationWeatherCard'
+import { SafetyDisclaimer } from './SafetyDisclaimer'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
 import { StormMap, type PlotBoundary, type StormMapHandle } from './LazyStormMap'
 
@@ -458,6 +459,7 @@ export function Dashboard({ onLogout }: Props) {
             Atualizado {updatedAt.toLocaleTimeString('pt-BR')} · atualização automática 30s
           </div>
         )}
+        <SafetyDisclaimer />
       </div>
     </>
   )

@@ -7,6 +7,7 @@ Alembic (autogenerate / bootstrap) and anywhere the full schema is needed.
 from __future__ import annotations
 
 from app.alerts.models import Alert
+from app.alerts.verification_models import AlertVerification
 from app.lightning.models import LightningStrike
 from app.locations.models import AlertPreference, Location
 from app.notifications.models import Notification, PushSubscription
@@ -20,6 +21,7 @@ from app.weather.models import RadarFrame, WeatherSource
 __all__ = [
     "Alert",
     "AlertPreference",
+    "AlertVerification",
     "ConvectiveWatch",
     "LightningStrike",
     "Location",

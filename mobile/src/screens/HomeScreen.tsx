@@ -101,6 +101,14 @@ export function HomeScreen({ onLogout }: Props) {
       {items.map(({ location, risk }) => (
         <LocationCard key={location.id} location={location} risk={risk} />
       ))}
+
+      {/* Hardening ADR-0036 — shown on the home screen, not just documented
+          in the README. Never let StormPulse be mistaken for a substitute
+          for official alerts. */}
+      <Text style={styles.disclaimer}>
+        ⚠️ StormPulse não substitui alertas oficiais (INMET, Defesa Civil,
+        CEMADEN). Em qualquer situação de risco real, siga os canais oficiais.
+      </Text>
     </ScrollView>
   )
 }
@@ -160,6 +168,14 @@ const styles = StyleSheet.create({
   sub: { color: colors.inkMute, fontSize: 12, marginTop: 2 },
   dot: { width: 12, height: 12, borderRadius: 6 },
   radius: { color: colors.inkDim, fontFamily: 'monospace', fontSize: 12 },
+  disclaimer: {
+    color: colors.inkMute,
+    fontSize: 11,
+    marginTop: 24,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
   badge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   badgeText: { color: '#04121f', fontSize: 11, fontWeight: '700' },
 })

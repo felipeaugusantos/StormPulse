@@ -80,7 +80,7 @@ sua própria ADR; fases não listadas aqui ainda não começaram.
 | **8** | Rate limiting atrás de proxy | Política de proxy confiável, chave por tenant+usuário+IP — [ADR-0033](docs/adr/0033-hardening-fase-8-rate-limit-proxy.md) | ✅ Concluída |
 | **9** | Documentação, licença, estrutura frontend | README/ARCHITECTURE/ROADMAP sincronizados, distinção entre os dois frontends, SECURITY.md com canal de reporte privado — [ADR-0034](docs/adr/0034-hardening-fase-9-documentacao-licenca-estrutura.md) | ✅ Concluída |
 | **10** | Frontend e observabilidade | Code-splitting já existia (confirmado); 34 testes novos no `web/` (Vitest); métricas operacionais (duração/falha de ciclo, fonte meteorológica, idade do dado, alertas, latência externa) — [ADR-0035](docs/adr/0035-hardening-fase-10-frontend-observabilidade.md) | ✅ Concluída |
-| **11** | Validação meteorológica | Infra de avaliação forecast vs. observação real, ADR sobre adequação a alertas de segurança | ⏳ Planejada |
+| **11** | Validação meteorológica | Infra de avaliação (`engine/validation.py`), tabela `alert_verifications` (ground truth, sem endpoint público), aviso "não substitui alertas oficiais" agora visível na UI (web + mobile, não só no README) — [ADR-0036](docs/adr/0036-hardening-fase-11-validacao-meteorologica.md) conclui que o sistema **não está classificado como apropriado para alertas de segurança** por falta de dado real ainda | ✅ Concluída |
 
 Preparação de infraestrutura de produção (proxy reverso/TLS, backup do
 Postgres, política do Redis, rotação de segredos, retenção de logs,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, publicApi } from '../api'
 import { timeAgo } from '../format'
+import { SafetyDisclaimer } from './SafetyDisclaimer'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
 import type {
   ConvectiveWatch,
@@ -174,6 +175,7 @@ export function VisitorView({ onBack }: Props) {
           <p className="muted">
             Locais monitorados e alertas personalizados exigem uma conta.
           </p>
+          <SafetyDisclaimer />
         </div>
       </div>
     </>
