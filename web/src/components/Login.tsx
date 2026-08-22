@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ApiError, login, loginWithGoogle, setToken } from '../api'
+import { ApiError, login, loginWithGoogle } from '../api'
 
 interface Props {
   onAuthenticated: () => void
@@ -38,8 +38,7 @@ export function Login({ onAuthenticated, onVisitor }: Props) {
     setLoading(true)
     setError(null)
     try {
-      const token = await login(email, password)
-      setToken(token)
+      await login(email, password)
       onAuthenticated()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Falha ao entrar')
@@ -61,8 +60,7 @@ export function Login({ onAuthenticated, onVisitor }: Props) {
           callback: async (response) => {
             setError(null)
             try {
-              const token = await loginWithGoogle(response.credential)
-              setToken(token)
+              await loginWithGoogle(response.credential)
               onAuthenticated()
             } catch (err) {
               setError(err instanceof ApiError ? err.message : 'Falha ao entrar com Google')

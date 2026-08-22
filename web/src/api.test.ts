@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
-// Each test gets a fresh module registry so module-level state (the
-// refreshInFlight lock) doesn't leak between tests.
+// Each test gets a fresh module registry so module-level state (the access
+// token, the refreshInFlight lock) doesn't leak between tests.
 async function freshApi() {
   vi.resetModules()
   return await import('./api')
@@ -23,23 +23,31 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('login', () => {
-  test('stores the refresh token and returns the access token (caller stores it)', async () => {
-    // `login()` persists the refresh token itself but returns the access
-    // token for the caller to store (Login.tsx calls `setToken` right
-    // after) — matches the same split as the mobile client.
-    const { login, setToken, getToken } = await freshApi()
+describe('login (Fase 4 — cookie-based refresh, ADR-0045)', () => {
+  test('stores the access token in memory and sends credentials for the cookie', async () => {
+    const { login, getToken } = await freshApi()
     const fetchMock = vi.fn().mockResolvedValue(
-      jsonResponse({ access_token: 'access-1', refresh_token: 'refresh-1' }),
+      jsonResponse({ access_token: 'access-1', refresh_token: null }),
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    const access = await login('user@example.com', 'hunter2')
-    setToken(access)
+    await login('user@example.com', 'hunter2')
 
-    expect(access).toBe('access-1')
     expect(getToken()).toBe('access-1')
-    expect(localStorage.getItem('stormpulse.refresh_token')).toBe('refresh-1')
+    const [, init] = fetchMock.mock.calls[0]
+    expect(init.credentials).toBe('include')
+  })
+
+  test('never writes anything to localStorage', async () => {
+    const { login } = await freshApi()
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ access_token: 'access-1', refresh_token: null }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await login('user@example.com', 'hunter2')
+
+    expect(localStorage.length).toBe(0)
   })
 
   test('a bad password (401) is surfaced as ApiError, not treated as an expired session', async () => {
@@ -53,50 +61,81 @@ describe('login', () => {
   })
 })
 
-describe('session renewal on 401', () => {
-  test('refreshes once and retries the original request', async () => {
-    const { api, setToken } = await freshApi()
-    localStorage.setItem('stormpulse.access_token', 'expired-access')
-    localStorage.setItem('stormpulse.refresh_token', 'refresh-1')
-    setToken('expired-access')
+describe('legacy localStorage migration', () => {
+  test('removes old access/refresh token keys on load', async () => {
+    localStorage.setItem('stormpulse.access_token', 'old-access')
+    localStorage.setItem('stormpulse.refresh_token', 'old-refresh')
 
+    await freshApi()
+
+    expect(localStorage.getItem('stormpulse.access_token')).toBeNull()
+    expect(localStorage.getItem('stormpulse.refresh_token')).toBeNull()
+  })
+})
+
+describe('initSession (app boot)', () => {
+  test('redeems a valid refresh cookie for an access token', async () => {
+    const { initSession, getToken } = await freshApi()
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ access_token: 'access-1', refresh_token: null }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const ok = await initSession()
+
+    expect(ok).toBe(true)
+    expect(getToken()).toBe('access-1')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/auth/refresh')
+    expect(init.credentials).toBe('include')
+  })
+
+  test('returns false (not a thrown error) when there is no valid cookie', async () => {
+    const { initSession, getToken } = await freshApi()
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ detail: 'Refresh token ausente' }, 401))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const ok = await initSession()
+
+    expect(ok).toBe(false)
+    expect(getToken()).toBeNull()
+  })
+})
+
+describe('session renewal on 401', () => {
+  test('refreshes via the cookie and retries the original request once', async () => {
+    const { api, login } = await freshApi()
     const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'expired-access', refresh_token: null }))
+    await login('user@example.com', 'hunter2')
+
     // 1st call: the original request, expired token -> 401.
     fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'expired' }, 401))
-    // 2nd call: POST /auth/refresh -> new pair.
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({ access_token: 'access-2', refresh_token: 'refresh-2' }),
-    )
+    // 2nd call: POST /auth/refresh (cookie-based, no body token) -> new access token.
+    fetchMock.mockResolvedValueOnce(jsonResponse({ access_token: 'access-2', refresh_token: null }))
     // 3rd call: retried original request, now succeeds.
     fetchMock.mockResolvedValueOnce(jsonResponse([]))
-    vi.stubGlobal('fetch', fetchMock)
 
     const result = await api.locations()
 
     expect(result).toEqual([])
-    expect(fetchMock).toHaveBeenCalledTimes(3)
-    expect(localStorage.getItem('stormpulse.access_token')).toBe('access-2')
+    expect(fetchMock).toHaveBeenCalledTimes(4) // login + 401 + refresh + retry
+    const refreshCall = fetchMock.mock.calls[2]
+    expect(String(refreshCall[0])).toContain('/auth/refresh')
+    expect(refreshCall[1].credentials).toBe('include')
   })
 
   test('concurrent 401s share a single refresh call', async () => {
-    const { api, setToken } = await freshApi()
-    setToken('expired-access')
-    localStorage.setItem('stormpulse.refresh_token', 'refresh-1')
-
+    const { api } = await freshApi()
     let refreshCalls = 0
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (typeof url === 'string' && url.includes('/auth/refresh')) {
         refreshCalls += 1
-        return Promise.resolve(
-          jsonResponse({ access_token: 'access-2', refresh_token: 'refresh-2' }),
-        )
+        return Promise.resolve(jsonResponse({ access_token: 'access-2', refresh_token: null }))
       }
-      // Every non-refresh call: 401 the first time it sees the old token
-      // still attached; subsequent calls (post-refresh retry) succeed.
       return Promise.resolve(jsonResponse([]))
     })
-    // First N calls (the two parallel original requests) 401; make that
-    // explicit rather than relying on call order.
     fetchMock
       .mockResolvedValueOnce(jsonResponse({}, 401))
       .mockResolvedValueOnce(jsonResponse({}, 401))
@@ -107,11 +146,8 @@ describe('session renewal on 401', () => {
     expect(refreshCalls).toBe(1)
   })
 
-  test('an invalid refresh token clears the session instead of looping', async () => {
-    const { api, setToken, getToken, ApiError } = await freshApi()
-    setToken('expired-access')
-    localStorage.setItem('stormpulse.refresh_token', 'garbage')
-
+  test('an invalid/expired cookie clears the session instead of looping', async () => {
+    const { api, getToken, ApiError } = await freshApi()
     const fetchMock = vi.fn()
     fetchMock.mockResolvedValueOnce(jsonResponse({}, 401)) // original request
     fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'invalid' }, 401)) // refresh fails
@@ -119,17 +155,16 @@ describe('session renewal on 401', () => {
 
     await expect(api.locations()).rejects.toThrow(ApiError)
     expect(getToken()).toBeNull()
-    expect(localStorage.getItem('stormpulse.refresh_token')).toBeNull()
   })
 
-  test('a 401 with no refresh token available is surfaced immediately, no refresh attempted', async () => {
+  test('a 401 on a fresh session (no prior login) still attempts a refresh, then fails cleanly', async () => {
     const { api } = await freshApi()
-    // No token at all — e.g. a public/visitor call that unexpectedly 401s.
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ detail: 'nope' }, 401))
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(api.locations()).rejects.toThrow()
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    // original request + one refresh attempt — never an unbounded loop.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -158,15 +193,35 @@ describe('error states', () => {
   })
 })
 
-describe('clearToken (logout)', () => {
-  test('removes both tokens from storage', async () => {
-    const { clearToken, getToken } = await freshApi()
-    localStorage.setItem('stormpulse.access_token', 'a')
-    localStorage.setItem('stormpulse.refresh_token', 'r')
+describe('logout', () => {
+  test('calls the backend and clears the in-memory token', async () => {
+    const { login, logout, getToken } = await freshApi()
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ access_token: 'access-1', refresh_token: null }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    await login('user@example.com', 'hunter2')
 
-    clearToken()
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+    await logout()
 
     expect(getToken()).toBeNull()
-    expect(localStorage.getItem('stormpulse.refresh_token')).toBeNull()
+    const [url, init] = fetchMock.mock.calls[1]
+    expect(String(url)).toContain('/auth/logout')
+    expect(init.credentials).toBe('include')
+  })
+
+  test('still clears local state even if the network call fails', async () => {
+    const { login, logout, getToken } = await freshApi()
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ access_token: 'access-1', refresh_token: null }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    await login('user@example.com', 'hunter2')
+
+    fetchMock.mockRejectedValueOnce(new Error('network down'))
+    await expect(logout()).resolves.toBeUndefined() // never throws
+
+    expect(getToken()).toBeNull()
   })
 })

@@ -18,24 +18,37 @@ import type {
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 const V1 = `${BASE}/api/v1`
 
-const TOKEN_KEY = 'stormpulse.access_token'
-const REFRESH_TOKEN_KEY = 'stormpulse.refresh_token'
+// Hardening Fase 4 (ADR-0045): the refresh token is never handled by this
+// module at all anymore — it's an HttpOnly cookie the backend sets
+// (REFRESH_COOKIE_ENABLED=true by default now that HTTPS + same-origin are
+// both in place, ADR-0038/0039) and the browser attaches automatically.
+// The access token lives ONLY in memory (a module-level variable) — never
+// localStorage, never anything JS can leave lying around after the tab
+// closes.
+let accessToken: string | null = null
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
+  return accessToken
 }
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
-}
-function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_KEY)
-}
-function setRefreshToken(token: string): void {
-  localStorage.setItem(REFRESH_TOKEN_KEY, token)
+function setToken(token: string): void {
+  accessToken = token
 }
 export function clearToken(): void {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(REFRESH_TOKEN_KEY)
+  accessToken = null
+}
+
+// One-time migration: anyone who used the app before this change has a
+// real, live refresh token sitting in localStorage. Nothing here reads
+// those keys anymore, but leaving a valid credential parked in
+// localStorage indefinitely is exactly the exposure this phase removes —
+// clear them on load. Wrapped in try/catch: localStorage can throw in some
+// privacy-mode/embedded contexts, and this cleanup must never block the
+// app from starting.
+try {
+  localStorage.removeItem('stormpulse.access_token')
+  localStorage.removeItem('stormpulse.refresh_token')
+} catch {
+  /* no localStorage available — nothing to migrate away from */
 }
 
 export class ApiError extends Error {
@@ -49,27 +62,26 @@ export class ApiError extends Error {
 
 interface TokenPair {
   access_token: string
-  refresh_token: string
+  refresh_token: string | null
 }
 
 // The access token expires every 15 minutes (ACCESS_TOKEN_EXPIRE_MINUTES) —
 // a user actively using the dashboard would otherwise get logged out every
-// 15 minutes. On a 401, silently exchange the refresh token (7-day expiry)
-// for a new pair and retry the request once; only surface the 401 (and let
-// the caller log out) if the refresh itself fails — meaning the refresh
-// token is gone/expired too, a real "please log in again."
+// 15 minutes. On a 401, silently exchange the refresh cookie for a new
+// access token and retry the request once; only surface the 401 (and let
+// the caller log out) if the refresh itself fails — meaning the cookie is
+// gone/expired too, a real "please log in again."
 let refreshInFlight: Promise<string> | null = null
 
 async function refreshAccessToken(): Promise<string> {
   if (refreshInFlight) return refreshInFlight
-  const refreshToken = getRefreshToken()
-  if (!refreshToken) throw new ApiError(401, 'Sessão expirada')
 
   refreshInFlight = (async () => {
     const res = await fetch(`${V1}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      credentials: 'include', // send the HttpOnly refresh cookie
+      body: JSON.stringify({}),
     })
     if (!res.ok) {
       clearToken()
@@ -77,7 +89,6 @@ async function refreshAccessToken(): Promise<string> {
     }
     const data = (await res.json()) as TokenPair
     setToken(data.access_token)
-    setRefreshToken(data.refresh_token)
     return data.access_token
   })()
 
@@ -88,18 +99,32 @@ async function refreshAccessToken(): Promise<string> {
   }
 }
 
+/** Called once, at app boot: exchanges the HttpOnly refresh cookie (if the
+ * browser still has a valid one) for a fresh access token, without the user
+ * needing to log in again. Never throws — a missing/expired/blocked cookie
+ * is a completely ordinary "please log in" state, not an error; the caller
+ * just gets `false` and shows the login screen. */
+export async function initSession(): Promise<boolean> {
+  try {
+    await refreshAccessToken()
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function request<T>(path: string, init: RequestInit = {}, isRetry = false): Promise<T> {
   const token = getToken()
   const headers = new Headers(init.headers)
   headers.set('Content-Type', 'application/json')
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const res = await fetch(`${V1}${path}`, { ...init, headers })
+  const res = await fetch(`${V1}${path}`, { ...init, headers, credentials: 'include' })
   if (!res.ok) {
     // Never try to refresh the refresh call itself, or a plain login
     // attempt (a real bad password is a 401 too, not an expired session).
     const isAuthEndpoint = path.startsWith('/auth/')
-    if (res.status === 401 && !isRetry && !isAuthEndpoint && getRefreshToken()) {
+    if (res.status === 401 && !isRetry && !isAuthEndpoint) {
       await refreshAccessToken()
       return request<T>(path, init, true)
     }
@@ -115,22 +140,34 @@ async function request<T>(path: string, init: RequestInit = {}, isRetry = false)
   return (res.status === 204 ? undefined : await res.json()) as T
 }
 
-export async function login(email: string, password: string): Promise<string> {
+export async function login(email: string, password: string): Promise<void> {
   const data = await request<TokenPair>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   })
-  setRefreshToken(data.refresh_token)
-  return data.access_token
+  setToken(data.access_token)
 }
 
-export async function loginWithGoogle(idToken: string): Promise<string> {
+export async function loginWithGoogle(idToken: string): Promise<void> {
   const data = await request<TokenPair>('/auth/google', {
     method: 'POST',
     body: JSON.stringify({ id_token: idToken }),
   })
-  setRefreshToken(data.refresh_token)
-  return data.access_token
+  setToken(data.access_token)
+}
+
+/** Clears the HttpOnly refresh cookie server-side and the in-memory access
+ * token locally. Always safe to call, even if the session already expired
+ * (the backend's /auth/logout is unconditional and idempotent) — never
+ * throws, a failed network call still clears local state. */
+export async function logout(): Promise<void> {
+  try {
+    await fetch(`${V1}/auth/logout`, { method: 'POST', credentials: 'include' })
+  } catch {
+    /* best-effort — local state is cleared regardless, below */
+  } finally {
+    clearToken()
+  }
 }
 
 export interface CreateLocationInput {

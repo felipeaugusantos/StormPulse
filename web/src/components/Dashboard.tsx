@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, api, clearToken, publicApi, readiness } from '../api'
+import { ApiError, api, publicApi, readiness } from '../api'
 import type {
   AlertItem,
   ConvectiveWatch,
@@ -89,7 +89,10 @@ export function Dashboard({ onLogout }: Props) {
       setError(null)
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        clearToken()
+        // The refresh cookie itself is gone/expired (request() already
+        // tried it once) — nothing left to do but end the session.
+        // `onLogout` (App.tsx) already clears local state and calls the
+        // backend; no need to duplicate that here.
         onLogout()
         return
       }
@@ -194,7 +197,6 @@ export function Dashboard({ onLogout }: Props) {
       // Even if the request itself failed after the account was gone
       // (e.g. token already invalid), logging out locally is still correct.
     }
-    clearToken()
     onLogout()
   }
 
