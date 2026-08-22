@@ -88,6 +88,13 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-local}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_JSON: ${LOG_JSON:-true}
+      # Never actually used for token operations here (workers don't issue
+      # or verify JWTs) — but `get_settings()` validates this field
+      # unconditionally at import time (`workers/celery_app.py`), and
+      # refuses the dev default when ENVIRONMENT=production. Without this,
+      # worker/beat crash-loop in any real production deploy — this was
+      # missing until a real ENVIRONMENT=production run first exercised it.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-insecure-change-me}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-stormpulse}
