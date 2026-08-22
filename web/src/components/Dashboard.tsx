@@ -312,6 +312,7 @@ export function Dashboard({ onLogout }: Props) {
             <StormsPanel storms={storms} />
             <SatelliteWatchesPanel
               watches={satelliteWatches}
+              hasImage={satelliteImage !== null}
               locations={locations.filter((l) => l.is_active)}
               onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
             />
@@ -576,10 +577,12 @@ function bestStormEtaLabel(watch: ConvectiveWatch, locations: LocationItem[]): s
 
 function SatelliteWatchesPanel({
   watches,
+  hasImage,
   locations,
   onSelect,
 }: {
   watches: ConvectiveWatch[]
+  hasImage: boolean
   locations: LocationItem[]
   onSelect: (latitude: number, longitude: number) => void
 }) {
@@ -593,9 +596,15 @@ function SatelliteWatchesPanel({
         aparecer como célula de tempestade. Clique numa observação para ver no mapa.
       </p>
       <div className="list">
-        {watches.length === 0 && (
+        {watches.length === 0 && hasImage && (
           <p className="empty">
-            Nenhuma observação ativa (ou SATELLITE_ENABLED=false — ver README).
+            Nenhuma célula com resfriamento de topo detectada na área monitorada agora.
+          </p>
+        )}
+        {watches.length === 0 && !hasImage && (
+          <p className="empty">
+            Nenhuma observação ativa (ainda sem imagem de satélite — pipeline não rodou ou
+            SATELLITE_ENABLED=false, ver README).
           </p>
         )}
         {watches.map((w) => (

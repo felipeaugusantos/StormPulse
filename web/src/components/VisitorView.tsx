@@ -121,7 +121,12 @@ export function VisitorView({ onBack }: Props) {
               de aparecer como célula de tempestade. Clique numa observação para ver no mapa.
             </p>
             <div className="list">
-              {satelliteWatches.length === 0 && (
+              {satelliteWatches.length === 0 && satelliteImage && (
+                <p className="empty">
+                  Nenhuma célula com resfriamento de topo detectada na área monitorada agora.
+                </p>
+              )}
+              {satelliteWatches.length === 0 && !satelliteImage && (
                 <p className="empty">Nenhuma observação ativa no momento.</p>
               )}
               {satelliteWatches.slice(0, 8).map((w) => (
