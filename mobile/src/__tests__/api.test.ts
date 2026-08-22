@@ -117,6 +117,47 @@ describe('mobile session (Fase 3)', () => {
     expect(await authStorage.hasSession()).toBe(false)
   })
 
+  test('login and refresh both identify this client as mobile (ADR-0045)', async () => {
+    // Backend hardening Fase 4 defaults REFRESH_COOKIE_ENABLED to true and
+    // treats any unrecognized/absent X-Client-Platform as the web/cookie
+    // flow — which would silently strip refresh_token from the body and
+    // break mobile's SecureStore session. This header is what keeps mobile
+    // on the body-token path.
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, { access_token: 'access-1', refresh_token: 'refresh-1' }),
+      )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await login('user@example.com', 'senha-super-secreta')
+
+    const [, loginInit] = fetchMock.mock.calls[0]
+    expect((loginInit.headers as Record<string, string>)['X-Client-Platform']).toBe('mobile')
+
+    const fetchMock2 = jest
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, { access_token: 'access-2', refresh_token: 'refresh-2' }),
+      )
+    globalThis.fetch = fetchMock2 as unknown as typeof fetch
+    await authStorage.setTokenPair('expired-access', 'refresh-1')
+    // Directly exercise the refresh path via a 401'd request.
+    fetchMock2.mockReset()
+    fetchMock2
+      .mockResolvedValueOnce(jsonResponse(401, {}))
+      .mockResolvedValueOnce(
+        jsonResponse(200, { access_token: 'access-3', refresh_token: 'refresh-3' }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, []))
+
+    await api.locations()
+
+    const refreshCall = fetchMock2.mock.calls[1]
+    expect(String(refreshCall[0])).toContain('/auth/refresh')
+    expect((refreshCall[1].headers as Record<string, string>)['X-Client-Platform']).toBe('mobile')
+  })
+
   test('login is never itself retried through the refresh flow', async () => {
     // A plain wrong-password 401 on /auth/login must surface immediately —
     // never trigger a refresh attempt (there's no session yet to refresh).

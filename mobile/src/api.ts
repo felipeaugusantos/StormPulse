@@ -48,7 +48,7 @@ async function refreshAccessToken(): Promise<string> {
 
     const res = await fetch(`${V1}/auth/refresh`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Platform': 'mobile' },
       body: JSON.stringify({ refresh_token: refreshToken }),
     })
     if (!res.ok) {
@@ -71,6 +71,11 @@ async function request<T>(path: string, init: RequestInit = {}, isRetry = false)
   const token = await authStorage.getAccessToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    // Backend hardening Fase 4 (ADR-0045): REFRESH_COOKIE_ENABLED defaults
+    // to true now — without this header the backend can't tell mobile
+    // apart from the web dashboard and would strip refresh_token from the
+    // response body, breaking mobile's SecureStore-based session.
+    'X-Client-Platform': 'mobile',
     ...(init.headers as Record<string, string> | undefined),
   }
   if (token) headers.Authorization = `Bearer ${token}`
