@@ -174,8 +174,19 @@ jobs:
       - name: Create .env from example
         run: cp .env.example .env
 
-      - name: Build images
+      - name: Build images (runtime-base, the default variant)
         run: docker compose build
+
+      - name: Build runtime-satellite variant (GDAL/TATHU — build-only)
+        # Hardening ADR-0032: confirms the satellite-capable image still
+        # builds (catches a broken GDAL/TATHU pin) without paying for a
+        # second full stack boot + smoke-test cycle in CI.
+        run: docker build --target runtime-satellite -t stormpulse-backend:satellite-check ./backend
+
+      - name: Image size comparison (runtime-base vs runtime-satellite)
+        run: |
+          docker images stormpulse-api --format '{{.Repository}} (runtime-base)  {{.Size}}'
+          docker images stormpulse-backend --format '{{.Repository}}:{{.Tag}} (runtime-satellite)  {{.Size}}'
 
       - name: Start the stack
         run: docker compose up -d

@@ -35,6 +35,11 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      # Defaults to the smaller image without GDAL/TATHU, matching
+      # SATELLITE_ENABLED=false below. Set API_DOCKER_TARGET=runtime-satellite
+      # (alongside SATELLITE_ENABLED=true) to build the satellite-capable
+      # variant — see backend/Dockerfile and ADR-0032.
+      target: ${API_DOCKER_TARGET:-runtime-base}
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-local}
       DEBUG: ${DEBUG:-false}
@@ -74,6 +79,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      # The satellite pipeline (GDAL/TATHU) runs inside this service — needs
+      # the satellite target whenever SATELLITE_ENABLED=true. See the `api`
+      # service above for the full explanation.
+      target: ${API_DOCKER_TARGET:-runtime-base}
     command: ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info"]
     environment: &worker_env
       ENVIRONMENT: ${ENVIRONMENT:-local}
@@ -105,6 +114,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      # Beat only schedules task *names* (workers/celery_app.py never
+      # imports workers.tasks), so it never needs GDAL/TATHU — always the
+      # small image, regardless of API_DOCKER_TARGET.
+      target: runtime-base
     # --schedule points at a writable path (the app dir is owned by root; the
     # container runs as a non-root user).
     command:

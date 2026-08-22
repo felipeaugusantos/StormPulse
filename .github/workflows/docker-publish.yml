@@ -29,6 +29,18 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      # Hardening ADR-0032: two published variants. "runtime-base" (no
+      # GDAL/TATHU, matches the project's SATELLITE_ENABLED=false default)
+      # is untagged/plain — the variant most deployments want. "satellite"
+      # gets a "-satellite" tag suffix and maps to the runtime-satellite
+      # Docker stage.
+      matrix:
+        include:
+          - target: runtime-base
+            suffix: ""
+          - target: runtime-satellite
+            suffix: "-satellite"
     steps:
       - uses: actions/checkout@v7
 
@@ -47,6 +59,8 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            suffix=${{ matrix.suffix }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -58,8 +72,9 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: backend
+          target: ${{ matrix.target }}
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
