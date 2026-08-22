@@ -123,6 +123,21 @@ localmente simulando o arquivo `nginx.conf.active` de produção (com o
 domínio real da instância) e confirmando que a regeneração produz
 exatamente os novos headers.
 
+### Segundo bug, encontrado ao confirmar a correção acima
+
+Depois da correção do `nginx.conf.active`, os headers apareciam em `/` —
+menos `Strict-Transport-Security`, que tinha sido colocado no nível do
+`server { listen 443 ssl; }`, fora de qualquer `location`. Causa: no
+Nginx, `add_header` **não é mesclado** entre `server` e `location` — uma
+`location` que define seus próprios `add_header`s (como a `location /`
+desta fase, com CSP e companhia) substitui inteiramente o conjunto
+herdado do `server`, em vez de somar a ele. `/health`/`/api/` (que não
+têm `add_header` próprio) continuavam herdando o HSTS do `server`
+normalmente — só a própria `location /` silenciosamente perdia o header
+que mais importa ali. Corrigido listando `Strict-Transport-Security`
+explicitamente dentro da `location /`, junto dos demais, e removendo a
+duplicata do nível `server`.
+
 ## Consequências
 
 - A SPA ganha defesa em profundidade contra XSS (CSP restringe onde
