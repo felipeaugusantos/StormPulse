@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from functools import lru_cache
 from typing import Literal
 
@@ -69,6 +70,16 @@ class Settings(BaseSettings):
     # --- Rate limiting (public/visitor endpoints, FASE 15 — stricter: anonymous) ---
     public_rate_limit_max: int = Field(default=30, gt=0)
     public_rate_limit_window_seconds: int = Field(default=60, gt=0)
+
+    # --- Rate limiting: trusted proxy policy (hardening ADR-0033) ---
+    # Empty by default — fail-safe-closed. With no trusted proxy configured,
+    # `Forwarded`/`X-Forwarded-For` are never trusted and the limiter always
+    # keys on the direct TCP peer, which is correct with no reverse proxy in
+    # front (local dev, the current deploy). Only set this to the reverse
+    # proxy's own IP(s)/CIDR(s) once one is actually in front of the API —
+    # trusting it blindly here would let any client spoof these headers to
+    # either dodge the limit or frame another IP for it.
+    trusted_proxy_ips: str = ""
 
     # --- Observability / tracing (FASE 14) ---
     otel_enabled: bool = True
@@ -255,6 +266,16 @@ class Settings(BaseSettings):
     def cors_allowed_origins_list(self) -> list[str]:
         """Parsed from a comma-separated env var (12-factor friendly)."""
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def trusted_proxy_networks(self) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        """Parsed from a comma-separated env var of IPs/CIDRs (12-factor friendly)."""
+        return [
+            ipaddress.ip_network(entry.strip(), strict=False)
+            for entry in self.trusted_proxy_ips.split(",")
+            if entry.strip()
+        ]
 
     @computed_field  # type: ignore[prop-decorator]
     @property
