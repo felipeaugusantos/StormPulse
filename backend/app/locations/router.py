@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, get_request_settings
 from app.core.config import Settings
+from app.core.metrics import record_weather_data_age
 from app.locations import service
 from app.locations.models import Location
 from app.locations.schemas import LocationCreate, LocationOut, LocationUpdate, SprayWindowOut
@@ -172,12 +173,14 @@ async def get_location_current(
     location = await _get_owned_or_404(session, user, location_id)
     provider = get_weather_provider(settings)
     try:
-        return await provider.get_current_data(location.latitude, location.longitude)
+        current = await provider.get_current_data(location.latitude, location.longitude)
     except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Condições atuais indisponíveis para este local no momento",
         ) from exc
+    record_weather_data_age(current.observed_at, current.provenance.source_name)
+    return current
 
 
 @router.get(
@@ -200,6 +203,7 @@ async def get_location_spray_window(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Condições atuais indisponíveis para este local no momento",
         ) from exc
+    record_weather_data_age(current.observed_at, current.provenance.source_name)
 
     # Rain is a bonus signal — only INMET/CPTEC never give a numeric
     # forecast at all (ADR-0011/0014), so this asks Open-Meteo directly

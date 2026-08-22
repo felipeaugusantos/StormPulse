@@ -9,8 +9,16 @@ from __future__ import annotations
 from celery import Celery
 
 from app.core.config import get_settings
+from app.core.metrics import configure_metrics
 
 _settings = get_settings()
+
+if _settings.otel_enabled and _settings.environment != "test":
+    # Same gating as app.main.create_app() — a single global MeterProvider
+    # per process, configured once here for both `worker` and `beat` (see
+    # ADR-0035). Pipeline cycle duration/failure counts (workers/tasks.py)
+    # only actually export anywhere once this has run.
+    configure_metrics(_settings)
 
 celery_app = Celery(
     "stormpulse",

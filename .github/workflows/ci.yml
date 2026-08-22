@@ -115,7 +115,7 @@ jobs:
   # Web admin dashboard: type-check and production build.
   # -----------------------------------------------------------------------
   web:
-    name: Web admin (typecheck · build)
+    name: Web admin (typecheck · tests · build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -128,6 +128,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - name: Vitest (HTTP client/session renewal/formatting — Fase 10)
+        run: npm test
       - run: npm run build
       - name: npm audit (runtime deps — blocking on high/critical)
         run: npm audit --omit=dev --audit-level=high

@@ -79,7 +79,7 @@ sua própria ADR; fases não listadas aqui ainda não começaram.
 | **7** | Docker reproduzível | TATHU pinado por SHA, imagem base por digest, variantes `runtime-base`/`runtime-satellite` — [ADR-0032](docs/adr/0032-hardening-fase-7-docker-reproducivel.md) | ✅ Concluída |
 | **8** | Rate limiting atrás de proxy | Política de proxy confiável, chave por tenant+usuário+IP — [ADR-0033](docs/adr/0033-hardening-fase-8-rate-limit-proxy.md) | ✅ Concluída |
 | **9** | Documentação, licença, estrutura frontend | README/ARCHITECTURE/ROADMAP sincronizados, distinção entre os dois frontends, SECURITY.md com canal de reporte privado — [ADR-0034](docs/adr/0034-hardening-fase-9-documentacao-licenca-estrutura.md) | ✅ Concluída |
-| **10** | Frontend e observabilidade | Code-splitting, testes mínimos de frontend, métricas operacionais | ⏳ Planejada |
+| **10** | Frontend e observabilidade | Code-splitting já existia (confirmado); 34 testes novos no `web/` (Vitest); métricas operacionais (duração/falha de ciclo, fonte meteorológica, idade do dado, alertas, latência externa) — [ADR-0035](docs/adr/0035-hardening-fase-10-frontend-observabilidade.md) | ✅ Concluída |
 | **11** | Validação meteorológica | Infra de avaliação forecast vs. observação real, ADR sobre adequação a alertas de segurança | ⏳ Planejada |
 
 Preparação de infraestrutura de produção (proxy reverso/TLS, backup do

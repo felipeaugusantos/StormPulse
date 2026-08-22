@@ -19,10 +19,14 @@ still raises, exactly as if there were no fallback, while for
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
 import httpx
 
 from app.core.enums import WeatherSourceKind
+from app.core.metrics import external_api_latency, weather_source_used
 from app.weather.provider import (
     CurrentConditions,
     Forecast,
@@ -36,6 +40,8 @@ from app.weather.provider import (
 logger = logging.getLogger(__name__)
 
 _RECOVERABLE = (WeatherProviderUnavailableError, httpx.HTTPError)
+
+_T = TypeVar("_T")
 
 
 class FallbackWeatherProvider(WeatherProvider):
@@ -53,67 +59,84 @@ class FallbackWeatherProvider(WeatherProvider):
     def kind(self) -> WeatherSourceKind:
         return self._primary.kind
 
-    async def get_current_data(self, latitude: float, longitude: float) -> CurrentConditions:
+    async def _call(
+        self,
+        method: str,
+        primary_call: Callable[[], Awaitable[_T]],
+        secondary_call: Callable[[], Awaitable[_T]],
+    ) -> _T:
+        """Shared try-primary-then-secondary body (hardening ADR-0035): the
+        five public methods below only differ in *which* provider call they
+        make, so the fallback/metrics/logging logic lives here once instead
+        of five times.
+        """
+        start = time.monotonic()
         try:
-            return await self._primary.get_current_data(latitude, longitude)
+            result = await primary_call()
         except _RECOVERABLE as exc:
+            external_api_latency.record(
+                time.monotonic() - start, {"provider": self._primary.name, "method": method}
+            )
             logger.warning(
-                "%s current-conditions unavailable (%s); falling back to %s",
+                "%s %s unavailable (%s); falling back to %s",
                 self._primary.name,
+                method,
                 exc,
                 self._secondary.name,
             )
-            return await self._secondary.get_current_data(latitude, longitude)
+            start = time.monotonic()
+            result = await secondary_call()
+            external_api_latency.record(
+                time.monotonic() - start, {"provider": self._secondary.name, "method": method}
+            )
+            weather_source_used.add(
+                1, {"provider": self._secondary.name, "fallback": True, "method": method}
+            )
+            return result
+        external_api_latency.record(
+            time.monotonic() - start, {"provider": self._primary.name, "method": method}
+        )
+        weather_source_used.add(
+            1, {"provider": self._primary.name, "fallback": False, "method": method}
+        )
+        return result
+
+    async def get_current_data(self, latitude: float, longitude: float) -> CurrentConditions:
+        return await self._call(
+            "get_current_data",
+            lambda: self._primary.get_current_data(latitude, longitude),
+            lambda: self._secondary.get_current_data(latitude, longitude),
+        )
 
     async def get_radar_frames(self, *, limit: int = 1) -> list[RadarFrameData]:
-        try:
-            return await self._primary.get_radar_frames(limit=limit)
-        except _RECOVERABLE as exc:
-            logger.warning(
-                "%s radar frames unavailable (%s); falling back to %s",
-                self._primary.name,
-                exc,
-                self._secondary.name,
-            )
-            return await self._secondary.get_radar_frames(limit=limit)
+        return await self._call(
+            "get_radar_frames",
+            lambda: self._primary.get_radar_frames(limit=limit),
+            lambda: self._secondary.get_radar_frames(limit=limit),
+        )
 
     async def get_warnings(self, latitude: float, longitude: float) -> list[Warning]:
-        try:
-            return await self._primary.get_warnings(latitude, longitude)
-        except _RECOVERABLE as exc:
-            logger.warning(
-                "%s warnings unavailable (%s); falling back to %s",
-                self._primary.name,
-                exc,
-                self._secondary.name,
-            )
-            return await self._secondary.get_warnings(latitude, longitude)
+        return await self._call(
+            "get_warnings",
+            lambda: self._primary.get_warnings(latitude, longitude),
+            lambda: self._secondary.get_warnings(latitude, longitude),
+        )
 
     async def get_forecast(self, latitude: float, longitude: float) -> Forecast:
-        try:
-            return await self._primary.get_forecast(latitude, longitude)
-        except _RECOVERABLE as exc:
-            logger.warning(
-                "%s forecast unavailable (%s); falling back to %s",
-                self._primary.name,
-                exc,
-                self._secondary.name,
-            )
-            return await self._secondary.get_forecast(latitude, longitude)
+        return await self._call(
+            "get_forecast",
+            lambda: self._primary.get_forecast(latitude, longitude),
+            lambda: self._secondary.get_forecast(latitude, longitude),
+        )
 
     async def get_recent_rainfall(
         self, latitude: float, longitude: float, *, days: int = 15
     ) -> RainfallHistory:
-        try:
-            return await self._primary.get_recent_rainfall(latitude, longitude, days=days)
-        except _RECOVERABLE as exc:
-            logger.warning(
-                "%s recent rainfall unavailable (%s); falling back to %s",
-                self._primary.name,
-                exc,
-                self._secondary.name,
-            )
-            return await self._secondary.get_recent_rainfall(latitude, longitude, days=days)
+        return await self._call(
+            "get_recent_rainfall",
+            lambda: self._primary.get_recent_rainfall(latitude, longitude, days=days),
+            lambda: self._secondary.get_recent_rainfall(latitude, longitude, days=days),
+        )
 
     async def aclose(self) -> None:
         for provider in (self._primary, self._secondary):

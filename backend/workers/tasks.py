@@ -5,6 +5,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.core.metrics import (
+    alerts_generated,
+    alerts_suppressed,
+    notification_failures,
+    track_pipeline_cycle,
+)
 from workers.agro_pipeline import run_agro_advisory_cycle
 from workers.celery_app import celery_app
 from workers.db import session_scope
@@ -19,8 +25,9 @@ logger = logging.getLogger(__name__)
 @celery_app.task(name="workers.tasks.run_ingestion_cycle_task")
 def run_ingestion_cycle_task() -> dict[str, Any]:
     """Run one ingestion → engine → risk → alert cycle."""
-    with session_scope() as session:
+    with track_pipeline_cycle("ingestion"), session_scope() as session:
         summary = run_ingestion_cycle(session)
+    alerts_generated.add(summary.alerts, {"pipeline": "ingestion"})
     result = {
         "frames": summary.frames,
         "cells": summary.cells,
@@ -37,8 +44,9 @@ def run_satellite_detection_task() -> dict[str, Any]:
 
     No-op (returns immediately) when SATELLITE_ENABLED=false — the default.
     """
-    with session_scope() as session:
+    with track_pipeline_cycle("satellite"), session_scope() as session:
         summary = run_satellite_detection_cycle(session)
+    alerts_generated.add(summary.alerts, {"pipeline": "satellite"})
     result = {
         "enabled": summary.enabled,
         "frames_downloaded": summary.frames_downloaded,
@@ -57,8 +65,9 @@ def run_agro_advisory_task() -> dict[str, Any]:
 
     No-op (returns immediately) when AGRO_ENABLED=false.
     """
-    with session_scope() as session:
+    with track_pipeline_cycle("agro"), session_scope() as session:
         summary = run_agro_advisory_cycle(session)
+    alerts_generated.add(summary.frost_alerts + summary.dry_spell_alerts, {"pipeline": "agro"})
     result = {
         "enabled": summary.enabled,
         "locations_checked": summary.locations_checked,
@@ -75,8 +84,12 @@ def run_notification_delivery_task() -> dict[str, Any]:
 
     No-op (returns immediately) when no VAPID key is configured.
     """
-    with session_scope() as session:
+    with track_pipeline_cycle("notification"), session_scope() as session:
         summary = run_notification_delivery_cycle(session)
+    if summary.failed:
+        notification_failures.add(summary.failed, {"pipeline": "notification"})
+    if summary.suppressed:
+        alerts_suppressed.add(summary.suppressed, {"reason": "no_subscription_or_unconfigured"})
     result = {
         "configured": summary.configured,
         "attempted": summary.attempted,
@@ -94,7 +107,7 @@ def run_lightning_detection_task() -> dict[str, Any]:
 
     No-op (returns immediately) when LIGHTNING_ENABLED=false — the default.
     """
-    with session_scope() as session:
+    with track_pipeline_cycle("lightning"), session_scope() as session:
         summary = run_lightning_detection_cycle(session)
     result = {
         "enabled": summary.enabled,

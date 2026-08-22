@@ -13,6 +13,7 @@ from app import __version__
 from app.api.router import public_v1_router, root_router, v1_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
+from app.core.metrics import configure_metrics
 from app.core.middleware import RequestContextMiddleware
 from app.core.ratelimit import RateLimiter
 from app.core.security_headers import SecurityHeadersMiddleware
@@ -91,6 +92,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     if settings.otel_enabled and settings.environment != "test":
         configure_tracing(app, settings)
+        configure_metrics(settings)
 
     return app
 
