@@ -220,6 +220,24 @@ class Settings(BaseSettings):
     agro_spray_inversion_max_wind_kmh: float = Field(default=3.0, ge=0)
     agro_spray_inversion_min_humidity_percent: float = Field(default=90.0, ge=0, le=100)
 
+    # --- NDVI por talhão (Copernicus Sentinel Hub, FASE 29) ---
+    # Desligado por padrão — igual ao satélite (ADR-0053): exige
+    # credenciais próprias (client_id/secret OAuth2 da Copernicus Data
+    # Space Ecosystem) e consome cota mensal compartilhada da conta. Só se
+    # aplica a talhões (locations com parent_location_id e boundary_geojson
+    # preenchidos) — uma fazenda-ponto não tem polígono pra calcular NDVI
+    # sobre. Revisita do Sentinel-2 é ~5 dias — não adianta consultar com
+    # mais frequência que isso.
+    ndvi_enabled: bool = False
+    ndvi_sh_client_id: str | None = None
+    ndvi_sh_client_secret: SecretStr | None = None
+    ndvi_sh_token_url: str = (
+        "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+    )
+    ndvi_sh_statistics_url: str = "https://sh.dataspace.copernicus.eu/statistics/v1"
+    ndvi_lookback_days: float = Field(default=15.0, gt=0)
+    ndvi_http_timeout_seconds: float = Field(default=30.0, gt=0)
+
     # --- Notificação push real (Web Push / VAPID, FASE 22) ---
     # Sem serviço externo (FCM/APNs) — o navegador é o próprio serviço de
     # push, só a assinatura VAPID é local. `vapid_private_key`/
@@ -262,6 +280,13 @@ class Settings(BaseSettings):
             raise ValueError(
                 "REFRESH_COOKIE_SAMESITE=none requires REFRESH_COOKIE_SECURE=true "
                 "(browsers reject SameSite=None cookies that aren't Secure)."
+            )
+        # A misconfiguration here must fail loudly at startup, never fall
+        # back to serving mock NDVI values silently under NDVI_ENABLED=true
+        # — that would look like a real reading to anyone consuming it.
+        if self.ndvi_enabled and not (self.ndvi_sh_client_id and self.ndvi_sh_client_secret):
+            raise ValueError(
+                "NDVI_ENABLED=true requires NDVI_SH_CLIENT_ID and NDVI_SH_CLIENT_SECRET to be set."
             )
         return self
 

@@ -15,6 +15,7 @@ from workers.agro_pipeline import run_agro_advisory_cycle
 from workers.celery_app import celery_app
 from workers.db import session_scope
 from workers.lightning_pipeline import run_lightning_detection_cycle
+from workers.ndvi_pipeline import run_ndvi_pipeline_cycle
 from workers.notification_pipeline import run_notification_delivery_cycle
 from workers.pipeline_service import run_ingestion_cycle
 from workers.satellite_pipeline import run_satellite_detection_cycle
@@ -56,6 +57,24 @@ def run_satellite_detection_task() -> dict[str, Any]:
         "alerts": summary.alerts,
     }
     logger.info("satellite detection cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_ndvi_pipeline_task")
+def run_ndvi_pipeline_task() -> dict[str, Any]:
+    """Run one NDVI-per-talhão cycle (FASE 29).
+
+    No-op (returns immediately) when NDVI_ENABLED=false — the default.
+    """
+    with track_pipeline_cycle("ndvi"), session_scope() as session:
+        summary = run_ndvi_pipeline_cycle(session)
+    result = {
+        "enabled": summary.enabled,
+        "talhoes_checked": summary.talhoes_checked,
+        "readings_created": summary.readings_created,
+        "failures": summary.failures,
+    }
+    logger.info("NDVI pipeline cycle complete", extra=result)
     return result
 
 

@@ -10,6 +10,7 @@ from app.alerts.models import Alert
 from app.alerts.verification_models import AlertVerification
 from app.lightning.models import LightningStrike
 from app.locations.models import AlertPreference, Location
+from app.ndvi.models import NdviReading
 from app.notifications.models import Notification, PushSubscription
 from app.reports.models import UserReport
 from app.satellite.models import ConvectiveWatch, SatelliteImage
@@ -25,6 +26,7 @@ __all__ = [
     "ConvectiveWatch",
     "LightningStrike",
     "Location",
+    "NdviReading",
     "Notification",
     "PushSubscription",
     "RadarFrame",

@@ -62,5 +62,12 @@ celery_app.conf.update(
             # matches the main ingestion cadence, not satellite's slower one.
             "schedule": 300.0,  # seconds
         },
+        "ndvi-check-daily": {
+            "task": "workers.tasks.run_ndvi_pipeline_task",
+            # Sentinel-2 revisits the same spot roughly every 5 days —
+            # checking more often than daily would just burn Copernicus
+            # quota for no new data most of the time.
+            "schedule": 86_400.0,  # seconds
+        },
     },
 )

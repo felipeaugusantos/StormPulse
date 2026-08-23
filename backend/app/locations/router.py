@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, get_request_settings
@@ -15,6 +16,8 @@ from app.core.metrics import record_weather_data_age
 from app.locations import service
 from app.locations.models import Location
 from app.locations.schemas import LocationCreate, LocationOut, LocationUpdate, SprayWindowOut
+from app.ndvi.models import NdviReading
+from app.ndvi.schemas import NdviOut
 from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
@@ -304,3 +307,38 @@ async def get_location_rainfall(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Histórico de chuva indisponível para este local no momento",
         ) from exc
+
+
+@router.get(
+    "/{location_id}/agro/ndvi",
+    response_model=NdviOut,
+    summary="Última leitura de NDVI do talhão (FASE 29, ADR-0053)",
+)
+async def get_location_ndvi(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> NdviReading:
+    """Reads the most recent `NdviReading` already computed by the
+    background pipeline — never calls the NDVI provider live (unlike the
+    weather endpoints above), since a Sentinel Hub request is heavier and
+    quota-limited, not something to spend on every dashboard refresh.
+
+    Only ever has data for a talhão (`parent_location_id` set) with a drawn
+    `boundary_geojson` — a farm-level point, or a talhão that hasn't had a
+    pipeline cycle run yet, both 404 the same honest way "no data" would.
+    """
+    location = await _get_owned_or_404(session, user, location_id)
+    stmt = (
+        select(NdviReading)
+        .where(NdviReading.location_id == location.id)
+        .order_by(NdviReading.observed_at.desc())
+        .limit(1)
+    )
+    reading = (await session.execute(stmt)).scalar_one_or_none()
+    if reading is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma leitura de NDVI disponível para este talhão ainda",
+        )
+    return reading
