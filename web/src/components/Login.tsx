@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ApiError, login, loginWithGoogle } from '../api'
+import { ApiError, login, loginWithGoogle, register } from '../api'
 
 interface Props {
   onAuthenticated: () => void
@@ -8,6 +8,7 @@ interface Props {
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client'
+const MIN_PASSWORD_LENGTH = 8
 
 function loadGoogleScript(): Promise<void> {
   if (window.google?.accounts?.id) return Promise.resolve()
@@ -27,21 +28,46 @@ function loadGoogleScript(): Promise<void> {
 }
 
 export function Login({ onAuthenticated, onVisitor }: Props) {
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const googleButtonRef = useRef<HTMLDivElement>(null)
 
+  function switchMode(next: 'login' | 'register') {
+    setMode(next)
+    setError(null)
+    setPassword('')
+    setConfirmPassword('')
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
     setError(null)
+
+    if (mode === 'register' && password !== confirmPassword) {
+      setError('As senhas não coincidem')
+      return
+    }
+    if (mode === 'register' && password.length < MIN_PASSWORD_LENGTH) {
+      setError(`A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres`)
+      return
+    }
+
+    setLoading(true)
     try {
-      await login(email, password)
+      if (mode === 'register') {
+        await register(email, password, fullName.trim() || undefined)
+      } else {
+        await login(email, password)
+      }
       onAuthenticated()
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Falha ao entrar')
+      const fallback = mode === 'register' ? 'Falha ao criar conta' : 'Falha ao entrar'
+      setError(err instanceof ApiError ? err.message : fallback)
     } finally {
       setLoading(false)
     }
@@ -79,6 +105,8 @@ export function Login({ onAuthenticated, onVisitor }: Props) {
     }
   }, [onAuthenticated])
 
+  const isRegister = mode === 'register'
+
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
@@ -88,7 +116,25 @@ export function Login({ onAuthenticated, onVisitor }: Props) {
             Storm<strong>Pulse</strong>
           </span>
         </div>
-        <p className="muted">Painel administrativo — entre com sua conta.</p>
+        <p className="muted">
+          {isRegister
+            ? 'Criar conta — leva menos de um minuto.'
+            : 'Painel administrativo — entre com sua conta.'}
+        </p>
+
+        {isRegister && (
+          <>
+            <label htmlFor="fullName">Nome (opcional)</label>
+            <input
+              id="fullName"
+              type="text"
+              value={fullName}
+              autoComplete="name"
+              onChange={(e) => setFullName(e.target.value)}
+              maxLength={120}
+            />
+          </>
+        )}
 
         <label htmlFor="email">E-mail</label>
         <input
@@ -105,17 +151,51 @@ export function Login({ onAuthenticated, onVisitor }: Props) {
           id="password"
           type="password"
           value={password}
-          autoComplete="current-password"
+          autoComplete={isRegister ? 'new-password' : 'current-password'}
           onChange={(e) => setPassword(e.target.value)}
+          minLength={isRegister ? MIN_PASSWORD_LENGTH : undefined}
           required
         />
 
+        {isRegister && (
+          <>
+            <label htmlFor="confirmPassword">Confirmar senha</label>
+            <input
+              id="confirmPassword"
+              type="password"
+              value={confirmPassword}
+              autoComplete="new-password"
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              minLength={MIN_PASSWORD_LENGTH}
+              required
+            />
+          </>
+        )}
+
         <button className="btn" type="submit" disabled={loading}>
-          {loading ? 'Entrando…' : 'Entrar'}
+          {loading ? (isRegister ? 'Criando conta…' : 'Entrando…') : isRegister ? 'Criar conta' : 'Entrar'}
         </button>
         {error && <p className="error">⚠️ {error}</p>}
 
-        {GOOGLE_CLIENT_ID && (
+        <p className="muted center">
+          {isRegister ? (
+            <>
+              Já tem conta?{' '}
+              <button type="button" className="link-btn" onClick={() => switchMode('login')}>
+                Entrar
+              </button>
+            </>
+          ) : (
+            <>
+              Não tem conta?{' '}
+              <button type="button" className="link-btn" onClick={() => switchMode('register')}>
+                Criar conta
+              </button>
+            </>
+          )}
+        </p>
+
+        {GOOGLE_CLIENT_ID && !isRegister && (
           <>
             <p className="muted center">ou</p>
             <div ref={googleButtonRef} className="google-btn" />

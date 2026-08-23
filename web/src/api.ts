@@ -140,6 +140,21 @@ async function request<T>(path: string, init: RequestInit = {}, isRetry = false)
   return (res.status === 204 ? undefined : await res.json()) as T
 }
 
+/** Creates the account, then immediately logs in with the same credentials
+ * — /auth/register only returns the created user (201), never tokens, so a
+ * session still has to be established the normal way right after. */
+export async function register(
+  email: string,
+  password: string,
+  fullName?: string,
+): Promise<void> {
+  await request<void>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ email, password, full_name: fullName || null }),
+  })
+  await login(email, password)
+}
+
 export async function login(email: string, password: string): Promise<void> {
   const data = await request<TokenPair>('/auth/login', {
     method: 'POST',

@@ -61,6 +61,49 @@ describe('login (Fase 4 — cookie-based refresh, ADR-0045)', () => {
   })
 })
 
+describe('register', () => {
+  test('registers the account, then logs in with the same credentials', async () => {
+    const { register, getToken } = await freshApi()
+    const fetchMock = vi.fn()
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'user-1', email: 'new@example.com' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ access_token: 'access-1', refresh_token: null }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await register('new@example.com', 'supersecret123', 'Nova Usuária')
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [registerUrl, registerInit] = fetchMock.mock.calls[0]
+    expect(String(registerUrl)).toContain('/auth/register')
+    expect(JSON.parse(registerInit.body)).toEqual({
+      email: 'new@example.com',
+      password: 'supersecret123',
+      full_name: 'Nova Usuária',
+    })
+    const [loginUrl] = fetchMock.mock.calls[1]
+    expect(String(loginUrl)).toContain('/auth/login')
+    expect(getToken()).toBe('access-1')
+  })
+
+  test('an e-mail already in use (409) never attempts the follow-up login', async () => {
+    const { register, ApiError, getToken } = await freshApi()
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      jsonResponse({ detail: 'E-mail já cadastrado' }, 409),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(register('taken@example.com', 'supersecret123')).rejects.toThrow(ApiError)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(getToken()).toBeNull()
+  })
+})
+
 describe('legacy localStorage migration', () => {
   test('removes old access/refresh token keys on load', async () => {
     localStorage.setItem('stormpulse.access_token', 'old-access')
