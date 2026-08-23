@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Enum, String
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import UserRole
@@ -34,3 +36,11 @@ class User(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     # by a client; only ever flipped by the startup bootstrap in main.py
     # (PLATFORM_ADMIN_EMAIL) or a future dedicated admin action.
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Set on every successful password/Google login (FASE 28 Fase 3,
+    # ADR-0051) — never on a token refresh, which happens automatically in
+    # the background and isn't a deliberate sign-in. NULL for an account
+    # that has never logged in since this column existed (a fresh
+    # registration, or one that predates this migration). The only reader
+    # is the platform-admin "active users" metric — nothing in the app's
+    # own auth/authorization logic depends on it.
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

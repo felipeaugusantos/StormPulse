@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from google.auth.transport import requests as google_requests
@@ -49,6 +50,15 @@ async def _auth_rate_limit(request: Request) -> None:
         scope="auth",
     )
     await limiter(request)
+
+
+async def _touch_last_login(session: AsyncSession, user: User) -> None:
+    """Stamps `last_login_at` on a real sign-in (FASE 28 Fase 3, ADR-0051)
+    — never on a token refresh, which happens automatically in the
+    background and isn't a deliberate login. The only reader is the
+    platform-admin "active users" metric."""
+    user.last_login_at = datetime.now(UTC)
+    await session.commit()
 
 
 def _issue_tokens(user: User, settings: Settings) -> TokenPair:
@@ -149,6 +159,7 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas",
         )
+    await _touch_last_login(session, user)
     return _apply_token_response(_issue_tokens(user, settings), request, response, settings)
 
 
@@ -206,6 +217,7 @@ async def login_google(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Conta desativada",
         )
+    await _touch_last_login(session, user)
     return _apply_token_response(_issue_tokens(user, settings), request, response, settings)
 
 

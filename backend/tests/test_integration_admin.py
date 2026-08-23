@@ -364,3 +364,69 @@ async def test_update_with_no_fields_returns_400(client: AsyncClient) -> None:
             f"/api/v1/admin/users/{target_id}", json={"confirm": True}, headers=headers
         )
         assert resp.status_code == 400
+
+
+async def test_non_admin_gets_403_on_stats(client: AsyncClient) -> None:
+    token = await register_and_login(client)
+    resp = await client.get("/api/v1/admin/stats", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403
+
+
+async def test_login_stamps_last_login_at(client: AsyncClient) -> None:
+    admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
+    target_email = f"target-{uuid.uuid4().hex}@example.com"
+    target_id = await _register(client, target_email)
+    await _register(client, admin_email)
+
+    async for admin_client in _promoted_client(admin_email):
+        login = await admin_client.post(
+            "/api/v1/auth/login", json={"email": admin_email, "password": _PASSWORD}
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        # target_email was only ever registered, never logged in.
+        resp = await admin_client.get(
+            "/api/v1/admin/users", params={"search": target_email}, headers=headers
+        )
+        assert resp.json()["items"][0]["last_login_at"] is None
+
+        # Once it logs in, the field is stamped.
+        await admin_client.post(
+            "/api/v1/auth/login", json={"email": target_email, "password": _PASSWORD}
+        )
+        resp = await admin_client.get(
+            "/api/v1/admin/users", params={"search": target_email}, headers=headers
+        )
+        assert resp.json()["items"][0]["last_login_at"] is not None
+        assert resp.json()["items"][0]["id"] == target_id
+
+
+async def test_stats_reflects_recent_logins_and_counts(client: AsyncClient) -> None:
+    admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
+    await _register(client, admin_email)
+    await _register(client, f"other-{uuid.uuid4().hex}@example.com")
+
+    location_payload = {
+        "name": "Fazenda",
+        "kind": "farm",
+        "latitude": -23.5,
+        "longitude": -46.6,
+        "radius_km": 20,
+    }
+
+    async for admin_client in _promoted_client(admin_email):
+        login = await admin_client.post(
+            "/api/v1/auth/login", json={"email": admin_email, "password": _PASSWORD}
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        await admin_client.post("/api/v1/locations", json=location_payload, headers=headers)
+
+        resp = await admin_client.get("/api/v1/admin/stats", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_tenants"] >= 2
+        assert body["total_users"] >= 2
+        # The admin itself just logged in — counted in both windows.
+        assert body["active_users_7d"] >= 1
+        assert body["active_users_30d"] >= body["active_users_7d"]
+        assert body["total_locations"] >= 1

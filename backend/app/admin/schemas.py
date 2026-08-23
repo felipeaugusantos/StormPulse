@@ -26,6 +26,7 @@ class AdminUserOut(BaseModel):
     is_active: bool
     is_platform_admin: bool
     created_at: datetime
+    last_login_at: datetime | None
 
 
 class AdminUserListOut(BaseModel):
@@ -75,3 +76,16 @@ class AdminAuditLogOut(BaseModel):
 class AdminAuditLogListOut(BaseModel):
     items: list[AdminAuditLogOut]
     total: int
+
+
+class AdminStatsOut(BaseModel):
+    """Aggregate counters for the platform-admin dashboard (FASE 28 Fase 3,
+    ADR-0051). Deliberately simple totals/windows — no per-tenant
+    breakdown here, that's what /admin/tenants is for."""
+
+    total_tenants: int
+    total_users: int
+    active_users_7d: int
+    active_users_30d: int
+    total_locations: int
+    alerts_last_30d: int

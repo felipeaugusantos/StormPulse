@@ -9,12 +9,20 @@ also recording who did it and what changed.
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.models import AdminAuditLog
-from app.admin.schemas import AdminAuditLogOut, AdminTenantOut, AdminUserOut, AdminUserUpdateIn
+from app.admin.schemas import (
+    AdminAuditLogOut,
+    AdminStatsOut,
+    AdminTenantOut,
+    AdminUserOut,
+    AdminUserUpdateIn,
+)
+from app.alerts.models import Alert
 from app.core.enums import UserRole
 from app.locations.models import Location
 from app.tenants.models import Tenant
@@ -73,6 +81,7 @@ async def list_users(
             is_active=user.is_active,
             is_platform_admin=user.is_platform_admin,
             created_at=user.created_at,
+            last_login_at=user.last_login_at,
         )
         for user, tenant_name in rows
     ]
@@ -144,6 +153,7 @@ async def get_user(session: AsyncSession, user_id: uuid.UUID) -> AdminUserOut | 
         is_active=user.is_active,
         is_platform_admin=user.is_platform_admin,
         created_at=user.created_at,
+        last_login_at=user.last_login_at,
     )
 
 
@@ -216,3 +226,39 @@ async def list_audit_log(
     rows = (await session.execute(stmt)).scalars().all()
     items = [AdminAuditLogOut.model_validate(row) for row in rows]
     return items, total
+
+
+async def get_stats(session: AsyncSession) -> AdminStatsOut:
+    now = datetime.now(UTC)
+    cutoff_7d = now - timedelta(days=7)
+    cutoff_30d = now - timedelta(days=30)
+
+    total_tenants = (await session.execute(select(func.count()).select_from(Tenant))).scalar_one()
+    total_users = (await session.execute(select(func.count()).select_from(User))).scalar_one()
+    active_users_7d = (
+        await session.execute(
+            select(func.count()).select_from(User).where(User.last_login_at >= cutoff_7d)
+        )
+    ).scalar_one()
+    active_users_30d = (
+        await session.execute(
+            select(func.count()).select_from(User).where(User.last_login_at >= cutoff_30d)
+        )
+    ).scalar_one()
+    total_locations = (
+        await session.execute(select(func.count()).select_from(Location))
+    ).scalar_one()
+    alerts_last_30d = (
+        await session.execute(
+            select(func.count()).select_from(Alert).where(Alert.created_at >= cutoff_30d)
+        )
+    ).scalar_one()
+
+    return AdminStatsOut(
+        total_tenants=total_tenants,
+        total_users=total_users,
+        active_users_7d=active_users_7d,
+        active_users_30d=active_users_30d,
+        total_locations=total_locations,
+        alerts_last_30d=alerts_last_30d,
+    )

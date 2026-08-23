@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.admin import service
 from app.admin.schemas import (
     AdminAuditLogListOut,
+    AdminStatsOut,
     AdminTenantListOut,
     AdminUserListOut,
     AdminUserOut,
@@ -111,3 +112,15 @@ async def list_audit_log(
 ) -> AdminAuditLogListOut:
     items, total = await service.list_audit_log(session, limit=limit, offset=offset)
     return AdminAuditLogListOut(items=items, total=total)
+
+
+@router.get(
+    "/stats",
+    response_model=AdminStatsOut,
+    summary="Métricas agregadas da base (operador da plataforma)",
+)
+async def get_stats(
+    session: AsyncSession = Depends(get_db),
+    _: User = Depends(require_platform_admin),
+) -> AdminStatsOut:
+    return await service.get_stats(session)
