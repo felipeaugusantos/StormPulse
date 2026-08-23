@@ -1,23 +1,28 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api'
-import type { AdminTenant, AdminUser } from '../types'
+import type { AdminAuditLogEntry, AdminTenant, AdminUser } from '../types'
 
 interface Props {
   onBack: () => void
+  meId: string | null
 }
 
 const PAGE_SIZE = 100
+const ROLE_OPTIONS = ['user', 'admin']
 
-export function AdminPanel({ onBack }: Props) {
-  const [tab, setTab] = useState<'users' | 'tenants'>('users')
+export function AdminPanel({ onBack, meId }: Props) {
+  const [tab, setTab] = useState<'users' | 'tenants' | 'audit'>('users')
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [users, setUsers] = useState<AdminUser[]>([])
   const [usersTotal, setUsersTotal] = useState(0)
   const [tenants, setTenants] = useState<AdminTenant[]>([])
   const [tenantsTotal, setTenantsTotal] = useState(0)
+  const [auditLog, setAuditLog] = useState<AdminAuditLogEntry[]>([])
+  const [auditTotal, setAuditTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [mutatingId, setMutatingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -27,10 +32,14 @@ export function AdminPanel({ onBack }: Props) {
         const res = await api.adminUsers({ search: searchQuery || undefined, limit: PAGE_SIZE })
         setUsers(res.items)
         setUsersTotal(res.total)
-      } else {
+      } else if (tab === 'tenants') {
         const res = await api.adminTenants({ search: searchQuery || undefined, limit: PAGE_SIZE })
         setTenants(res.items)
         setTenantsTotal(res.total)
+      } else {
+        const res = await api.adminAuditLog({ limit: PAGE_SIZE })
+        setAuditLog(res.items)
+        setAuditTotal(res.total)
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao carregar')
@@ -48,10 +57,44 @@ export function AdminPanel({ onBack }: Props) {
     setSearchQuery(searchInput.trim())
   }
 
-  function switchTab(next: 'users' | 'tenants') {
+  function switchTab(next: 'users' | 'tenants' | 'audit') {
     setTab(next)
     setSearchInput('')
     setSearchQuery('')
+  }
+
+  async function toggleActive(u: AdminUser) {
+    const verb = u.is_active ? 'desativar' : 'ativar'
+    if (!window.confirm(`Tem certeza que quer ${verb} a conta ${u.email}?`)) return
+    setMutatingId(u.id)
+    setError(null)
+    try {
+      await api.adminUpdateUser(u.id, { is_active: !u.is_active })
+      await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : `Erro ao ${verb} conta`)
+    } finally {
+      setMutatingId(null)
+    }
+  }
+
+  async function changeRole(u: AdminUser, nextRole: string) {
+    if (nextRole === u.role) return
+    if (
+      !window.confirm(`Tem certeza que quer mudar o role de ${u.email} de "${u.role}" para "${nextRole}"?`)
+    ) {
+      return
+    }
+    setMutatingId(u.id)
+    setError(null)
+    try {
+      await api.adminUpdateUser(u.id, { role: nextRole })
+      await load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao mudar role')
+    } finally {
+      setMutatingId(null)
+    }
   }
 
   return (
@@ -88,49 +131,87 @@ export function AdminPanel({ onBack }: Props) {
             >
               Tenants
             </button>
+            <button
+              type="button"
+              className={`btn small ${tab === 'audit' ? '' : 'ghost'}`}
+              onClick={() => switchTab('audit')}
+            >
+              Auditoria
+            </button>
           </div>
 
-          <form className="location-search-row" onSubmit={submitSearch}>
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder={tab === 'users' ? 'Buscar por e-mail' : 'Buscar por nome do tenant'}
-            />
-            <button className="btn small" type="submit" disabled={loading}>
-              Buscar
-            </button>
-          </form>
+          {tab !== 'audit' && (
+            <form className="location-search-row" onSubmit={submitSearch}>
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder={tab === 'users' ? 'Buscar por e-mail' : 'Buscar por nome do tenant'}
+              />
+              <button className="btn small" type="submit" disabled={loading}>
+                Buscar
+              </button>
+            </form>
+          )}
 
-          {tab === 'users' ? (
+          {tab === 'users' && (
             <>
               <h2>
                 Usuários <span className="count">{usersTotal}</span>
               </h2>
               <div className="list">
                 {!loading && users.length === 0 && <p className="empty">Nenhum usuário encontrado.</p>}
-                {users.map((u) => (
-                  <div className="row" key={u.id}>
-                    <span className={`badge ${u.is_active ? 'green' : 'red'}`}>
-                      {u.is_active ? 'ativo' : 'inativo'}
-                    </span>
-                    <div className="grow">
-                      <div>
-                        {u.email}
-                        {u.is_platform_admin && <span className="mock-tag">OPERADOR</span>}
+                {users.map((u) => {
+                  const isSelf = u.id === meId
+                  const busy = mutatingId === u.id
+                  return (
+                    <div className="row" key={u.id}>
+                      <span className={`badge ${u.is_active ? 'green' : 'red'}`}>
+                        {u.is_active ? 'ativo' : 'inativo'}
+                      </span>
+                      <div className="grow">
+                        <div>
+                          {u.email}
+                          {u.is_platform_admin && <span className="mock-tag">OPERADOR</span>}
+                          {isSelf && <span className="mock-tag">VOCÊ</span>}
+                        </div>
+                        <div className="sub">
+                          {u.full_name || 'sem nome'} · {u.tenant_name}
+                        </div>
+                        <div className="sub muted">
+                          criado em {new Date(u.created_at).toLocaleDateString('pt-BR')}
+                        </div>
                       </div>
-                      <div className="sub">
-                        {u.full_name || 'sem nome'} · {u.tenant_name} · {u.role}
-                      </div>
-                      <div className="sub muted">
-                        criado em {new Date(u.created_at).toLocaleDateString('pt-BR')}
-                      </div>
+                      <select
+                        className="admin-role-select"
+                        value={u.role}
+                        disabled={busy || !ROLE_OPTIONS.includes(u.role)}
+                        onChange={(e) => changeRole(u, e.target.value)}
+                      >
+                        {ROLE_OPTIONS.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
+                          </option>
+                        ))}
+                        {!ROLE_OPTIONS.includes(u.role) && <option value={u.role}>{u.role}</option>}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn ghost small"
+                        disabled={busy || isSelf}
+                        title={isSelf ? 'Você não pode desativar sua própria conta' : undefined}
+                        onClick={() => toggleActive(u)}
+                      >
+                        {u.is_active ? 'Desativar' : 'Ativar'}
+                      </button>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </>
-          ) : (
+          )}
+
+          {tab === 'tenants' && (
             <>
               <h2>
                 Tenants <span className="count">{tenantsTotal}</span>
@@ -150,6 +231,33 @@ export function AdminPanel({ onBack }: Props) {
                       </div>
                       <div className="sub muted">
                         criado em {new Date(t.created_at).toLocaleDateString('pt-BR')}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {tab === 'audit' && (
+            <>
+              <h2>
+                Auditoria <span className="count">{auditTotal}</span>
+              </h2>
+              <div className="list">
+                {!loading && auditLog.length === 0 && (
+                  <p className="empty">Nenhuma ação administrativa registrada ainda.</p>
+                )}
+                {auditLog.map((entry) => (
+                  <div className="row" key={entry.id}>
+                    <span className="badge sev">{entry.action}</span>
+                    <div className="grow">
+                      <div>
+                        {entry.actor_email} → {entry.target_email || '—'}
+                      </div>
+                      <div className="sub">{JSON.stringify(entry.detail)}</div>
+                      <div className="sub muted">
+                        {new Date(entry.created_at).toLocaleString('pt-BR')}
                       </div>
                     </div>
                   </div>

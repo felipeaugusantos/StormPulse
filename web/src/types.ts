@@ -46,6 +46,20 @@ export interface AdminTenantList {
   total: number
 }
 
+export interface AdminAuditLogEntry {
+  id: string
+  actor_email: string
+  action: string
+  target_email: string | null
+  detail: Record<string, unknown>
+  created_at: string
+}
+
+export interface AdminAuditLogList {
+  items: AdminAuditLogEntry[]
+  total: number
+}
+
 export interface StormCell {
   id: string
   detected_at: string

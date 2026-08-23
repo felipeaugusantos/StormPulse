@@ -1,5 +1,7 @@
 import type {
+  AdminAuditLogList,
   AdminTenantList,
+  AdminUser,
   AdminUserList,
   AlertItem,
   ConvectiveWatch,
@@ -271,6 +273,21 @@ export const api = {
     if (opts.offset) params.set('offset', String(opts.offset))
     const qs = params.toString()
     return request<AdminTenantList>(`/admin/tenants${qs ? `?${qs}` : ''}`)
+  },
+  // FASE 28 Fase 2 (ADR-0049) — is_active/role mutations, always with
+  // confirm: true (the backend rejects anything else, mirroring
+  // deleteAccount's confirmation gate).
+  adminUpdateUser: (userId: string, data: { is_active?: boolean; role?: string }) =>
+    request<AdminUser>(`/admin/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ ...data, confirm: true }),
+    }),
+  adminAuditLog: (opts: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams()
+    if (opts.limit) params.set('limit', String(opts.limit))
+    if (opts.offset) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return request<AdminAuditLogList>(`/admin/audit-log${qs ? `?${qs}` : ''}`)
   },
 }
 

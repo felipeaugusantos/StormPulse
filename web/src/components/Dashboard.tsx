@@ -223,7 +223,7 @@ export function Dashboard({ onLogout }: Props) {
   })
 
   if (showAdmin) {
-    return <AdminPanel onBack={() => setShowAdmin(false)} />
+    return <AdminPanel onBack={() => setShowAdmin(false)} meId={me?.id ?? null} />
   }
 
   return (
