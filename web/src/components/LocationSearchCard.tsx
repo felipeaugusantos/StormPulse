@@ -20,6 +20,12 @@ interface Props {
    * street where someone lives, when there's no city-level match to search
    * for. `onPicked` fires once with the clicked coordinate. */
   onStartPickLocation: (onPicked: (latitude: number, longitude: number) => void) => void
+  /** Talhão *creation* (the "+ talhão" button and its form) only makes
+   * sense in the Agro context — a plot is an agro concept (cultura,
+   * contorno de plantio), not something the storm-tracking tab has any
+   * use for. Already-created plots still show up under their farm in
+   * both tabs; only the entry points to *creating* a new one are gated. */
+  plotCreationEnabled: boolean
 }
 
 export function LocationSearchCard({
@@ -31,6 +37,7 @@ export function LocationSearchCard({
   onLocationDeleted,
   onStartDrawBoundary,
   onStartPickLocation,
+  plotCreationEnabled,
 }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CitySearchResult[]>([])
@@ -276,15 +283,17 @@ export function LocationSearchCard({
                       {farm.kind} · raio {farm.radius_km} km
                     </div>
                   </div>
-                  <button
-                    className="btn ghost small"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      startAddingPlot(farm)
-                    }}
-                  >
-                    + talhão
-                  </button>
+                  {plotCreationEnabled && (
+                    <button
+                      className="btn ghost small"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        startAddingPlot(farm)
+                      }}
+                    >
+                      + talhão
+                    </button>
+                  )}
                   <button
                     className="btn ghost small"
                     onClick={(e) => {
@@ -327,7 +336,7 @@ export function LocationSearchCard({
                   </div>
                 ))}
 
-                {addingPlotFor === farm.id && (
+                {plotCreationEnabled && addingPlotFor === farm.id && (
                   <div className="location-create-form plot-create-form">
                     <label>Nome do talhão</label>
                     <input value={plotName} onChange={(e) => setPlotName(e.target.value)} />
