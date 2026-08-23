@@ -133,6 +133,11 @@ button {
   text-align: center;
   margin: 12px 0;
 }
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
 .link-btn {
   background: none;
   border: none;

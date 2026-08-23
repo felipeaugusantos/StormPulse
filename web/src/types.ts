@@ -8,7 +8,42 @@ export interface Me {
   full_name: string | null
   role: string
   is_active: boolean
+  is_platform_admin: boolean
   created_at: string
+}
+
+// Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever
+// fetched when `Me.is_platform_admin` is true.
+export interface AdminUser {
+  id: string
+  tenant_id: string
+  tenant_name: string
+  email: string
+  full_name: string | null
+  role: string
+  is_active: boolean
+  is_platform_admin: boolean
+  created_at: string
+}
+
+export interface AdminUserList {
+  items: AdminUser[]
+  total: number
+}
+
+export interface AdminTenant {
+  id: string
+  name: string
+  slug: string
+  is_active: boolean
+  created_at: string
+  user_count: number
+  location_count: number
+}
+
+export interface AdminTenantList {
+  items: AdminTenant[]
+  total: number
 }
 
 export interface StormCell {

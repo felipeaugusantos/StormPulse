@@ -1,4 +1,6 @@
 import type {
+  AdminTenantList,
+  AdminUserList,
   AlertItem,
   ConvectiveWatch,
   CurrentConditions,
@@ -252,6 +254,24 @@ export const api = {
     request<SprayWindow>(`/locations/${locationId}/agro/spray-window`),
   rainfall: (locationId: string, days = 15) =>
     request<RainfallHistory>(`/locations/${locationId}/agro/rainfall?days=${days}`),
+  // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever
+  // called when `Me.is_platform_admin` is true; the backend 403s otherwise.
+  adminUsers: (opts: { search?: string; limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams()
+    if (opts.search) params.set('search', opts.search)
+    if (opts.limit) params.set('limit', String(opts.limit))
+    if (opts.offset) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return request<AdminUserList>(`/admin/users${qs ? `?${qs}` : ''}`)
+  },
+  adminTenants: (opts: { search?: string; limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams()
+    if (opts.search) params.set('search', opts.search)
+    if (opts.limit) params.set('limit', String(opts.limit))
+    if (opts.offset) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return request<AdminTenantList>(`/admin/tenants${qs ? `?${qs}` : ''}`)
+  },
 }
 
 // No token required (visitor mode) — same request() helper, it just won't

@@ -29,6 +29,7 @@ import { classifyCape, estimateStormEta, type CapeLevel } from '../storm'
 import { cropColor } from '../cropColors'
 import { riskLevelLabel, timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
+import { AdminPanel } from './AdminPanel'
 import { LocationSearchCard } from './LocationSearchCard'
 import { LocationWeatherCard } from './LocationWeatherCard'
 import { SafetyDisclaimer } from './SafetyDisclaimer'
@@ -65,6 +66,7 @@ export function Dashboard({ onLogout }: Props) {
   const [deletingAccount, setDeletingAccount] = useState(false)
   const [pushStatus, setPushStatus] = useState<'idle' | 'subscribing' | 'on' | 'error'>('idle')
   const [pushError, setPushError] = useState<string | null>(null)
+  const [showAdmin, setShowAdmin] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -220,6 +222,10 @@ export function Dashboard({ onLogout }: Props) {
     }
   })
 
+  if (showAdmin) {
+    return <AdminPanel onBack={() => setShowAdmin(false)} />
+  }
+
   return (
     <>
       <header className="topbar">
@@ -242,6 +248,11 @@ export function Dashboard({ onLogout }: Props) {
           </span>
           <span className="pill">{me?.email ?? '—'}</span>
         </div>
+        {me?.is_platform_admin && (
+          <button className="btn ghost" onClick={() => setShowAdmin(true)}>
+            🛠️ Admin
+          </button>
+        )}
         {isPushSupported() && pushStatus !== 'on' && (
           <button
             className="btn ghost"
