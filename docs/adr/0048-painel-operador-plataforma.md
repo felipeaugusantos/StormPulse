@@ -61,6 +61,22 @@ um sistema de tabela novo.
 - Revogação forçada de sessão — depende de uma tabela de sessões que
   ainda não existe (risco residual já registrado no ADR-0045).
 
+### Bug real encontrado no CI (smoke test do Docker)
+
+O primeiro push desta fase quebrou o job "Docker build & stack smoke
+test" — a API nunca respondia `/health`. Causa: `platform_admin_email`
+foi declarado como `EmailStr | None`, mas o `.env.example` documenta
+`PLATFORM_ADMIN_EMAIL=` **vazio** por padrão (mesmo padrão de
+`GOOGLE_CLIENT_ID=`) — uma string vazia não é um e-mail válido, então o
+pydantic rejeitava a criação de `Settings()` na inicialização e a API
+inteira morria no import, antes mesmo de abrir a porta. Reproduzido
+localmente com o `.env` gerado exatamente como o CI gera (`cp
+.env.example .env`), confirmando a falha antes de corrigir. Corrigido
+trocando para `str | None` simples — igual ao `google_client_id` — já
+que essa validação de formato não é necessária aqui: um valor mal
+formado simplesmente nunca bate com nenhum usuário real, o que é
+inofensivo, não motivo pra derrubar a inicialização inteira.
+
 ## Verificação
 
 - Backend: 7 testes novos em `test_integration_admin.py` (contra

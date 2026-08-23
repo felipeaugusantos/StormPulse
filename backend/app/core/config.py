@@ -7,7 +7,6 @@ from functools import lru_cache
 from typing import Literal
 
 from pydantic import (
-    EmailStr,
     Field,
     PostgresDsn,
     RedisDsn,
@@ -126,7 +125,11 @@ class Settings(BaseSettings):
     # (is_platform_admin=True) — idempotent, safe to leave set permanently.
     # Never creates the account itself; the email must already be
     # registered (e.g. via normal signup) before it can be promoted.
-    platform_admin_email: EmailStr | None = None
+    # Plain `str`, not `EmailStr` — an unset/empty ".env" value (the
+    # documented default) must not fail Settings validation the way an
+    # empty `EmailStr` would; malformed values simply never match a real
+    # user, which is a harmless no-op, not worth hard-failing startup over.
+    platform_admin_email: str | None = None
 
     # --- Weather source (FASE 5) ---
     weather_provider: str = "mock"
