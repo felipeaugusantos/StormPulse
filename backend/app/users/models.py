@@ -28,3 +28,9 @@ class User(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
         default=UserRole.USER,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Cross-tenant platform operator flag (FASE 28, ADR-0048) — orthogonal to
+    # `role`, which is scoped *within* a tenant. Only a platform admin can
+    # see/manage data across every tenant, not just their own. Never settable
+    # by a client; only ever flipped by the startup bootstrap in main.py
+    # (PLATFORM_ADMIN_EMAIL) or a future dedicated admin action.
+    is_platform_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

@@ -80,3 +80,15 @@ def require_roles(*roles: UserRole) -> Callable[[User], Awaitable[User]]:
 
 # Convenience guard used by admin-only endpoints in later phases.
 require_admin = require_roles(UserRole.ADMIN)
+
+
+async def require_platform_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Cross-tenant guard (FASE 28, ADR-0048) — distinct from `require_admin`
+    above, which only checks the tenant-scoped `role`. A tenant's own ADMIN
+    still can't see other tenants' data; only `is_platform_admin` can."""
+    if not current_user.is_platform_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Permissão insuficiente",
+        )
+    return current_user

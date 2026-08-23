@@ -6,7 +6,15 @@ import ipaddress
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn, SecretStr, computed_field, model_validator
+from pydantic import (
+    EmailStr,
+    Field,
+    PostgresDsn,
+    RedisDsn,
+    SecretStr,
+    computed_field,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 Environment = Literal["local", "test", "staging", "production"]
@@ -111,6 +119,14 @@ class Settings(BaseSettings):
     # audience doesn't require the client secret (that's only for the
     # server-side authorization-code exchange flow, which we don't use).
     google_client_id: str | None = None
+
+    # --- Platform admin bootstrap (FASE 28, ADR-0048) ---
+    # On every API startup, if set and a User with this email already
+    # exists, it's promoted to a cross-tenant platform operator
+    # (is_platform_admin=True) — idempotent, safe to leave set permanently.
+    # Never creates the account itself; the email must already be
+    # registered (e.g. via normal signup) before it can be promoted.
+    platform_admin_email: EmailStr | None = None
 
     # --- Weather source (FASE 5) ---
     weather_provider: str = "mock"

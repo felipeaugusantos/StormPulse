@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from app.admin.router import router as admin_router
 from app.alerts.router import router as alerts_router
 from app.api import health
 from app.auth.router import router as auth_router
@@ -31,6 +32,7 @@ v1_router.include_router(storms_router, prefix="/storms")
 v1_router.include_router(alerts_router, prefix="/alerts")
 v1_router.include_router(satellite_router, prefix="/satellite")
 v1_router.include_router(lightning_router, prefix="/lightning")
+v1_router.include_router(admin_router, prefix="/admin")
 
 # Unauthenticated "visitor mode" endpoints (FASE 15) — mounted separately by
 # main.py under /public with its own (stricter) rate limit, not included

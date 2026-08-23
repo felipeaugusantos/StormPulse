@@ -24,6 +24,29 @@ from app.db.session import create_engine, create_session_factory
 logger = logging.getLogger(__name__)
 
 
+async def _bootstrap_platform_admin(app: FastAPI, settings: Settings) -> None:
+    """Promote PLATFORM_ADMIN_EMAIL to a cross-tenant operator (FASE 28,
+    ADR-0048), if that account already exists. Idempotent — safe to run on
+    every startup; a no-op once the flag is already set, and a no-op
+    entirely if the account hasn't registered yet (never creates one)."""
+    if not settings.platform_admin_email:
+        return
+    from sqlalchemy import select
+
+    from app.users.models import User
+
+    session_factory = app.state.session_factory
+    async with session_factory() as session:
+        result = await session.execute(
+            select(User).where(User.email == settings.platform_admin_email.lower())
+        )
+        user = result.scalar_one_or_none()
+        if user is not None and not user.is_platform_admin:
+            user.is_platform_admin = True
+            await session.commit()
+            logger.info("promoted platform admin", extra={"email": user.email})
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize and dispose shared resources (DB engine, Redis client)."""
@@ -31,6 +54,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = create_engine(settings)
     app.state.session_factory = create_session_factory(app.state.engine)
     app.state.redis = create_redis(settings)
+    # Gated only by PLATFORM_ADMIN_EMAIL being set (see the function's own
+    # early return) — not by environment, so integration tests can exercise
+    # the real startup path instead of a parallel test-only code path.
+    await _bootstrap_platform_admin(app, settings)
     logger.info("application startup complete", extra={"environment": settings.environment})
     try:
         yield

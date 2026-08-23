@@ -21,6 +21,7 @@ class UserOut(BaseModel):
     full_name: str | None
     role: UserRole
     is_active: bool
+    is_platform_admin: bool
     created_at: datetime
 
 
