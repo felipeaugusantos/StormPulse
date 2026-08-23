@@ -6,7 +6,10 @@
 # STORMPULSE_WEB_IMAGE/STORMPULSE_WORKER_IMAGE already exported). Can also
 # be run by hand on the server for a manual redeploy — with those
 # variables left unset, it falls back to whatever docker-compose.prod.yml
-# resolves from .env.
+# resolves from .env, which this script itself keeps pointed at the last
+# successfully deployed images (see the end of the script) — never the
+# hardcoded `:latest` in docker-compose.prod.yml, which nothing on this
+# branch ever actually publishes to.
 #
 # Order matters, and is the whole point of this script: Postgres/Redis up
 # and healthy -> pre-deploy backup -> migration in a one-shot container
@@ -111,6 +114,30 @@ curl_local /api/v1/public/storms > /dev/null
 "${COMPOSE[@]}" ps worker | grep -q "Up"
 "${COMPOSE[@]}" ps beat | grep -q "Up"
 
+echo "==> Persisting this deploy's image tags to .env"
+# Without this, .env never carries STORMPULSE_IMAGE/STORMPULSE_WEB_IMAGE/
+# STORMPULSE_WORKER_IMAGE at all, so any *manual* `docker compose up -d`
+# run later without explicitly exporting them first — e.g. someone on the
+# server just re-applying a config change — silently falls back to
+# docker-compose.prod.yml's hardcoded `:latest`, an image nothing on this
+# branch's pipeline has ever actually published. That's a stale-rollback
+# footgun, not a hypothetical one — it happened for real (see ADR-0050).
+# Placed after every health/smoke-test check above and after `trap - ERR`,
+# so a failed deploy (rolled back to the previous images) never persists
+# the failed tag as if it had succeeded.
+_persist_env_var() {
+  local key="$1" value="$2"
+  [ -z "$value" ] && return
+  if grep -q "^${key}=" .env 2>/dev/null; then
+    sed -i "s#^${key}=.*#${key}=${value}#" .env
+  else
+    echo "${key}=${value}" >>.env
+  fi
+}
 trap - ERR
+_persist_env_var STORMPULSE_IMAGE "${STORMPULSE_IMAGE:-}"
+_persist_env_var STORMPULSE_WEB_IMAGE "${STORMPULSE_WEB_IMAGE:-}"
+_persist_env_var STORMPULSE_WORKER_IMAGE "${STORMPULSE_WORKER_IMAGE:-}"
+
 echo "==> Deploy confirmed."
 docker image prune -f || true
