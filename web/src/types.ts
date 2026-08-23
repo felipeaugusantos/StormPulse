@@ -106,6 +106,16 @@ export interface LocationItem {
   color: string | null
 }
 
+// NDVI per talhão (FASE 29, ADR-0053) — only ever meaningful for a plot
+// with a drawn boundary; a farm-level point has no polygon to average
+// vegetation-index pixels over.
+export interface NdviReading {
+  observed_at: string
+  ndvi_mean: number
+  valid_pixel_percent: number
+  is_mock: boolean
+}
+
 export interface AlertItem {
   id: string
   location_id: string

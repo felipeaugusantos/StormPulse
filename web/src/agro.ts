@@ -114,6 +114,20 @@ export function classifyVpd(vpdKpa: number): VpdLevel {
   return 'high'
 }
 
+export type NdviLevel = 'bare' | 'stressed' | 'moderate' | 'vigorous' | 'unknown'
+
+/** Standard NDVI vegetation-vigor bands (FASE 29, ADR-0053) — same
+ * deterministic-bucket spirit as `classifyCape`/`classifyVpd`, not a
+ * per-crop model. `null` (no reading yet, or the location isn't a talhão)
+ * is always 'unknown', never guessed at. */
+export function classifyNdvi(ndviMean: number | null): NdviLevel {
+  if (ndviMean == null) return 'unknown'
+  if (ndviMean < 0.2) return 'bare'
+  if (ndviMean < 0.4) return 'stressed'
+  if (ndviMean < 0.6) return 'moderate'
+  return 'vigorous'
+}
+
 export type Trafficability = 'trafficable' | 'not_trafficable' | 'unknown'
 
 /** Whether the soil is dry enough for machinery/harvest: a real dry streak

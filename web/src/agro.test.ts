@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { classifyFrostDays, dryStreakDays, formatFrostDays } from './agro'
+import { classifyFrostDays, classifyNdvi, dryStreakDays, formatFrostDays } from './agro'
 import type { DailyRainfall, ForecastPoint } from './types'
 
 function point(time: string, temperature_min_c: number | null): ForecastPoint {
@@ -17,6 +17,25 @@ function point(time: string, temperature_min_c: number | null): ForecastPoint {
     cape_max_jkg: null,
   }
 }
+
+describe('classifyNdvi', () => {
+  test('buckets by the standard vegetation-vigor bands', () => {
+    expect(classifyNdvi(0.1)).toBe('bare')
+    expect(classifyNdvi(0.3)).toBe('stressed')
+    expect(classifyNdvi(0.5)).toBe('moderate')
+    expect(classifyNdvi(0.8)).toBe('vigorous')
+  })
+
+  test('boundary values fall into the higher (more vigorous) bucket', () => {
+    expect(classifyNdvi(0.2)).toBe('stressed')
+    expect(classifyNdvi(0.4)).toBe('moderate')
+    expect(classifyNdvi(0.6)).toBe('vigorous')
+  })
+
+  test('null is always unknown, never guessed', () => {
+    expect(classifyNdvi(null)).toBe('unknown')
+  })
+})
 
 describe('classifyFrostDays', () => {
   test('splits severe vs light by the two thresholds', () => {

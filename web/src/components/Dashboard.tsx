@@ -7,6 +7,7 @@ import type {
   LightningStrike,
   LocationItem,
   Me,
+  NdviReading,
   ReadyStatus,
   SatelliteImageMeta,
   SprayWindow,
@@ -15,6 +16,7 @@ import type {
 import {
   classifyDiseaseRisk,
   classifyFrostDays,
+  classifyNdvi,
   classifyVpd,
   evaluateTrafficability,
   formatFrostDays,
@@ -22,6 +24,7 @@ import {
   vaporPressureDeficitKpa,
   waterBalanceMm,
   type DiseaseRisk,
+  type NdviLevel,
   type Trafficability,
   type VpdLevel,
 } from '../agro'
@@ -366,6 +369,11 @@ export function Dashboard({ onLogout }: Props) {
               onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
             />
             <DiseaseRiskPanel
+              activeLocations={agroActiveLocations}
+              entries={agroEntries}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
+            <NdviPanel
               activeLocations={agroActiveLocations}
               entries={agroEntries}
               onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
@@ -760,6 +768,8 @@ interface AgroEntry {
   diseaseRisk: DiseaseRisk
   vpdKpa: number | null
   vpdLevel: VpdLevel
+  ndvi: NdviReading | null
+  ndviLevel: NdviLevel
   error: string | null
 }
 
@@ -819,7 +829,8 @@ function useAgroEntries(locations: LocationItem[]): {
       const results = await Promise.all(
         active.map(async (l): Promise<[string, AgroEntry]> => {
           try {
-            const [forecast, sprayWindow, rainfall, rainForecast] = await Promise.all([
+            const isTalhaoWithBoundary = l.parent_location_id != null && l.boundary_geojson != null
+            const [forecast, sprayWindow, rainfall, rainForecast, ndvi] = await Promise.all([
               api.forecast(l.id).catch(() => null),
               api.sprayWindow(l.id).catch(() => null),
               api.rainfall(l.id).catch(() => null),
@@ -829,6 +840,11 @@ function useAgroEntries(locations: LocationItem[]): {
               // all, so trafficability would otherwise almost always come
               // back "unknown" even when Open-Meteo has the answer.
               api.rainForecast(l.id).catch(() => null),
+              // Only talhões (a plot with a drawn boundary) ever have NDVI
+              // data (FASE 29, ADR-0053) — skip the call entirely for a
+              // farm-level point instead of hitting an endpoint that would
+              // just 404 every refresh cycle.
+              isTalhaoWithBoundary ? api.ndvi(l.id).catch(() => null) : Promise.resolve(null),
             ])
             const { severe, light } = classifyFrostDays(
               forecast?.points ?? [],
@@ -858,6 +874,8 @@ function useAgroEntries(locations: LocationItem[]): {
                     })
                   : null,
                 ...deriveAgroSignals(upcomingRain[0] ?? null),
+                ndvi,
+                ndviLevel: classifyNdvi(ndvi?.ndvi_mean ?? null),
                 error:
                   forecast == null && sprayWindow == null && rainfall == null
                     ? 'Dados agro indisponíveis no momento'
@@ -875,6 +893,8 @@ function useAgroEntries(locations: LocationItem[]): {
                 rainfallDays: 0,
                 trafficability: null,
                 ...EMPTY_AGRO_DERIVED,
+                ndvi: null,
+                ndviLevel: 'unknown' as NdviLevel,
                 error: 'Dados agro indisponíveis no momento',
               },
             ]
@@ -1150,6 +1170,70 @@ function DiseaseRiskPanel({ activeLocations, entries, onSelect }: AgroPanelProps
                       VPD {entry.vpdKpa != null ? `${entry.vpdKpa.toFixed(2)} kPa — ` : ''}
                       {vpdLabel[entry.vpdLevel]}
                     </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+const NDVI_LABEL: Record<NdviLevel, string> = {
+  bare: 'solo exposto/sem vegetação',
+  stressed: 'vegetação esparsa ou em estresse',
+  moderate: 'vegetação moderada',
+  vigorous: 'vegetação vigorosa',
+  unknown: 'sem leitura ainda',
+}
+
+/** Only ever shows talhões (a plot with a drawn boundary) — NDVI has no
+ * meaning for a farm-level point (FASE 29, ADR-0053). Deliberately its own
+ * filtered subset of `activeLocations`, not a new prop threaded through
+ * `AgroPanelProps` — every other agro panel still applies to farms and
+ * plots alike. */
+function NdviPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
+  const talhoes = activeLocations.filter(
+    (l) => l.parent_location_id != null && l.boundary_geojson != null,
+  )
+  return (
+    <section className="panel">
+      <h2>
+        🌿 NDVI (talhões) <span className="count">{talhoes.length}</span>
+      </h2>
+      <p className="panel-hint">
+        Índice de vegetação por satélite (Sentinel-2) — só disponível para talhões com contorno
+        desenhado no mapa.
+      </p>
+      <div className="list">
+        {talhoes.length === 0 && (
+          <p className="empty">Nenhum talhão com contorno desenhado ainda.</p>
+        )}
+        {talhoes.map((l) => {
+          const entry = entries[l.id]
+          return (
+            <div
+              className="row clickable"
+              key={l.id}
+              onClick={() => onSelect(l.latitude, l.longitude)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                {!entry && <div className="sub">carregando…</div>}
+                {entry && (
+                  <div className="agro-section">
+                    {entry.ndvi ? (
+                      <div className="agro-row">
+                        NDVI {entry.ndvi.ndvi_mean.toFixed(2)} — {NDVI_LABEL[entry.ndviLevel]}
+                        {entry.ndvi.is_mock && ' (simulado)'}
+                      </div>
+                    ) : (
+                      <div className="agro-row sub">{NDVI_LABEL.unknown}</div>
+                    )}
                   </div>
                 )}
               </div>

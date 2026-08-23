@@ -11,6 +11,7 @@ import type {
   LightningStrike,
   LocationItem,
   Me,
+  NdviReading,
   PushSubscriptionInput,
   RainfallHistory,
   ReadyStatus,
@@ -257,6 +258,10 @@ export const api = {
     request<SprayWindow>(`/locations/${locationId}/agro/spray-window`),
   rainfall: (locationId: string, days = 15) =>
     request<RainfallHistory>(`/locations/${locationId}/agro/rainfall?days=${days}`),
+  // Only ever has data for a talhão with a drawn boundary (FASE 29,
+  // ADR-0053) — 404s for a farm-level point or a talhão the background
+  // pipeline hasn't checked yet, same "no data" shape as everything else.
+  ndvi: (locationId: string) => request<NdviReading>(`/locations/${locationId}/agro/ndvi`),
   // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever
   // called when `Me.is_platform_admin` is true; the backend 403s otherwise.
   adminUsers: (opts: { search?: string; limit?: number; offset?: number } = {}) => {
