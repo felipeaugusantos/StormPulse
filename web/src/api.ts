@@ -1,5 +1,6 @@
 import type {
   AdminAuditLogList,
+  AdminStats,
   AdminTenantList,
   AdminUser,
   AdminUserList,
@@ -289,6 +290,7 @@ export const api = {
     const qs = params.toString()
     return request<AdminAuditLogList>(`/admin/audit-log${qs ? `?${qs}` : ''}`)
   },
+  adminStats: () => request<AdminStats>('/admin/stats'),
 }
 
 // No token required (visitor mode) — same request() helper, it just won't

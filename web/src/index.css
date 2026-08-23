@@ -138,6 +138,28 @@ button {
   gap: 8px;
   margin-bottom: 14px;
 }
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+.admin-stat-card {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.admin-stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.admin-stat-label {
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+  margin-top: 4px;
+}
 .admin-role-select {
   background: #0d1626;
   border: 1px solid var(--line);

@@ -24,6 +24,7 @@ export interface AdminUser {
   is_active: boolean
   is_platform_admin: boolean
   created_at: string
+  last_login_at: string | null
 }
 
 export interface AdminUserList {
@@ -58,6 +59,15 @@ export interface AdminAuditLogEntry {
 export interface AdminAuditLogList {
   items: AdminAuditLogEntry[]
   total: number
+}
+
+export interface AdminStats {
+  total_tenants: number
+  total_users: number
+  active_users_7d: number
+  active_users_30d: number
+  total_locations: number
+  alerts_last_30d: number
 }
 
 export interface StormCell {

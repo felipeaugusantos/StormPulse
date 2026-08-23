@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api'
-import type { AdminAuditLogEntry, AdminTenant, AdminUser } from '../types'
+import type { AdminAuditLogEntry, AdminStats, AdminTenant, AdminUser } from '../types'
 
 interface Props {
   onBack: () => void
@@ -11,7 +11,7 @@ const PAGE_SIZE = 100
 const ROLE_OPTIONS = ['user', 'admin']
 
 export function AdminPanel({ onBack, meId }: Props) {
-  const [tab, setTab] = useState<'users' | 'tenants' | 'audit'>('users')
+  const [tab, setTab] = useState<'stats' | 'users' | 'tenants' | 'audit'>('stats')
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -20,6 +20,7 @@ export function AdminPanel({ onBack, meId }: Props) {
   const [tenantsTotal, setTenantsTotal] = useState(0)
   const [auditLog, setAuditLog] = useState<AdminAuditLogEntry[]>([])
   const [auditTotal, setAuditTotal] = useState(0)
+  const [stats, setStats] = useState<AdminStats | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mutatingId, setMutatingId] = useState<string | null>(null)
@@ -28,7 +29,9 @@ export function AdminPanel({ onBack, meId }: Props) {
     setLoading(true)
     setError(null)
     try {
-      if (tab === 'users') {
+      if (tab === 'stats') {
+        setStats(await api.adminStats())
+      } else if (tab === 'users') {
         const res = await api.adminUsers({ search: searchQuery || undefined, limit: PAGE_SIZE })
         setUsers(res.items)
         setUsersTotal(res.total)
@@ -57,7 +60,7 @@ export function AdminPanel({ onBack, meId }: Props) {
     setSearchQuery(searchInput.trim())
   }
 
-  function switchTab(next: 'users' | 'tenants' | 'audit') {
+  function switchTab(next: 'stats' | 'users' | 'tenants' | 'audit') {
     setTab(next)
     setSearchInput('')
     setSearchQuery('')
@@ -119,6 +122,13 @@ export function AdminPanel({ onBack, meId }: Props) {
           <div className="admin-tabs">
             <button
               type="button"
+              className={`btn small ${tab === 'stats' ? '' : 'ghost'}`}
+              onClick={() => switchTab('stats')}
+            >
+              Métricas
+            </button>
+            <button
+              type="button"
               className={`btn small ${tab === 'users' ? '' : 'ghost'}`}
               onClick={() => switchTab('users')}
             >
@@ -140,7 +150,7 @@ export function AdminPanel({ onBack, meId }: Props) {
             </button>
           </div>
 
-          {tab !== 'audit' && (
+          {tab !== 'audit' && tab !== 'stats' && (
             <form className="location-search-row" onSubmit={submitSearch}>
               <input
                 type="text"
@@ -152,6 +162,41 @@ export function AdminPanel({ onBack, meId }: Props) {
                 Buscar
               </button>
             </form>
+          )}
+
+          {tab === 'stats' && (
+            <>
+              <h2>Métricas</h2>
+              {!stats && !loading && <p className="empty">Não foi possível carregar as métricas.</p>}
+              {stats && (
+                <div className="admin-stats-grid">
+                  <div className="admin-stat-card">
+                    <div className="admin-stat-value">{stats.total_tenants}</div>
+                    <div className="admin-stat-label">Tenants</div>
+                  </div>
+                  <div className="admin-stat-card">
+                    <div className="admin-stat-value">{stats.total_users}</div>
+                    <div className="admin-stat-label">Usuários</div>
+                  </div>
+                  <div className="admin-stat-card">
+                    <div className="admin-stat-value">{stats.active_users_7d}</div>
+                    <div className="admin-stat-label">Ativos (7 dias)</div>
+                  </div>
+                  <div className="admin-stat-card">
+                    <div className="admin-stat-value">{stats.active_users_30d}</div>
+                    <div className="admin-stat-label">Ativos (30 dias)</div>
+                  </div>
+                  <div className="admin-stat-card">
+                    <div className="admin-stat-value">{stats.total_locations}</div>
+                    <div className="admin-stat-label">Locais monitorados</div>
+                  </div>
+                  <div className="admin-stat-card">
+                    <div className="admin-stat-value">{stats.alerts_last_30d}</div>
+                    <div className="admin-stat-label">Alertas (30 dias)</div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {tab === 'users' && (
@@ -179,7 +224,11 @@ export function AdminPanel({ onBack, meId }: Props) {
                           {u.full_name || 'sem nome'} · {u.tenant_name}
                         </div>
                         <div className="sub muted">
-                          criado em {new Date(u.created_at).toLocaleDateString('pt-BR')}
+                          criado em {new Date(u.created_at).toLocaleDateString('pt-BR')} · último
+                          login:{' '}
+                          {u.last_login_at
+                            ? new Date(u.last_login_at).toLocaleString('pt-BR')
+                            : 'nunca'}
                         </div>
                       </div>
                       <select
