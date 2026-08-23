@@ -24,6 +24,40 @@ export function convectiveIntensity(tempKelvin: number): {
   return { label: 'fraca', className: 'green' }
 }
 
+const RISK_LEVEL_LABELS: Record<string, string> = {
+  green: 'Baixo',
+  yellow: 'Moderado',
+  orange: 'Alto',
+  red: 'Severo',
+}
+
+/** Plain-language severity word for a risk-level color code (`green`/
+ * `yellow`/`orange`/`red`) — the raw code is an internal identifier, not
+ * something an end user should ever see directly. */
+export function riskLevelLabel(level: string): string {
+  return RISK_LEVEL_LABELS[level] ?? level
+}
+
+const ALERT_EVENT_LABELS: Record<string, string> = {
+  storm_detected: 'Tempestade detectada',
+  storm_approaching: 'Tempestade se aproximando',
+  storm_intensified: 'Tempestade se intensificou',
+  storm_entered_monitoring_area: 'Tempestade entrou na área monitorada',
+  storm_risk_changed: 'Risco de tempestade mudou',
+  storm_passed: 'Tempestade passou',
+  satellite_watch_detected: 'Observação via satélite',
+  satellite_watch_dissipated: 'Observação via satélite dissipada',
+  frost_warning: 'Risco de geada',
+  dry_spell_warning: 'Sequência sem chuva',
+}
+
+/** Plain-language category for an alert's internal event-type code (e.g.
+ * `dry_spell_warning`) — falls back to the raw code for any future event
+ * type this list hasn't caught up with yet, rather than hiding it. */
+export function alertEventLabel(eventType: string): string {
+  return ALERT_EVENT_LABELS[eventType] ?? eventType
+}
+
 export function cardinalDirection(degrees: number): string {
   const index = Math.round(((degrees % 360) + 360) % 360 / 45) % 8
   return DIRECTIONS[index]

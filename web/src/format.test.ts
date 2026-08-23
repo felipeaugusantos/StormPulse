@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest'
-import { cardinalDirection, convectiveIntensity, kelvinToCelsius, timeAgo } from './format'
+import {
+  alertEventLabel,
+  cardinalDirection,
+  convectiveIntensity,
+  kelvinToCelsius,
+  riskLevelLabel,
+  timeAgo,
+} from './format'
 
 describe('kelvinToCelsius', () => {
   test('converts freezing point', () => {
@@ -33,6 +40,31 @@ describe('cardinalDirection', () => {
   test('wraps negative and >360 degrees correctly', () => {
     expect(cardinalDirection(-45)).toBe(cardinalDirection(315))
     expect(cardinalDirection(405)).toBe(cardinalDirection(45))
+  })
+})
+
+describe('riskLevelLabel', () => {
+  test('translates the internal color codes into plain-language severity', () => {
+    expect(riskLevelLabel('green')).toBe('Baixo')
+    expect(riskLevelLabel('yellow')).toBe('Moderado')
+    expect(riskLevelLabel('orange')).toBe('Alto')
+    expect(riskLevelLabel('red')).toBe('Severo')
+  })
+
+  test('falls back to the raw code for anything unmapped, never hides it', () => {
+    expect(riskLevelLabel('purple')).toBe('purple')
+  })
+})
+
+describe('alertEventLabel', () => {
+  test('translates known alert event-type codes into plain language', () => {
+    expect(alertEventLabel('dry_spell_warning')).toBe('Sequência sem chuva')
+    expect(alertEventLabel('frost_warning')).toBe('Risco de geada')
+    expect(alertEventLabel('storm_approaching')).toBe('Tempestade se aproximando')
+  })
+
+  test('falls back to the raw code for an unmapped event type', () => {
+    expect(alertEventLabel('some_future_event')).toBe('some_future_event')
   })
 })
 

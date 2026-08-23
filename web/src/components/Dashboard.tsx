@@ -27,7 +27,7 @@ import {
 } from '../agro'
 import { classifyCape, estimateStormEta, type CapeLevel } from '../storm'
 import { cropColor } from '../cropColors'
-import { timeAgo } from '../format'
+import { riskLevelLabel, timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { LocationSearchCard } from './LocationSearchCard'
 import { LocationWeatherCard } from './LocationWeatherCard'
@@ -478,12 +478,11 @@ function AlertsPanel({ alerts }: { alerts: AlertItem[] }) {
         {alerts.length === 0 && <p className="empty">Nenhum alerta.</p>}
         {alerts.map((a) => (
           <div className="row" key={a.id}>
-            <span className={`badge ${a.level}`}>{a.level}</span>
+            <span className={`badge ${a.level}`}>{riskLevelLabel(a.level)}</span>
             <div className="grow">
               <div>{a.title}</div>
-              <div className="sub">
-                {a.event_type} · {new Date(a.created_at).toLocaleString('pt-BR')}
-              </div>
+              <div className="sub">{a.message}</div>
+              <div className="sub muted">{timeAgo(a.created_at)}</div>
             </div>
           </div>
         ))}
