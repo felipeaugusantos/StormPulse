@@ -6,11 +6,15 @@
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "scheme": "stormpulse",
-    "extra": {
-      "apiUrl": "http://localhost:8000"
-    },
+    "icon": "./assets/icon.png",
+    "backgroundColor": "#0b1120",
     "android": {
       "package": "com.stormpulse.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0b1120"
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
@@ -18,9 +22,13 @@
     },
     "ios": {
       "bundleIdentifier": "com.stormpulse.app",
+      "buildNumber": "1",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Usado para preencher automaticamente a coordenada ao cadastrar um novo local monitorado."
       }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-notifications",
@@ -33,6 +41,7 @@
       [
         "expo-splash-screen",
         {
+          "image": "./assets/splash-icon.png",
           "backgroundColor": "#0b1120"
         }
       ],
