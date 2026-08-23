@@ -7,7 +7,7 @@
 jest.mock('expo-secure-store')
 
 import * as authStorage from '../authStorage'
-import { ApiError, api, login, logout } from '../api'
+import { ApiError, api, login, logout, register } from '../api'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const secureStoreMock = require('expo-secure-store') as { __reset: () => void }
@@ -40,6 +40,40 @@ describe('mobile session (Fase 3)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url] = fetchMock.mock.calls[0]
     expect(String(url)).toContain('/auth/login')
+  })
+
+  test('register creates the account, then logs in with the same credentials', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(201, { id: 'user-1', email: 'new@example.com' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, { access_token: 'access-1', refresh_token: 'refresh-1' }),
+      )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await register('new@example.com', 'supersecret123', 'Nova Usuária')
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [registerUrl, registerInit] = fetchMock.mock.calls[0]
+    expect(String(registerUrl)).toContain('/auth/register')
+    expect(JSON.parse(registerInit.body)).toEqual({
+      email: 'new@example.com',
+      password: 'supersecret123',
+      full_name: 'Nova Usuária',
+    })
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/auth/login')
+    expect(await authStorage.getAccessToken()).toBe('access-1')
+  })
+
+  test('an e-mail already in use (409) never attempts the follow-up login', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(409, { detail: 'E-mail já cadastrado' }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await expect(register('taken@example.com', 'supersecret123')).rejects.toBeInstanceOf(ApiError)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(await authStorage.getAccessToken()).toBeNull()
   })
 
   test('an expired access token triggers exactly one refresh, then retries the request', async () => {
