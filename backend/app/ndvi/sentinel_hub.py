@@ -4,11 +4,21 @@ Sentinel Hub Statistical API (FASE 29, ADR-0053).
 Endpoints and request/response shapes below were verified against the
 official Copernicus documentation as of 2026-08-24
 (https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Statistical.html
-and .../Overview/Authentication.html) — unlike this project's weather
-providers, this one has **not** been exercised against a live account (no
-Copernicus credentials available in this environment). `ndvi_enabled`
-defaults to `false` for exactly this reason: verify against a real account
-before flipping it on anywhere real usage depends on it.
+and .../Overview/Authentication.html), and — since ADR-0053's follow-up —
+against a real account with real talhões (see the ADR's "bug real
+encontrado" section).
+
+**Real bug found and fixed on first live run**: the request originally sent
+`resx`/`resy: 10` alongside `bounds.properties.crs` set to EPSG:4326
+(degrees). Sentinel Hub interprets `resx`/`resy` in the *bounds CRS's own
+units* — so "10" meant 10 **degrees** per pixel (over 1000km), not 10
+meters, collapsing every talhão (however small) into a single giant pixel
+(`geometryPixelCount: 1` in the response) whose mean mixed in far more than
+just the field itself. Fixed by requesting `width`/`height` in pixels
+instead, computed from the polygon's own bounding box in meters (via
+`engine.geo.haversine_km`, already used elsewhere in this project) divided
+by the target ~10m resolution — CRS stays EPSG:4326 throughout, no
+reprojection library needed.
 """
 
 from __future__ import annotations
@@ -16,6 +26,7 @@ from __future__ import annotations
 import json
 import time
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
 
@@ -23,8 +34,14 @@ from app.core.config import Settings
 from app.core.enums import WeatherSourceKind
 from app.ndvi.provider import NdviObservation, NdviProvider, NdviProviderUnavailableError
 from app.weather.provider import Provenance
+from engine.geo import haversine_km
 
 _PROVIDER_NAME = "Copernicus Sentinel Hub"
+
+_TARGET_RESOLUTION_M = 10.0
+# Sentinel Hub cap for a single Process/Statistical request's raster size —
+# comfortably above any real talhão (a 2500x2500 10m grid is 625 km²).
+_MAX_PIXELS_PER_AXIS = 2500
 
 # Single-band NDVI evalscript (Sentinel-2 L2A red/NIR) — the exact example
 # from Copernicus's own Statistical API docs, output id "data" holds the
@@ -46,6 +63,29 @@ function evaluatePixel(samples) {
   if (samples.B08 + samples.B04 == 0) { validNDVIMask = 0 }
   return { data: [ndvi], dataMask: [samples.dataMask * validNDVIMask] }
 }"""
+
+
+def _pixel_dimensions(polygon: dict[str, Any]) -> tuple[int, int]:
+    """Bbox width/height in ~10m pixels, computed from real-world extent.
+
+    Sentinel Hub interprets `resx`/`resy` in the bounds CRS's own units — for
+    EPSG:4326 that's degrees, not meters — so requesting a resolution
+    directly silently produced a single giant pixel per talhão. Asking for
+    `width`/`height` in pixels instead sidesteps that entirely.
+    """
+    ring = polygon["coordinates"][0]
+    lons = [pt[0] for pt in ring]
+    lats = [pt[1] for pt in ring]
+    lon_min, lon_max = min(lons), max(lons)
+    lat_min, lat_max = min(lats), max(lats)
+    lat_mid = (lat_min + lat_max) / 2
+
+    width_m = haversine_km(lat_mid, lon_min, lat_mid, lon_max) * 1000
+    height_m = haversine_km(lat_min, lon_min, lat_max, lon_min) * 1000
+
+    width_px = min(_MAX_PIXELS_PER_AXIS, max(1, round(width_m / _TARGET_RESOLUTION_M)))
+    height_px = min(_MAX_PIXELS_PER_AXIS, max(1, round(height_m / _TARGET_RESOLUTION_M)))
+    return width_px, height_px
 
 
 class SentinelHubNdviProvider(NdviProvider):
@@ -106,6 +146,7 @@ class SentinelHubNdviProvider(NdviProvider):
         now = datetime.now(UTC)
         start = now - timedelta(days=lookback_days)
         token = await self._access_token()
+        width_px, height_px = _pixel_dimensions(polygon)
 
         request_body = {
             "input": {
@@ -121,8 +162,8 @@ class SentinelHubNdviProvider(NdviProvider):
                 "timeRange": {"from": start.isoformat(), "to": now.isoformat()},
                 "aggregationInterval": {"of": "P1D"},
                 "evalscript": _NDVI_EVALSCRIPT,
-                "resx": 10,
-                "resy": 10,
+                "width": width_px,
+                "height": height_px,
             },
             "calculations": {"default": {"statistics": {"default": {}}}},
         }
