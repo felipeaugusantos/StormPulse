@@ -296,6 +296,7 @@ export function Dashboard({ onLogout }: Props) {
             onStartDrawBoundary={handleStartDrawBoundary}
             onStartPickLocation={handleStartPickLocation}
             plotCreationEnabled={activeTab === 'agro'}
+            showPlots={activeTab === 'agro'}
           />
           <LocationWeatherCard location={selectedLocation} />
         </div>

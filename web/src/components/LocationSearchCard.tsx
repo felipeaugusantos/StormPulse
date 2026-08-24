@@ -23,9 +23,12 @@ interface Props {
   /** Talhão *creation* (the "+ talhão" button and its form) only makes
    * sense in the Agro context — a plot is an agro concept (cultura,
    * contorno de plantio), not something the storm-tracking tab has any
-   * use for. Already-created plots still show up under their farm in
-   * both tabs; only the entry points to *creating* a new one are gated. */
+   * use for. */
   plotCreationEnabled: boolean
+  /** Talhões themselves — not just their creation — are agro-only content
+   * (ADR-0024/0053): the storm tab has no use for a plot's crop/boundary,
+   * so they're hidden there entirely, not just the "+ talhão" entry point. */
+  showPlots: boolean
 }
 
 export function LocationSearchCard({
@@ -38,6 +41,7 @@ export function LocationSearchCard({
   onStartDrawBoundary,
   onStartPickLocation,
   plotCreationEnabled,
+  showPlots,
 }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<CitySearchResult[]>([])
@@ -305,7 +309,7 @@ export function LocationSearchCard({
                   </button>
                 </div>
 
-                {plots.map((plot) => (
+                {showPlots && plots.map((plot) => (
                   <div
                     className={`row clickable plot-row ${selectedLocationId === plot.id ? 'selected' : ''}`}
                     key={plot.id}
