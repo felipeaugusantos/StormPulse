@@ -205,7 +205,13 @@ class Settings(BaseSettings):
     # Any day at/below this (but above the severe threshold) is reported as
     # "risco leve", never silently merged into the severe warning.
     agro_frost_light_threshold_c: float = 6.0
-    agro_dry_spell_window_days: int = Field(default=15, gt=0)
+    # 30, not 15: the dry-streak count can never exceed how many days of
+    # rainfall history we fetch, so a real drought longer than the window
+    # would otherwise show the exact same day count forever once it caught
+    # up to the window size — misleading, since the alert reads as "still
+    # 15 days" when it's really been 20+. 30 balances that against INMET's
+    # one-HTTP-request-per-day cost for this lookup (no batch endpoint).
+    agro_dry_spell_window_days: int = Field(default=30, gt=0)
     agro_dry_spell_min_days: int = Field(default=7, gt=0)
     agro_dry_spell_rain_threshold_mm: float = Field(default=1.0, ge=0)
     agro_spray_max_wind_kmh: float = Field(default=15.0, gt=0)

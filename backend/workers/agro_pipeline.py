@@ -229,6 +229,12 @@ async def _check_dry_spell(
     if streak < settings.agro_dry_spell_min_days:
         return False
 
+    # The streak can never exceed how many days of history we fetched
+    # (`agro_dry_spell_window_days`) — if it hit exactly that ceiling, the
+    # real dry spell may well be longer than we can see, so say "pelo menos"
+    # instead of implying we know the exact count.
+    streak_prefix = "pelo menos " if streak >= settings.agro_dry_spell_window_days else ""
+
     today_str = now.date().isoformat()
     return _emit_alert(
         session,
@@ -237,7 +243,7 @@ async def _check_dry_spell(
         level=_DRY_SPELL_LEVEL,
         title=f"Sequência sem chuva em {location.name}",
         message=(
-            f"{streak} dias consecutivos sem chuva mensurável (abaixo de "
+            f"{streak_prefix}{streak} dias consecutivos sem chuva mensurável (abaixo de "
             f"{settings.agro_dry_spell_rain_threshold_mm:.1f}mm) na estação mais próxima."
         ),
         dedup_key=_dedup_key(AlertEventType.DRY_SPELL_WARNING, location.id, today_str),

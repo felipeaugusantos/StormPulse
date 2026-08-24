@@ -269,6 +269,34 @@ def test_dry_spell_alert_emitted_when_streak_reaches_minimum() -> None:
             )
         ).one()
         assert "dias consecutivos sem chuva" in alert.message
+        assert "pelo menos" not in alert.message
+        session.rollback()
+
+
+def test_dry_spell_alert_says_pelo_menos_when_streak_hits_window_ceiling() -> None:
+    """The streak can never exceed how many days of history were fetched —
+    if it hits that ceiling, the real drought may be longer than we can
+    see, so the message must say "pelo menos" instead of an exact count."""
+    with session_scope() as session:
+        location = _make_location(session)
+        settings = Settings(
+            environment="test",
+            agro_frost_threshold_c=-99.0,
+            agro_dry_spell_min_days=5,
+            agro_dry_spell_window_days=10,
+            agro_dry_spell_rain_threshold_mm=1.0,
+        )
+        provider = _FakeProvider(frost_temp_c=15.0, dry_days=20)
+
+        run_agro_advisory_cycle(session, settings=settings, provider=provider)
+
+        alert = session.scalars(
+            select(Alert).where(
+                Alert.event_type == AlertEventType.DRY_SPELL_WARNING,
+                Alert.location_id == location.id,
+            )
+        ).one()
+        assert "pelo menos" in alert.message
         session.rollback()
 
 
