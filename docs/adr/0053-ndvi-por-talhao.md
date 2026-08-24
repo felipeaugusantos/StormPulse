@@ -69,12 +69,27 @@ vegetação.
   reais desta sessão; endpoint: 404 sem leitura ainda, 404 pra fazenda,
   devolve a leitura mais recente entre duas, 404 pro talhão de outro
   usuário). Suíte completa (89% cobertura), ruff e mypy verdes.
-- **`SentinelHubNdviProvider` não foi exercitado contra uma conta real**
-  (sem credenciais Copernicus disponíveis neste ambiente) — os
-  endpoints/formatos de request-response foram verificados contra a
-  documentação oficial em 2026-08-24, documentado explicitamente no
-  próprio módulo. `NDVI_ENABLED=false` por padrão existe exatamente por
-  isso: verificar contra uma conta real antes de ligar em produção.
+- **Bug real encontrado na primeira execução ao vivo.** Assim que
+  `NDVI_ENABLED=true` foi ligado em produção com credenciais reais, o
+  painel mostrou NDVI implausível (-0.01 e 0.16, "solo exposto") para
+  talhões confirmados pelo usuário como área real de plantio saudável.
+  Causa raiz: o request original mandava `resx: 10, resy: 10` junto com
+  `bounds.properties.crs` em EPSG:4326 (graus) — a Statistical API
+  interpreta `resx`/`resy` **nas unidades do CRS informado**, então "10"
+  virou 10 **graus** por pixel (mais de 1000km), não 10 metros. Isso
+  colapsava o talhão inteiro (tipicamente <1km) em **1 pixel só**
+  (`"geometryPixelCount": 1` confirmado na resposta bruta da API para os
+  dois talhões reais testados), cuja "média" não representava o talhão
+  de verdade. Corrigido trocando `resx`/`resy` por `width`/`height` em
+  pixels, calculados a partir do bounding box real do polígono em metros
+  (via `engine.geo.haversine_km`, já usado em `workers/satellite_pipeline.py`)
+  dividido pela resolução alvo de 10m — o CRS dos `bounds` continua
+  EPSG:4326, só a forma de especificar a resolução mudou. Cobertura de
+  teste nova (`test_ndvi_sentinel_hub.py`) exercitando a construção real
+  do request via `httpx.MockTransport` — os testes do pipeline
+  (`test_ndvi_pipeline.py`) só injetam um provider falso e por isso nunca
+  teriam pego esse bug, mesmo padrão de lacuna já visto nas ADRs 0044,
+  0046 e 0050.
 - Web: `tsc -b`, suíte de testes (`classifyNdvi`) e `npm run build`
   verdes. Verificado em navegador real contra a stack local: cadastrada
   fazenda + talhão com contorno, leitura NDVI inserida diretamente
