@@ -13,6 +13,7 @@ from app.notifications.schemas import (
     PushSubscriptionDeleteIn,
     PushSubscriptionIn,
 )
+from app.tenants.models import Tenant
 from app.users import service
 from app.users.models import User
 from app.users.schemas import DeleteAccountIn, UserOut
@@ -21,8 +22,26 @@ router = APIRouter(tags=["users"])
 
 
 @router.get("/me", response_model=UserOut, summary="Perfil do usuário autenticado")
-async def read_me(current_user: User = Depends(get_current_user)) -> User:
-    return current_user
+async def read_me(
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserOut:
+    # Module flags live on Tenant, not User — fetched here rather than
+    # joined eagerly in get_current_user, since this is the only endpoint
+    # that needs them.
+    tenant = await session.get(Tenant, current_user.tenant_id)
+    return UserOut(
+        id=current_user.id,
+        tenant_id=current_user.tenant_id,
+        email=current_user.email,
+        full_name=current_user.full_name,
+        role=current_user.role,
+        is_active=current_user.is_active,
+        is_platform_admin=current_user.is_platform_admin,
+        created_at=current_user.created_at,
+        storm_module_enabled=tenant.storm_enabled if tenant is not None else True,
+        agro_module_enabled=tenant.agro_enabled if tenant is not None else False,
+    )
 
 
 @router.delete(

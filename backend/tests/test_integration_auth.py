@@ -34,6 +34,51 @@ async def test_register_returns_created_user(client: AsyncClient) -> None:
     assert body["is_active"] is True
 
 
+async def test_register_defaults_to_storm_only(client: AsyncClient) -> None:
+    email = _unique_email()
+    resp = await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["storm_module_enabled"] is True
+    assert body["agro_module_enabled"] is False
+
+
+async def test_register_with_agro_module_selected(client: AsyncClient) -> None:
+    email = _unique_email()
+    resp = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": _PASSWORD,
+            "storm_module": True,
+            "agro_module": True,
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["storm_module_enabled"] is True
+    assert body["agro_module_enabled"] is True
+
+    login = await client.post("/api/v1/auth/login", json={"email": email, "password": _PASSWORD})
+    access = login.json()["access_token"]
+    me = await client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {access}"})
+    assert me.json()["agro_module_enabled"] is True
+
+
+async def test_register_rejects_no_modules_selected(client: AsyncClient) -> None:
+    email = _unique_email()
+    resp = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": _PASSWORD,
+            "storm_module": False,
+            "agro_module": False,
+        },
+    )
+    assert resp.status_code == 422
+
+
 async def test_register_duplicate_email_returns_409(client: AsyncClient) -> None:
     email = _unique_email()
     payload = {"email": email, "password": _PASSWORD}

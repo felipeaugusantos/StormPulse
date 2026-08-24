@@ -33,6 +33,8 @@ export function Login({ onAuthenticated, onVisitor }: Props) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [wantStorm, setWantStorm] = useState(true)
+  const [wantAgro, setWantAgro] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const googleButtonRef = useRef<HTMLDivElement>(null)
@@ -56,11 +58,18 @@ export function Login({ onAuthenticated, onVisitor }: Props) {
       setError(`A senha precisa ter pelo menos ${MIN_PASSWORD_LENGTH} caracteres`)
       return
     }
+    if (mode === 'register' && !wantStorm && !wantAgro) {
+      setError('Selecione pelo menos um módulo: Tempestade ou Agro')
+      return
+    }
 
     setLoading(true)
     try {
       if (mode === 'register') {
-        await register(email, password, fullName.trim() || undefined)
+        await register(email, password, fullName.trim() || undefined, {
+          storm: wantStorm,
+          agro: wantAgro,
+        })
       } else {
         await login(email, password)
       }
@@ -169,6 +178,24 @@ export function Login({ onAuthenticated, onVisitor }: Props) {
               minLength={MIN_PASSWORD_LENGTH}
               required
             />
+
+            <label>Módulos</label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={wantStorm}
+                onChange={(e) => setWantStorm(e.target.checked)}
+              />
+              ⛈️ Tempestade
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={wantAgro}
+                onChange={(e) => setWantAgro(e.target.checked)}
+              />
+              🌾 Agro
+            </label>
           </>
         )}
 

@@ -38,6 +38,8 @@ async def _create_tenant_and_user(
     hashed_password: str,
     google_sub: str | None,
     tenant_name: str | None,
+    storm_module: bool = True,
+    agro_module: bool = False,
 ) -> User:
     """Create a personal tenant and its first (USER) account.
 
@@ -49,6 +51,8 @@ async def _create_tenant_and_user(
     tenant = Tenant(
         name=tenant_name or f"{base} (pessoal)",
         slug=f"{_slugify(base)}-{uuid.uuid4().hex[:8]}",
+        storm_enabled=storm_module,
+        agro_enabled=agro_module,
     )
     session.add(tenant)
     await session.flush()  # assigns tenant.id
@@ -79,6 +83,8 @@ async def register_user(session: AsyncSession, data: RegisterIn) -> User:
         hashed_password=hash_password(data.password),
         google_sub=None,
         tenant_name=data.tenant_name,
+        storm_module=data.storm_module,
+        agro_module=data.agro_module,
     )
 
 

@@ -130,14 +130,29 @@ def _clear_refresh_cookie(response: Response, settings: Settings) -> None:
 async def register(
     data: RegisterIn,
     session: AsyncSession = Depends(get_db),
-) -> User:
+) -> UserOut:
     try:
-        return await register_user(session, data)
+        user = await register_user(session, data)
     except EmailAlreadyRegistered as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="E-mail já cadastrado",
         ) from exc
+    # Module flags live on Tenant, not User (see users/router.py's read_me)
+    # — known here directly from what the caller just requested, no extra
+    # fetch needed.
+    return UserOut(
+        id=user.id,
+        tenant_id=user.tenant_id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        is_active=user.is_active,
+        is_platform_admin=user.is_platform_admin,
+        created_at=user.created_at,
+        storm_module_enabled=data.storm_module,
+        agro_module_enabled=data.agro_module,
+    )
 
 
 @router.post(

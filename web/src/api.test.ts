@@ -85,6 +85,8 @@ describe('register', () => {
       email: 'new@example.com',
       password: 'supersecret123',
       full_name: 'Nova Usuária',
+      storm_module: true,
+      agro_module: false,
     })
     const [loginUrl] = fetchMock.mock.calls[1]
     expect(String(loginUrl)).toContain('/auth/login')

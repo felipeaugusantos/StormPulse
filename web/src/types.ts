@@ -10,6 +10,10 @@ export interface Me {
   is_active: boolean
   is_platform_admin: boolean
   created_at: string
+  // Module selection (FASE 30), chosen at registration — which tabs the
+  // dashboard should show for this tenant.
+  storm_module_enabled: boolean
+  agro_module_enabled: boolean
 }
 
 // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever

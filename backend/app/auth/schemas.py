@@ -7,7 +7,7 @@ read from the client, so a caller can never set ``role``, ``tenant_id`` or
 
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class RegisterIn(BaseModel):
@@ -16,6 +16,18 @@ class RegisterIn(BaseModel):
     full_name: str | None = Field(default=None, max_length=120)
     # Optional: name of the tenant to create/join. Defaults to a personal tenant.
     tenant_name: str | None = Field(default=None, max_length=120)
+    # Module selection (FASE 30) — Tempestade is the platform's core
+    # product (defaults on), Agro is an opt-in add-on (defaults off). At
+    # least one must be selected; enforced below rather than left for the
+    # UI alone, since this is a request-validation concern.
+    storm_module: bool = True
+    agro_module: bool = False
+
+    @model_validator(mode="after")
+    def _at_least_one_module(self) -> RegisterIn:
+        if not self.storm_module and not self.agro_module:
+            raise ValueError("Selecione pelo menos um módulo: Tempestade ou Agro")
+        return self
 
 
 class LoginIn(BaseModel):

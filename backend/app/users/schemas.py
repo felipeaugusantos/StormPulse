@@ -23,6 +23,13 @@ class UserOut(BaseModel):
     is_active: bool
     is_platform_admin: bool
     created_at: datetime
+    # Module selection (FASE 30) — which modules the user's tenant has
+    # access to, chosen at registration. Drives which tabs the frontend
+    # shows; not on the ``User`` row itself (it's a tenant-level setting),
+    # so ``read_me`` builds this field-by-field rather than relying on
+    # ``from_attributes`` alone.
+    storm_module_enabled: bool
+    agro_module_enabled: bool
 
 
 class DeleteAccountIn(BaseModel):

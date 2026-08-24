@@ -122,6 +122,16 @@ export function Dashboard({ onLogout }: Props) {
     setSelectedLocationId(firstActive?.id ?? null)
   }, [locations, selectedLocationId])
 
+  // Module selection (FASE 30) — if the current tab isn't one the tenant
+  // actually has, switch to whichever one it does have. Both are always
+  // true/false at registration (never both false — enforced server-side),
+  // so exactly one of these branches applies when only one module is on.
+  useEffect(() => {
+    if (!me) return
+    if (activeTab === 'agro' && !me.agro_module_enabled) setActiveTab('storm')
+    if (activeTab === 'storm' && !me.storm_module_enabled) setActiveTab('agro')
+  }, [me, activeTab])
+
   function handleLocationCreated(created: LocationItem) {
     setLocations((prev) => [...prev, created])
   }
@@ -301,26 +311,31 @@ export function Dashboard({ onLogout }: Props) {
           <LocationWeatherCard location={selectedLocation} />
         </div>
 
-        <div className="tab-switcher" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'storm'}
-            className={`tab-button ${activeTab === 'storm' ? 'active' : ''}`}
-            onClick={() => setActiveTab('storm')}
-          >
-            ⛈️ Tempestade
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'agro'}
-            className={`tab-button ${activeTab === 'agro' ? 'active' : ''}`}
-            onClick={() => setActiveTab('agro')}
-          >
-            🌾 Agro
-          </button>
-        </div>
+        {/* Module selection (FASE 30): only show the switcher when the
+            tenant actually has both — a single-module tenant just sees
+            that module's content directly, no tab to switch to. */}
+        {(me?.storm_module_enabled ?? true) && (me?.agro_module_enabled ?? false) && (
+          <div className="tab-switcher" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'storm'}
+              className={`tab-button ${activeTab === 'storm' ? 'active' : ''}`}
+              onClick={() => setActiveTab('storm')}
+            >
+              ⛈️ Tempestade
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'agro'}
+              className={`tab-button ${activeTab === 'agro' ? 'active' : ''}`}
+              onClick={() => setActiveTab('agro')}
+            >
+              🌾 Agro
+            </button>
+          </div>
+        )}
 
         {activeTab === 'storm' ? (
           <div className="top-cards secondary">

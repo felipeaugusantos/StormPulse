@@ -153,10 +153,17 @@ export async function register(
   email: string,
   password: string,
   fullName?: string,
+  modules?: { storm: boolean; agro: boolean },
 ): Promise<void> {
   await request<void>('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, full_name: fullName || null }),
+    body: JSON.stringify({
+      email,
+      password,
+      full_name: fullName || null,
+      storm_module: modules?.storm ?? true,
+      agro_module: modules?.agro ?? false,
+    }),
   })
   await login(email, password)
 }
