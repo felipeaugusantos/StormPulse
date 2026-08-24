@@ -1228,7 +1228,12 @@ function NdviPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
                   <div className="agro-section">
                     {entry.ndvi ? (
                       <div className="agro-row">
-                        NDVI {entry.ndvi.ndvi_mean.toFixed(2)} — {NDVI_LABEL[entry.ndviLevel]}
+                        NDVI {entry.ndvi.ndvi_mean.toFixed(2)} —{' '}
+                        {new Date(entry.ndvi.observed_at).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                        })}{' '}
+                        — {NDVI_LABEL[entry.ndviLevel]}
                         {entry.ndvi.is_mock && ' (simulado)'}
                       </div>
                     ) : (
