@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -28,6 +29,7 @@ from app.weather.provider import (
     RainfallHistory,
     WeatherProviderUnavailableError,
 )
+from engine.geo import haversine_km
 
 router = APIRouter(tags=["locations"])
 
@@ -41,11 +43,11 @@ async def _get_owned_or_404(session: AsyncSession, user: User, location_id: uuid
 
 async def _validate_parent(
     session: AsyncSession, user: User, parent_location_id: uuid.UUID | None
-) -> None:
+) -> Location | None:
     """A talhão's parent must belong to the caller and not itself be a
     talhão — only one level of nesting (farm → plots), not a tree."""
     if parent_location_id is None:
-        return
+        return None
     parent = await service.get_location(session, user, parent_location_id)
     if parent is None:
         raise HTTPException(
@@ -56,6 +58,26 @@ async def _validate_parent(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Um talhão não pode ser filho de outro talhão",
         )
+    return parent
+
+
+def _validate_boundary_within_parent_radius(parent: Location, boundary_geojson: str) -> None:
+    """A talhão's drawn contour must fall inside its farm's own monitored
+    radius — otherwise it's easy to click/drag a boundary onto the wrong
+    spot on the map and end up with a plot the farm's alerts/weather never
+    actually cover."""
+    ring = json.loads(boundary_geojson)["coordinates"][0]
+    for lon, lat in ring:
+        distance_km = haversine_km(parent.latitude, parent.longitude, lat, lon)
+        if distance_km > parent.radius_km:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "O contorno do talhão precisa ficar dentro do raio monitorado da "
+                    f"fazenda ({parent.radius_km:.0f} km) — um ponto do contorno está a "
+                    f"{distance_km:.1f} km do centro da fazenda"
+                ),
+            )
 
 
 @router.post(
@@ -69,7 +91,9 @@ async def create_location(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Location:
-    await _validate_parent(session, user, data.parent_location_id)
+    parent = await _validate_parent(session, user, data.parent_location_id)
+    if parent is not None and data.boundary_geojson is not None:
+        _validate_boundary_within_parent_radius(parent, data.boundary_geojson)
     return await service.create_location(session, user, data)
 
 
@@ -98,6 +122,10 @@ async def update_location(
     user: User = Depends(get_current_user),
 ) -> Location:
     location = await _get_owned_or_404(session, user, location_id)
+    if data.boundary_geojson is not None and location.parent_location_id is not None:
+        parent = await service.get_location(session, user, location.parent_location_id)
+        if parent is not None:
+            _validate_boundary_within_parent_radius(parent, data.boundary_geojson)
     return await service.update_location(session, location, data)
 
 

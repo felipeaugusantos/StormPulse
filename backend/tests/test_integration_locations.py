@@ -168,9 +168,13 @@ async def test_create_plot_with_boundary_polygon(client: AsyncClient) -> None:
     headers = await _auth_headers(client)
     farm = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
 
+    # Small triangle a few hundred meters from the farm's own (lat, lon) —
+    # well inside its 50 km radius_km.
     boundary = {
         "type": "Polygon",
-        "coordinates": [[[-47.81, -21.18], [-47.80, -21.18], [-47.80, -21.17], [-47.81, -21.18]]],
+        "coordinates": [
+            [[-46.632, -23.552], [-46.628, -23.552], [-46.628, -23.548], [-46.632, -23.552]]
+        ],
     }
 
     resp = await client.post(
@@ -186,6 +190,57 @@ async def test_create_plot_with_boundary_polygon(client: AsyncClient) -> None:
     assert resp.status_code == 201
     body = resp.json()
     assert json.loads(body["boundary_geojson"]) == boundary
+
+
+async def test_create_plot_boundary_far_outside_farm_radius_is_rejected(
+    client: AsyncClient,
+) -> None:
+    headers = await _auth_headers(client)
+    farm = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    # Ribeirão Preto — ~300 km from the farm's São Paulo coordinates,
+    # far outside the farm's 50 km radius_km.
+    far_boundary = {
+        "type": "Polygon",
+        "coordinates": [[[-47.81, -21.18], [-47.80, -21.18], [-47.80, -21.17], [-47.81, -21.18]]],
+    }
+
+    resp = await client.post(
+        "/api/v1/locations",
+        json={
+            **_PAYLOAD,
+            "name": "Talhão longe demais",
+            "parent_location_id": farm["id"],
+            "boundary_geojson": json.dumps(far_boundary),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 400
+
+
+async def test_update_plot_boundary_far_outside_farm_radius_is_rejected(
+    client: AsyncClient,
+) -> None:
+    headers = await _auth_headers(client)
+    farm = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+    plot = (
+        await client.post(
+            "/api/v1/locations",
+            json={**_PAYLOAD, "name": "Talhão 1", "parent_location_id": farm["id"]},
+            headers=headers,
+        )
+    ).json()
+
+    far_boundary = {
+        "type": "Polygon",
+        "coordinates": [[[-47.81, -21.18], [-47.80, -21.18], [-47.80, -21.17], [-47.81, -21.18]]],
+    }
+    resp = await client.put(
+        f"/api/v1/locations/{plot['id']}",
+        json={"boundary_geojson": json.dumps(far_boundary)},
+        headers=headers,
+    )
+    assert resp.status_code == 400
 
 
 async def test_create_location_rejects_malformed_boundary_geojson(client: AsyncClient) -> None:
