@@ -46,6 +46,13 @@ interface Props {
 
 const REFRESH_MS = 30_000
 
+// Agro alert types (backend `AlertEventType.FROST_WARNING`/`DRY_SPELL_WARNING`)
+// must never surface in the Tempestade tab — the two tabs are deliberately
+// independent (module selection, FASE 30/32). The Agro tab already shows
+// this same information live via FrostPanel/RainfallPanel, computed fresh
+// rather than read from the persisted Alert row.
+const AGRO_ALERT_EVENT_TYPES = new Set(['frost_warning', 'dry_spell_warning'])
+
 export function Dashboard({ onLogout }: Props) {
   const mapRef = useRef<StormMapHandle>(null)
   const [me, setMe] = useState<Me | null>(null)
@@ -340,7 +347,9 @@ export function Dashboard({ onLogout }: Props) {
 
         {activeTab === 'storm' ? (
           <div className="top-cards secondary">
-            <AlertsPanel alerts={alerts} />
+            <AlertsPanel
+              alerts={alerts.filter((a) => !AGRO_ALERT_EVENT_TYPES.has(a.event_type))}
+            />
             <StormsPanel storms={storms} />
             <SatelliteWatchesPanel
               watches={satelliteWatches}
