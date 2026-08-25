@@ -338,6 +338,15 @@ class Settings(BaseSettings):
                 "(ADR-0055); the dev defaults are refused. Generate each with "
                 "`openssl rand -base64 32`."
             )
+        if self.environment == "production" and not self.refresh_cookie_enabled:
+            raise ValueError(
+                "REFRESH_COOKIE_ENABLED must be true in production — with it off, the web "
+                "dashboard's refresh token rides in the JSON body and localStorage, exactly "
+                "the XSS blast-radius ADR-0045 exists to avoid. The code default (False) is "
+                "a dev/test convenience only; .env.example already ships `true` for a real "
+                "deploy, but an incomplete .env silently falling back to the less-safe mode "
+                "must fail loudly instead, not go unnoticed."
+            )
         if (
             self.environment == "production"
             and self.refresh_cookie_enabled

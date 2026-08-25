@@ -13,10 +13,97 @@ was the first case that surfaced this).
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+
+from app.core.config import Settings
+
+logger = logging.getLogger(__name__)
+
+
+class RlsSafetyError(RuntimeError):
+    """The connected DB role/table setup doesn't actually give RLS the
+    protection migration ``0b7b9a5dbd11`` is meant to provide."""
+
+
+# Mirror of `_TENANT_SCOPED_TABLES` in that migration — kept as a separate
+# literal (not imported) since a startup check shouldn't depend on Alembic
+# migration modules being importable/available in every environment that
+# runs `create_app()`.
+_TENANT_SCOPED_TABLES = (
+    "users",
+    "locations",
+    "alerts",
+    "alert_verifications",
+    "ndvi_readings",
+    "notifications",
+    "push_subscriptions",
+    "user_reports",
+    "storm_risks",
+)
+
+
+async def verify_rls_safety(engine: AsyncEngine, settings: Settings) -> None:
+    """Confirm the role this process actually connected as can't silently
+    defeat RLS, and that every tenant-scoped table still has it on.
+
+    Hard-fails (raises `RlsSafetyError`) in production — this runs once at
+    startup, so a bad config never serves a single request. Everywhere
+    else it only logs a warning: local/CI conveniences (a superuser DB,
+    skipping the RLS migration entirely for a fast unit-test setup) are
+    legitimate outside production and shouldn't block them from starting.
+    """
+    async with engine.connect() as conn:
+        role_row = (
+            await conn.execute(
+                text(
+                    "SELECT rolname, rolsuper, rolbypassrls FROM pg_roles "
+                    "WHERE rolname = current_user"
+                )
+            )
+        ).one()
+        current_role, is_superuser, bypasses_rls = role_row
+
+        problems: list[str] = []
+        if is_superuser:
+            problems.append(f"runtime role {current_role!r} is a Postgres superuser")
+        if bypasses_rls:
+            problems.append(f"runtime role {current_role!r} has the BYPASSRLS attribute")
+        if current_role == settings.postgres_user:
+            problems.append(
+                f"runtime role {current_role!r} is the same as the migration/superuser role "
+                f"({settings.postgres_user!r}) — they must be different roles"
+            )
+
+        table_list = ",".join(f"'{name}'" for name in _TENANT_SCOPED_TABLES)
+        unprotected = (
+            (
+                await conn.execute(
+                    text(
+                        f"SELECT relname FROM pg_class "
+                        f"WHERE relname IN ({table_list}) "
+                        f"AND (NOT relrowsecurity OR NOT relforcerowsecurity)"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if unprotected:
+            problems.append(
+                "tables missing ENABLE+FORCE ROW LEVEL SECURITY: "
+                f"{sorted(unprotected)} (has migration 0b7b9a5dbd11 run?)"
+            )
+
+    if not problems:
+        return
+    message = "RLS safety check failed: " + "; ".join(problems)
+    if settings.environment == "production":
+        raise RlsSafetyError(message)
+    logger.warning(message)
 
 
 async def set_tenant_context(session: AsyncSession, tenant_id: uuid.UUID) -> None:

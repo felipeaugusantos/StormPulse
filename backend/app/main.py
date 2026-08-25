@@ -16,6 +16,7 @@ from app.core.logging import configure_logging
 from app.core.metrics import configure_metrics
 from app.core.middleware import RequestContextMiddleware
 from app.core.ratelimit import RateLimiter
+from app.core.rls import verify_rls_safety
 from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.tracing import configure_tracing
 from app.db.redis import create_redis
@@ -62,6 +63,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.engine = create_engine(settings)
     app.state.session_factory = create_session_factory(app.state.engine)
     app.state.redis = create_redis(settings)
+    # Fails startup outright in production (never serves a request with a
+    # broken RLS setup); everywhere else just warns — see
+    # verify_rls_safety's own docstring for why local/CI get the pass.
+    await verify_rls_safety(app.state.engine, settings)
     # Gated only by PLATFORM_ADMIN_EMAIL being set (see the function's own
     # early return) — not by environment, so integration tests can exercise
     # the real startup path instead of a parallel test-only code path.
