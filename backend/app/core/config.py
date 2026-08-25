@@ -5,6 +5,7 @@ from __future__ import annotations
 import ipaddress
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import quote
 
 from pydantic import (
     Field,
@@ -325,8 +326,8 @@ class Settings(BaseSettings):
         the migration superuser (see that field's docstring)."""
         dsn = PostgresDsn.build(
             scheme="postgresql+asyncpg",
-            username=self.postgres_app_user,
-            password=self.postgres_app_password,
+            username=quote(self.postgres_app_user, safe=""),
+            password=quote(self.postgres_app_password, safe=""),
             host=self.postgres_host,
             port=self.postgres_port,
             path=self.postgres_db,
@@ -342,8 +343,8 @@ class Settings(BaseSettings):
         actually still used."""
         dsn = PostgresDsn.build(
             scheme="postgresql+psycopg2",
-            username=self.postgres_app_user,
-            password=self.postgres_app_password,
+            username=quote(self.postgres_app_user, safe=""),
+            password=quote(self.postgres_app_password, safe=""),
             host=self.postgres_host,
             port=self.postgres_port,
             path=self.postgres_db,
@@ -358,8 +359,8 @@ class Settings(BaseSettings):
         ``0b7b9a5dbd11``). Never used by the running app or workers."""
         dsn = PostgresDsn.build(
             scheme="postgresql+psycopg2",
-            username=self.postgres_user,
-            password=self.postgres_password,
+            username=quote(self.postgres_user, safe=""),
+            password=quote(self.postgres_password, safe=""),
             host=self.postgres_host,
             port=self.postgres_port,
             path=self.postgres_db,
