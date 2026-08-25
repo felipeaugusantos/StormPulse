@@ -12,6 +12,7 @@ import type {
   LocationItem,
   Me,
   NdviReading,
+  PipelineHealth,
   PushSubscriptionInput,
   RainfallHistory,
   ReadyStatus,
@@ -307,6 +308,7 @@ export const api = {
     return request<AdminAuditLogList>(`/admin/audit-log${qs ? `?${qs}` : ''}`)
   },
   adminStats: () => request<AdminStats>('/admin/stats'),
+  adminPipelineHealth: () => request<PipelineHealth[]>('/admin/pipeline-health'),
 }
 
 // Radius publicApi's nearby calls query with — wider than the 50km default

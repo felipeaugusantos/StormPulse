@@ -22,11 +22,15 @@ from app.admin.schemas import (
     AdminTenantOut,
     AdminUserOut,
     AdminUserUpdateIn,
+    PipelineHealthOut,
 )
 from app.alerts.models import Alert
 from app.core.enums import UserRole
 from app.core.rls import bypass_rls
+from app.lightning.models import LightningStrike
 from app.locations.models import Location
+from app.satellite.models import SatelliteImage
+from app.storms.models import StormCell
 from app.tenants.models import Tenant
 from app.users.models import User
 
@@ -286,3 +290,51 @@ async def get_stats(session: AsyncSession) -> AdminStatsOut:
         total_locations=total_locations,
         alerts_last_30d=alerts_last_30d,
     )
+
+
+# (name, expected interval in seconds) — must match the actual Celery beat
+# schedule in workers/celery_app.py; kept here rather than importing that
+# module (workers/ isn't a dependency of app/) since these are just the
+# display thresholds, not the schedule itself.
+_PIPELINE_INTERVALS: tuple[tuple[str, int], tuple[str, int], tuple[str, int]] = (
+    ("satellite", 600),  # satellite-detect-every-10-minutes
+    ("storms", 300),  # ingest-every-5-minutes
+    ("lightning", 300),  # lightning-detect-every-5-minutes
+)
+
+
+async def get_pipeline_health(session: AsyncSession) -> list[PipelineHealthOut]:
+    """Freshness of each background pipeline's most recent data.
+
+    ``last_updated_at`` is the latest row's own timestamp, not a separate
+    "the cron last fired" record — there's no such log kept. For
+    ``satellite`` this doubles as true pipeline health, since
+    ``_persist_image`` (workers/satellite_pipeline.py) writes unconditionally
+    every cycle whether or not anything was detected. For ``storms``/
+    ``lightning``, a stale reading can also just mean genuinely quiet
+    weather — worth checking manually, not a hard failure signal on its own.
+    """
+    now = datetime.now(UTC)
+    latest_by_table = {
+        "satellite": (
+            await session.execute(select(func.max(SatelliteImage.captured_at)))
+        ).scalar_one(),
+        "storms": (await session.execute(select(func.max(StormCell.created_at)))).scalar_one(),
+        "lightning": (
+            await session.execute(select(func.max(LightningStrike.created_at)))
+        ).scalar_one(),
+    }
+
+    results = []
+    for name, interval_seconds in _PIPELINE_INTERVALS:
+        last = latest_by_table[name]
+        stale = last is None or (now - last) > timedelta(seconds=interval_seconds * 2)
+        results.append(
+            PipelineHealthOut(
+                name=name,
+                last_updated_at=last,
+                expected_interval_seconds=interval_seconds,
+                stale=stale,
+            )
+        )
+    return results

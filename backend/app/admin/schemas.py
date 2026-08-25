@@ -89,3 +89,23 @@ class AdminStatsOut(BaseModel):
     active_users_30d: int
     total_locations: int
     alerts_last_30d: int
+
+
+class PipelineHealthOut(BaseModel):
+    """How fresh each background pipeline's most recent data is (FASE 34
+    follow-up — built after a visitor-mode bug report led to manually
+    diagnosing a stale satellite cycle over SSH; this surfaces the same
+    check in the admin panel instead).
+
+    ``last_updated_at`` is the most recent row's own timestamp, not a
+    separate "the cron last fired" log — there's no such log. For
+    `satellite` this is equivalent to true pipeline health (it writes
+    unconditionally every cycle, detections or not); for `storms` and
+    `lightning`, a long gap can mean either a stuck pipeline or genuinely
+    quiet weather — `stale` is a hint worth checking, not a diagnosis.
+    """
+
+    name: str
+    last_updated_at: datetime | None
+    expected_interval_seconds: int
+    stale: bool

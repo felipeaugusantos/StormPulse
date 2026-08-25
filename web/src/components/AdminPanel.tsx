@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api'
 import { formatDateBR, formatDateTimeBR } from '../format'
-import type { AdminAuditLogEntry, AdminStats, AdminTenant, AdminUser } from '../types'
+import type { AdminAuditLogEntry, AdminStats, AdminTenant, AdminUser, PipelineHealth } from '../types'
+
+const PIPELINE_LABELS: Record<string, string> = {
+  satellite: 'Satélite (imagem + observações)',
+  storms: 'Células de tempestade (radar)',
+  lightning: 'Raios',
+}
 
 interface Props {
   onBack: () => void
@@ -12,7 +18,7 @@ const PAGE_SIZE = 100
 const ROLE_OPTIONS = ['user', 'admin']
 
 export function AdminPanel({ onBack, meId }: Props) {
-  const [tab, setTab] = useState<'stats' | 'users' | 'tenants' | 'audit'>('stats')
+  const [tab, setTab] = useState<'stats' | 'users' | 'tenants' | 'audit' | 'pipelines'>('stats')
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -22,6 +28,7 @@ export function AdminPanel({ onBack, meId }: Props) {
   const [auditLog, setAuditLog] = useState<AdminAuditLogEntry[]>([])
   const [auditTotal, setAuditTotal] = useState(0)
   const [stats, setStats] = useState<AdminStats | null>(null)
+  const [pipelineHealth, setPipelineHealth] = useState<PipelineHealth[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mutatingId, setMutatingId] = useState<string | null>(null)
@@ -40,6 +47,8 @@ export function AdminPanel({ onBack, meId }: Props) {
         const res = await api.adminTenants({ search: searchQuery || undefined, limit: PAGE_SIZE })
         setTenants(res.items)
         setTenantsTotal(res.total)
+      } else if (tab === 'pipelines') {
+        setPipelineHealth(await api.adminPipelineHealth())
       } else {
         const res = await api.adminAuditLog({ limit: PAGE_SIZE })
         setAuditLog(res.items)
@@ -61,7 +70,7 @@ export function AdminPanel({ onBack, meId }: Props) {
     setSearchQuery(searchInput.trim())
   }
 
-  function switchTab(next: 'stats' | 'users' | 'tenants' | 'audit') {
+  function switchTab(next: 'stats' | 'users' | 'tenants' | 'audit' | 'pipelines') {
     setTab(next)
     setSearchInput('')
     setSearchQuery('')
@@ -149,9 +158,16 @@ export function AdminPanel({ onBack, meId }: Props) {
             >
               Auditoria
             </button>
+            <button
+              type="button"
+              className={`btn small ${tab === 'pipelines' ? '' : 'ghost'}`}
+              onClick={() => switchTab('pipelines')}
+            >
+              Pipelines
+            </button>
           </div>
 
-          {tab !== 'audit' && tab !== 'stats' && (
+          {tab !== 'audit' && tab !== 'stats' && tab !== 'pipelines' && (
             <form className="location-search-row" onSubmit={submitSearch}>
               <input
                 type="text"
@@ -197,6 +213,41 @@ export function AdminPanel({ onBack, meId }: Props) {
                   </div>
                 </div>
               )}
+            </>
+          )}
+
+          {tab === 'pipelines' && (
+            <>
+              <h2>Pipelines</h2>
+              <p className="panel-hint">
+                Idade do dado mais recente de cada pipeline de fundo — não é um log de "quando o
+                cron rodou", é o timestamp da própria última linha. Pro satélite isso equivale à
+                saúde real do pipeline (ele grava a cada ciclo, com ou sem detecção); pra células e
+                raios, um período parado pode ser tempo calmo de verdade, não necessariamente um
+                pipeline travado — vale conferir antes de assumir que é bug.
+              </p>
+              <div className="list">
+                {!loading && pipelineHealth.length === 0 && (
+                  <p className="empty">Não foi possível carregar o status dos pipelines.</p>
+                )}
+                {pipelineHealth.map((p) => (
+                  <div className="row" key={p.name}>
+                    <span className={`badge ${p.stale ? 'red' : 'green'}`}>
+                      {p.stale ? 'atrasado' : 'em dia'}
+                    </span>
+                    <div className="grow">
+                      <div>{PIPELINE_LABELS[p.name] ?? p.name}</div>
+                      <div className="sub muted">
+                        {p.last_updated_at
+                          ? `último dado: ${formatDateTimeBR(p.last_updated_at)}`
+                          : 'nenhum dado ainda'}
+                        {' · esperado a cada '}
+                        {Math.round(p.expected_interval_seconds / 60)} min
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </>
           )}
 

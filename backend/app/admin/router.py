@@ -21,6 +21,7 @@ from app.admin.schemas import (
     AdminUserListOut,
     AdminUserOut,
     AdminUserUpdateIn,
+    PipelineHealthOut,
 )
 from app.api.deps import get_db, require_platform_admin
 from app.users.models import User
@@ -124,3 +125,15 @@ async def get_stats(
     _: User = Depends(require_platform_admin),
 ) -> AdminStatsOut:
     return await service.get_stats(session)
+
+
+@router.get(
+    "/pipeline-health",
+    response_model=list[PipelineHealthOut],
+    summary="Frescor dos dados de cada pipeline de fundo (operador da plataforma)",
+)
+async def get_pipeline_health(
+    session: AsyncSession = Depends(get_db),
+    _: User = Depends(require_platform_admin),
+) -> list[PipelineHealthOut]:
+    return await service.get_pipeline_health(session)

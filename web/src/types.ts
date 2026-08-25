@@ -74,6 +74,13 @@ export interface AdminStats {
   alerts_last_30d: number
 }
 
+export interface PipelineHealth {
+  name: string
+  last_updated_at: string | null
+  expected_interval_seconds: number
+  stale: boolean
+}
+
 export interface StormCell {
   id: string
   detected_at: string

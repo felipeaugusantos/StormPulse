@@ -14,13 +14,20 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
 from app.core.config import Settings
+from app.core.enums import StormSeverity
+from app.lightning.models import LightningStrike
 from app.main import create_app
+from app.satellite.models import SatelliteImage
+from app.storms.models import StormCell
 from tests.conftest import register_and_login
+from workers.db import session_scope
 
 pytestmark = pytest.mark.integration
 
@@ -430,3 +437,77 @@ async def test_stats_reflects_recent_logins_and_counts(client: AsyncClient) -> N
         assert body["active_users_7d"] >= 1
         assert body["active_users_30d"] >= body["active_users_7d"]
         assert body["total_locations"] >= 1
+
+
+async def test_non_admin_gets_403_on_pipeline_health(client: AsyncClient) -> None:
+    token = await register_and_login(client)
+    resp = await client.get(
+        "/api/v1/admin/pipeline-health", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 403
+
+
+async def test_pipeline_health_reflects_fresh_and_stale_data(client: AsyncClient) -> None:
+    # FASE 34 follow-up: this is the same freshness check that previously
+    # had to be done by hand over SSH (curling /public/satellite/image,
+    # reading captured_at) — surfaced here instead.
+    now = datetime.now(UTC)
+    with session_scope() as session:
+        for stale in session.scalars(select(SatelliteImage)).all():
+            session.delete(stale)
+        session.add(
+            SatelliteImage(
+                captured_at=now,
+                bbox_lon_min=-74.0,
+                bbox_lat_min=-34.0,
+                bbox_lon_max=-34.0,
+                bbox_lat_max=6.0,
+                band="B13",
+                width=10,
+                height=8,
+                png_data=b"\x89PNG",
+                is_mock=False,
+                experimental=True,
+            )
+        )
+        # Fresh lightning strike (well within the 300s*2 staleness window).
+        session.add(
+            LightningStrike(detected_at=now, latitude=-23.5, longitude=-46.6, is_mock=False)
+        )
+        # Storm cell old enough to be flagged stale (> 2x the 300s interval).
+        session.add(
+            StormCell(
+                detected_at=now - timedelta(hours=1),
+                latitude=-23.5,
+                longitude=-46.6,
+                severity=StormSeverity.MODERATE,
+                is_mock=False,
+                created_at=now - timedelta(hours=1),
+            )
+        )
+
+    admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
+    await _register(client, admin_email)
+
+    async for admin_client in _promoted_client(admin_email):
+        login = await admin_client.post(
+            "/api/v1/auth/login", json={"email": admin_email, "password": _PASSWORD}
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        resp = await admin_client.get("/api/v1/admin/pipeline-health", headers=headers)
+        assert resp.status_code == 200
+        by_name = {row["name"]: row for row in resp.json()}
+
+        assert by_name["satellite"]["stale"] is False
+        assert by_name["satellite"]["last_updated_at"] is not None
+        assert by_name["lightning"]["stale"] is False
+        assert by_name["storms"]["stale"] is True
+
+    with session_scope() as session:
+        for stale in session.scalars(select(SatelliteImage)).all():
+            session.delete(stale)
+        for stale in session.scalars(select(LightningStrike)).all():
+            session.delete(stale)
+        for stale in session.scalars(select(StormCell)).all():
+            session.delete(stale)
