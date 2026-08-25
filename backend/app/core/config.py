@@ -108,8 +108,20 @@ class Settings(BaseSettings):
     default_rate_limit_max: int = Field(default=120, gt=0)
     default_rate_limit_window_seconds: int = Field(default=60, gt=0)
 
-    # --- Rate limiting (public/visitor endpoints, FASE 15 — stricter: anonymous) ---
-    public_rate_limit_max: int = Field(default=30, gt=0)
+    # --- Rate limiting (public/visitor endpoints, FASE 15 — anonymous) ---
+    # Every anonymous client behind the same IP shares this one bucket — and
+    # in practice that's not one visitor: mobile carrier CGNAT (very common
+    # in Brazil, this app's audience) puts many unrelated users behind a
+    # single public IP. The original default of 30 was already exhausted by
+    # a single idle visitor tab alone: VisitorView polls 5 of these
+    # endpoints (storms/warnings/satellite watches/satellite image/
+    # lightning) together every 30s, ~10 req/min just sitting there, before
+    # counting a second tab, a location search, or anyone else sharing that
+    # IP (FASE 34 bug report: visitor location search 429'd from the very
+    # first page load). Raised to match `default_rate_limit_max` — plenty
+    # of headroom for several real visitors sharing an IP, still a real
+    # throttle against actual abuse.
+    public_rate_limit_max: int = Field(default=120, gt=0)
     public_rate_limit_window_seconds: int = Field(default=60, gt=0)
 
     # --- Rate limiting: trusted proxy policy (hardening ADR-0033) ---
