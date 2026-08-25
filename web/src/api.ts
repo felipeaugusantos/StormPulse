@@ -309,6 +309,11 @@ export const api = {
   },
   adminStats: () => request<AdminStats>('/admin/stats'),
   adminPipelineHealth: () => request<PipelineHealth[]>('/admin/pipeline-health'),
+  adminTriggerPipeline: (name: string) =>
+    request<{ queued: boolean; name: string }>('/admin/pipeline-health/trigger', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
 }
 
 // Radius publicApi's nearby calls query with — wider than the 50km default

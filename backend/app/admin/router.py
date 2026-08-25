@@ -22,8 +22,12 @@ from app.admin.schemas import (
     AdminUserOut,
     AdminUserUpdateIn,
     PipelineHealthOut,
+    PipelineTriggerIn,
+    PipelineTriggerOut,
 )
-from app.api.deps import get_db, require_platform_admin
+from app.api.deps import get_db, get_request_settings, require_platform_admin
+from app.core.config import Settings
+from app.core.tasks import PIPELINE_TASK_NAMES, trigger_pipeline
 from app.users.models import User
 
 router = APIRouter(tags=["admin"])
@@ -137,3 +141,25 @@ async def get_pipeline_health(
     _: User = Depends(require_platform_admin),
 ) -> list[PipelineHealthOut]:
     return await service.get_pipeline_health(session)
+
+
+@router.post(
+    "/pipeline-health/trigger",
+    response_model=PipelineTriggerOut,
+    summary="Rodar um pipeline agora, fora do agendamento (operador da plataforma)",
+)
+async def trigger_pipeline_now(
+    data: PipelineTriggerIn,
+    settings: Settings = Depends(get_request_settings),
+    _: User = Depends(require_platform_admin),
+) -> PipelineTriggerOut:
+    if data.name not in PIPELINE_TASK_NAMES:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline desconhecido: {data.name!r}",
+        )
+    # Fire-and-forget — enqueues onto the same Redis broker `worker`
+    # already consumes from; doesn't wait for the cycle to actually finish
+    # (the satellite one alone takes ~15s), same as beat's own dispatch.
+    trigger_pipeline(data.name, settings)
+    return PipelineTriggerOut(queued=True, name=data.name)

@@ -32,6 +32,8 @@ export function AdminPanel({ onBack, meId }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mutatingId, setMutatingId] = useState<string | null>(null)
+  const [triggeringName, setTriggeringName] = useState<string | null>(null)
+  const [triggerMessage, setTriggerMessage] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -74,6 +76,28 @@ export function AdminPanel({ onBack, meId }: Props) {
     setTab(next)
     setSearchInput('')
     setSearchQuery('')
+  }
+
+  async function triggerPipeline(name: string) {
+    setTriggeringName(name)
+    setTriggerMessage(null)
+    setError(null)
+    try {
+      await api.adminTriggerPipeline(name)
+      // Fire-and-forget on the backend (the satellite cycle alone takes
+      // ~15s) — this delay is a guess at "probably done", not a real
+      // completion signal; the reload afterward is what actually shows
+      // whether it worked.
+      setTriggerMessage(`Disparado — atualizando em alguns segundos...`)
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+      await load()
+      setTriggerMessage(null)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erro ao disparar pipeline')
+      setTriggerMessage(null)
+    } finally {
+      setTriggeringName(null)
+    }
   }
 
   async function toggleActive(u: AdminUser) {
@@ -221,11 +245,14 @@ export function AdminPanel({ onBack, meId }: Props) {
               <h2>Pipelines</h2>
               <p className="panel-hint">
                 Idade do dado mais recente de cada pipeline de fundo — não é um log de "quando o
-                cron rodou", é o timestamp da própria última linha. Pro satélite isso equivale à
-                saúde real do pipeline (ele grava a cada ciclo, com ou sem detecção); pra células e
-                raios, um período parado pode ser tempo calmo de verdade, não necessariamente um
-                pipeline travado — vale conferir antes de assumir que é bug.
+                cron rodou", é o timestamp da própria última linha. Pra satélite é o horário real
+                da varredura do satélite (não de quando nosso ciclo rodou) — o provedor de dados
+                costuma levar 20-40min pra publicar, então "atrasado" ali é bem mais folgado que
+                pras outras. Pra células e raios, um período parado pode ser tempo calmo de
+                verdade, não necessariamente travado — vale conferir antes de assumir que é bug.
+                "Atualizar agora" roda o pipeline na hora, fora do agendamento normal.
               </p>
+              {triggerMessage && <p className="panel-hint">{triggerMessage}</p>}
               <div className="list">
                 {!loading && pipelineHealth.length === 0 && (
                   <p className="empty">Não foi possível carregar o status dos pipelines.</p>
@@ -245,6 +272,14 @@ export function AdminPanel({ onBack, meId }: Props) {
                         {Math.round(p.expected_interval_seconds / 60)} min
                       </div>
                     </div>
+                    <button
+                      type="button"
+                      className="btn small ghost"
+                      onClick={() => triggerPipeline(p.name)}
+                      disabled={triggeringName !== null}
+                    >
+                      {triggeringName === p.name ? '…' : '🔄 Atualizar agora'}
+                    </button>
                   </div>
                 ))}
               </div>

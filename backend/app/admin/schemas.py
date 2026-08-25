@@ -99,13 +99,28 @@ class PipelineHealthOut(BaseModel):
 
     ``last_updated_at`` is the most recent row's own timestamp, not a
     separate "the cron last fired" log — there's no such log. For
-    `satellite` this is equivalent to true pipeline health (it writes
-    unconditionally every cycle, detections or not); for `storms` and
-    `lightning`, a long gap can mean either a stuck pipeline or genuinely
-    quiet weather — `stale` is a hint worth checking, not a diagnosis.
+    `storms`/`lightning` it's when our own cycle wrote the row, so a long
+    gap can mean either a stuck pipeline or genuinely quiet weather —
+    `stale` is a hint worth checking, not a diagnosis. For `satellite` it's
+    the GOES scene's own true scan time (STAC item metadata, not our
+    cycle's run time) — its `stale` threshold is deliberately looser than
+    2x the interval to account for real upstream publish latency (often
+    20-40+ minutes on its own), confirmed live rather than assumed.
     """
 
     name: str
     last_updated_at: datetime | None
     expected_interval_seconds: int
     stale: bool
+
+
+class PipelineTriggerIn(BaseModel):
+    """Which pipeline to run right now — `name` must be one of the values
+    `PipelineHealthOut.name` reports (`app.core.tasks.PIPELINE_TASK_NAMES`)."""
+
+    name: str
+
+
+class PipelineTriggerOut(BaseModel):
+    queued: bool
+    name: str

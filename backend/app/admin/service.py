@@ -292,14 +292,23 @@ async def get_stats(session: AsyncSession) -> AdminStatsOut:
     )
 
 
-# (name, expected interval in seconds) — must match the actual Celery beat
-# schedule in workers/celery_app.py; kept here rather than importing that
-# module (workers/ isn't a dependency of app/) since these are just the
-# display thresholds, not the schedule itself.
-_PIPELINE_INTERVALS: tuple[tuple[str, int], tuple[str, int], tuple[str, int]] = (
-    ("satellite", 600),  # satellite-detect-every-10-minutes
-    ("storms", 300),  # ingest-every-5-minutes
-    ("lightning", 300),  # lightning-detect-every-5-minutes
+# (name, expected interval seconds, staleness threshold seconds) — the
+# interval must match the actual Celery beat schedule in
+# workers/celery_app.py (kept here rather than importing that module,
+# since workers/ isn't a dependency of app/). The staleness threshold is
+# NOT always a flat 2x the interval: `satellite`'s `captured_at` is the
+# GOES scene's own true scan time (from STAC item metadata, see
+# `_persist_image(..., now=timestamp)` in workers/satellite_pipeline.py —
+# NOT when our own cycle ran), and the real gap between a GOES scan and
+# that scene actually being published/available commonly runs 20-40+
+# minutes on its own, independent of anything on our side. A 2x-interval
+# (20 min) threshold there would flag "atrasado" on every single healthy
+# cycle — confirmed live in production (FASE 34 follow-up) chasing exactly
+# that false alarm before finding the real explanation.
+_PIPELINE_THRESHOLDS: tuple[tuple[str, int, int], tuple[str, int, int], tuple[str, int, int]] = (
+    ("satellite", 600, 3600),  # satellite-detect-every-10-minutes
+    ("storms", 300, 600),  # ingest-every-5-minutes
+    ("lightning", 300, 600),  # lightning-detect-every-5-minutes
 )
 
 
@@ -308,11 +317,12 @@ async def get_pipeline_health(session: AsyncSession) -> list[PipelineHealthOut]:
 
     ``last_updated_at`` is the latest row's own timestamp, not a separate
     "the cron last fired" record — there's no such log kept. For
-    ``satellite`` this doubles as true pipeline health, since
-    ``_persist_image`` (workers/satellite_pipeline.py) writes unconditionally
-    every cycle whether or not anything was detected. For ``storms``/
-    ``lightning``, a stale reading can also just mean genuinely quiet
-    weather — worth checking manually, not a hard failure signal on its own.
+    ``storms``/``lightning`` it's when our own cycle wrote the row, so a
+    stale reading can mean either a stuck pipeline or genuinely quiet
+    weather — worth checking manually, not a hard failure signal on its
+    own. For ``satellite`` it's the GOES scene's true scan time (see
+    ``_PIPELINE_THRESHOLDS`` above for why its staleness threshold is much
+    looser, not because our cycle runs less reliably).
     """
     now = datetime.now(UTC)
     latest_by_table = {
@@ -326,9 +336,9 @@ async def get_pipeline_health(session: AsyncSession) -> list[PipelineHealthOut]:
     }
 
     results = []
-    for name, interval_seconds in _PIPELINE_INTERVALS:
+    for name, interval_seconds, staleness_seconds in _PIPELINE_THRESHOLDS:
         last = latest_by_table[name]
-        stale = last is None or (now - last) > timedelta(seconds=interval_seconds * 2)
+        stale = last is None or (now - last) > timedelta(seconds=staleness_seconds)
         results.append(
             PipelineHealthOut(
                 name=name,

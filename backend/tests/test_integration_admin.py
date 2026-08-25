@@ -511,3 +511,50 @@ async def test_pipeline_health_reflects_fresh_and_stale_data(client: AsyncClient
             session.delete(stale_strike)
         for stale_cell in session.scalars(select(StormCell)).all():
             session.delete(stale_cell)
+
+
+async def test_non_admin_gets_403_on_pipeline_trigger(client: AsyncClient) -> None:
+    token = await register_and_login(client)
+    resp = await client.post(
+        "/api/v1/admin/pipeline-health/trigger",
+        json={"name": "satellite"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+async def test_pipeline_trigger_rejects_unknown_name(client: AsyncClient) -> None:
+    admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
+    await _register(client, admin_email)
+
+    async for admin_client in _promoted_client(admin_email):
+        login = await admin_client.post(
+            "/api/v1/auth/login", json={"email": admin_email, "password": _PASSWORD}
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        resp = await admin_client.post(
+            "/api/v1/admin/pipeline-health/trigger",
+            json={"name": "not-a-real-pipeline"},
+            headers=headers,
+        )
+        assert resp.status_code == 404
+
+
+async def test_pipeline_trigger_queues_a_known_pipeline(client: AsyncClient) -> None:
+    admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
+    await _register(client, admin_email)
+
+    async for admin_client in _promoted_client(admin_email):
+        login = await admin_client.post(
+            "/api/v1/auth/login", json={"email": admin_email, "password": _PASSWORD}
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        resp = await admin_client.post(
+            "/api/v1/admin/pipeline-health/trigger",
+            json={"name": "storms"},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"queued": True, "name": "storms"}
