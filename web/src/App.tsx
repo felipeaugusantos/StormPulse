@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { initSession, logout } from './api'
 import { Login } from './components/Login'
 import { Dashboard } from './components/Dashboard'
+import { LandingPage } from './components/LandingPage'
 import { VisitorView } from './components/VisitorView'
 
-type View = 'checking' | 'login' | 'visitor' | 'authed'
+type View = 'checking' | 'landing' | 'login' | 'visitor' | 'authed'
 
 export default function App() {
   const [view, setView] = useState<View>('checking')
@@ -16,7 +17,7 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
     initSession().then((ok) => {
-      if (!cancelled) setView(ok ? 'authed' : 'login')
+      if (!cancelled) setView(ok ? 'authed' : 'landing')
     })
     return () => {
       cancelled = true
@@ -39,9 +40,16 @@ export default function App() {
     return <Dashboard onLogout={handleLogout} />
   }
   if (view === 'visitor') {
-    return <VisitorView onBack={() => setView('login')} />
+    return <VisitorView onBack={() => setView('landing')} />
+  }
+  if (view === 'landing') {
+    return <LandingPage onEnter={() => setView('login')} onVisitor={() => setView('visitor')} />
   }
   return (
-    <Login onAuthenticated={() => setView('authed')} onVisitor={() => setView('visitor')} />
+    <Login
+      onAuthenticated={() => setView('authed')}
+      onVisitor={() => setView('visitor')}
+      onBack={() => setView('landing')}
+    />
   )
 }

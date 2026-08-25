@@ -4,6 +4,7 @@ import { ApiError, login, loginWithGoogle, register } from '../api'
 interface Props {
   onAuthenticated: () => void
   onVisitor: () => void
+  onBack?: () => void
 }
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
@@ -27,7 +28,7 @@ function loadGoogleScript(): Promise<void> {
   })
 }
 
-export function Login({ onAuthenticated, onVisitor }: Props) {
+export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -119,6 +120,11 @@ export function Login({ onAuthenticated, onVisitor }: Props) {
   return (
     <div className="login-wrap">
       <form className="login-card" onSubmit={submit}>
+        {onBack && (
+          <button type="button" className="link-btn back-link" onClick={onBack}>
+            ← Voltar
+          </button>
+        )}
         <div className="brand">
           <span aria-hidden>⚡</span>
           <span>
