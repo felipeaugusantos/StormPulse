@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://52-206-89-133.nip.io/sitemap.xml
