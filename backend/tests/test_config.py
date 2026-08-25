@@ -10,20 +10,30 @@ from app.core.config import Settings
 
 def test_database_url_uses_asyncpg_driver() -> None:
     # database_url (the API's runtime connection, FASE 34/RLS) is built
-    # from postgres_app_*, not the migration superuser's postgres_*.
+    # from postgres_app_* (fixed role name, configurable password), not
+    # the migration superuser's postgres_*.
     settings = Settings(
         postgres_host="db",
         postgres_port=5432,
-        postgres_app_user="u",
         postgres_app_password="p",
         postgres_db="stormpulse",
     )
-    assert settings.database_url == "postgresql+asyncpg://u:p@db:5432/stormpulse"
+    assert settings.database_url == "postgresql+asyncpg://stormpulse_app:p@db:5432/stormpulse"
 
 
 def test_sync_database_url_uses_psycopg2_driver() -> None:
-    settings = Settings(postgres_host="db", postgres_app_user="u", postgres_app_password="p")
+    settings = Settings(postgres_host="db", postgres_app_password="p")
     assert settings.sync_database_url.startswith("postgresql+psycopg2://")
+
+
+def test_postgres_app_user_is_not_configurable() -> None:
+    # POSTGRES_APP_USER used to be a settable field the RLS migration
+    # (0b7b9a5dbd11) never actually read — setting it to anything else
+    # silently broke the deployment. Passing it as a constructor kwarg is
+    # now a no-op (Settings' `extra="ignore"`); the name always resolves
+    # to POSTGRES_APP_ROLE regardless.
+    settings = Settings(postgres_app_user="something-else", postgres_app_password="p")
+    assert settings.postgres_app_user == "stormpulse_app"
 
 
 def test_migration_database_url_uses_the_superuser_role() -> None:
@@ -58,6 +68,22 @@ def test_production_refuses_the_dev_field_encryption_keys() -> None:
             environment="production",
             jwt_secret_key="a-strong-production-secret-at-least-32-bytes!",
             postgres_app_password="a-strong-production-db-password",
+        )
+
+
+def test_production_refuses_refresh_cookie_disabled() -> None:
+    # The web dashboard's XSS blast-radius protection (ADR-0045) only
+    # holds if REFRESH_COOKIE_ENABLED is actually on — an incomplete .env
+    # silently falling back to the code default (False) must fail loudly
+    # in production, not ship the refresh token in the JSON body/localStorage.
+    with pytest.raises(ValidationError, match="REFRESH_COOKIE_ENABLED"):
+        Settings(
+            environment="production",
+            jwt_secret_key="a-strong-production-secret-at-least-32-bytes!",
+            postgres_app_password="a-strong-production-db-password",
+            field_encryption_key="dGhpcy1pcy1hLXN0cm9uZy1wcm9kLWtleS0zMmJieXRlcyE=",
+            field_encryption_index_key="YW5vdGhlci1zdHJvbmctcHJvZC1pbmRleC1rZXktMzJiIQ==",
+            refresh_cookie_enabled=False,
         )
 
 
@@ -103,3 +129,38 @@ def test_samesite_lax_never_requires_secure() -> None:
         refresh_cookie_secure=False,
     )
     assert settings.refresh_cookie_samesite == "lax"
+
+
+def _valid_production_settings(*, weather_provider: str) -> Settings:
+    """A from-scratch, fully-valid production `Settings` (every other
+    production-only check satisfied) except for the caller's own choice of
+    `weather_provider` — isolates exactly what the two tests below check."""
+    return Settings(
+        environment="production",
+        jwt_secret_key="a-strong-production-secret-at-least-32-bytes!",
+        postgres_app_password="a-strong-production-db-password",
+        field_encryption_key="dGhpcy1pcy1hLXN0cm9uZy1wcm9kLWtleS0zMmJieXRlcyE=",
+        field_encryption_index_key="YW5vdGhlci1zdHJvbmctcHJvZC1pbmRleC1rZXktMzJiIQ==",
+        refresh_cookie_enabled=True,
+        refresh_cookie_secure=True,
+        weather_provider=weather_provider,
+    )
+
+
+def test_production_refuses_mock_weather_provider() -> None:
+    with pytest.raises(ValidationError, match="WEATHER_PROVIDER"):
+        _valid_production_settings(weather_provider="mock")
+
+
+def test_production_accepts_a_real_weather_provider() -> None:
+    # Positive case — a fully-valid production config (every other
+    # production-only check satisfied) with a real provider must not raise.
+    settings = _valid_production_settings(weather_provider="inmet")
+    assert settings.weather_provider == "inmet"
+
+
+def test_non_production_still_defaults_to_mock() -> None:
+    # The dev/test/CI convenience default — must stay untouched outside
+    # production (every test in this suite implicitly relies on this).
+    settings = Settings()
+    assert settings.weather_provider == "mock"

@@ -70,14 +70,24 @@ from collections.abc import Sequence
 
 from alembic import op
 
-from app.core.config import get_settings
+from app.core.config import POSTGRES_APP_ROLE, get_settings
 
 revision: str = "0b7b9a5dbd11"
 down_revision: str | None = "817b1b97cac3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-_APP_ROLE = "stormpulse_app"
+# Hardening follow-up: this used to be its own literal ("stormpulse_app")
+# instead of importing the shared constant — `Settings.postgres_app_user`
+# was a *configurable* field back then that this migration never actually
+# read, so setting POSTGRES_APP_USER to anything else silently broke the
+# deploy (the app would connect as a role this migration never created).
+# Importing the constant here is a pure refactor, not a behavior change —
+# the value is identical ("stormpulse_app"), verified by re-running this
+# migration from scratch against a disposable Postgres and diffing the
+# resulting role/grants against the pre-refactor version. Never change
+# this migration's actual DDL logic; it's already applied in production.
+_APP_ROLE = POSTGRES_APP_ROLE
 
 # Every table with a `tenant_id` column (via `TenantMixin`) — verified
 # against `app/**/models.py` at the time this migration was written.

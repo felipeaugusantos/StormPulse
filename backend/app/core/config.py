@@ -27,6 +27,17 @@ _DEV_JWT_SECRET = "dev-insecure-change-me"
 _DEV_FIELD_ENCRYPTION_KEY = "ZGV2LWluc2VjdXJlLWVuY3J5cHRpb24ta2V5LTMyYmI="
 _DEV_FIELD_ENCRYPTION_INDEX_KEY = "ZGV2LWluc2VjdXJlLWJsaW5kLWluZGV4LWtleS0zMmI="
 
+# Single source of truth for the RLS runtime role's *name* (migration
+# 0b7b9a5dbd11 creates it, imports this exact constant rather than a
+# separate hardcoded literal). Previously `Settings.postgres_app_user` was
+# a configurable field that the migration never actually read — setting
+# POSTGRES_APP_USER to anything else silently broke the deployment (the
+# app would try to connect as a role the migration never created). Only
+# the *password* varies by environment; the name doesn't need to, and
+# making it configurable without the migration also reading it was false
+# configurability, not a real feature.
+POSTGRES_APP_ROLE = "stormpulse_app"
+
 
 class Settings(BaseSettings):
     """Application settings.
@@ -68,9 +79,8 @@ class Settings(BaseSettings):
     postgres_db: str = "stormpulse"
     # Runtime role the API and Celery workers actually connect as — an
     # ordinary (non-superuser) role the RLS migration creates and grants
-    # DML on every table, nothing more. Default matches the dev/CI
-    # convenience default above; production sets its own via env vars.
-    postgres_app_user: str = "stormpulse_app"
+    # DML on every table, nothing more. NOT configurable (see
+    # `POSTGRES_APP_ROLE` below): only the password varies by environment.
     postgres_app_password: str = "stormpulse_app"
 
     # --- Redis ---
@@ -357,7 +367,23 @@ class Settings(BaseSettings):
             raise ValueError(
                 "NDVI_ENABLED=true requires NDVI_SH_CLIENT_ID and NDVI_SH_CLIENT_SECRET to be set."
             )
+        # Same "never fake real data" principle as the NDVI check above —
+        # WEATHER_PROVIDER=mock (the dev/test/CI default) fabricates
+        # readings that would look exactly like real INMET/CPTEC/Open-Meteo
+        # data to anyone consuming the API; a production deploy accidentally
+        # left on it would silently serve fiction, not weather.
+        if self.environment == "production" and self.weather_provider.lower() == "mock":
+            raise ValueError(
+                "WEATHER_PROVIDER must not be 'mock' in production — set it to 'inmet', "
+                "'cptec', or 'open_meteo' (the dev/test default fabricates readings that "
+                "look like real weather data)."
+            )
         return self
+
+    @property
+    def postgres_app_user(self) -> str:
+        """Fixed, not configurable — see `POSTGRES_APP_ROLE`'s docstring."""
+        return POSTGRES_APP_ROLE
 
     @computed_field  # type: ignore[prop-decorator]
     @property
