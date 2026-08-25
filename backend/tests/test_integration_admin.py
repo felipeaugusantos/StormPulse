@@ -453,8 +453,19 @@ async def test_pipeline_health_reflects_fresh_and_stale_data(client: AsyncClient
     # reading captured_at) — surfaced here instead.
     now = datetime.now(UTC)
     with session_scope() as session:
-        for stale in session.scalars(select(SatelliteImage)).all():
-            session.delete(stale)
+        # Clear ALL rows first, not just this test's own leftovers from a
+        # previous run — other tests in the suite (e.g. the ingestion
+        # pipeline ones) leave real StormCell/LightningStrike rows behind
+        # with a `created_at` fresh enough to make "storms"/"lightning"
+        # look non-stale here regardless of what this test inserts,
+        # confirmed live: a full-suite run failed this exact assertion
+        # while the file run alone passed.
+        for stale_image in session.scalars(select(SatelliteImage)).all():
+            session.delete(stale_image)
+        for stale_strike in session.scalars(select(LightningStrike)).all():
+            session.delete(stale_strike)
+        for stale_cell in session.scalars(select(StormCell)).all():
+            session.delete(stale_cell)
         session.add(
             SatelliteImage(
                 captured_at=now,
