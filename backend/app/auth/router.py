@@ -20,6 +20,7 @@ from app.auth.service import (
 )
 from app.core.config import Settings
 from app.core.ratelimit import RateLimiter
+from app.core.rls import bypass_rls
 from app.core.security import (
     TokenError,
     create_access_token,
@@ -265,6 +266,11 @@ async def refresh(
             detail="Refresh token inválido",
         ) from exc
 
+    # Same reasoning as get_current_user (app/api/deps.py): this endpoint
+    # decodes its own token and looks the user up directly, outside that
+    # dependency's chain — the JWT's signature already authenticates which
+    # row this is allowed to read, before this request's tenant is known.
+    await bypass_rls(session)
     user = await session.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(

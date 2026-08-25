@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.rls import set_tenant_context
 from app.locations.models import AlertPreference, Location
 from app.locations.schemas import AlertPreferenceIn, LocationCreate, LocationUpdate
 from app.users.models import User
@@ -47,6 +48,10 @@ async def create_location(session: AsyncSession, user: User, data: LocationCreat
     _apply_preferences(location, data.alert_preferences)
     session.add(location)
     await session.commit()
+    # commit() ends the transaction get_current_user's app.tenant_id was
+    # scoped to (RLS, migration 0b7b9a5dbd11) — re-apply before the
+    # post-commit re-fetch below, or it silently returns zero rows.
+    await set_tenant_context(session, user.tenant_id)
     return await get_location(session, user, location.id)  # type: ignore[return-value]
 
 
@@ -89,6 +94,9 @@ async def update_location(
         _apply_preferences(location, data.alert_preferences)
 
     await session.commit()
+    # Same post-commit GUC loss as create_location above — the refresh
+    # below re-queries locations to load the relationship's owning row.
+    await set_tenant_context(session, location.tenant_id)
     await session.refresh(location, attribute_names=["alert_preferences"])
     return location
 

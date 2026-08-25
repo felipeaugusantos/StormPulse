@@ -33,10 +33,15 @@ async def _bootstrap_platform_admin(app: FastAPI, settings: Settings) -> None:
         return
     from sqlalchemy import select
 
+    from app.core.rls import bypass_rls
     from app.users.models import User
 
     session_factory = app.state.session_factory
     async with session_factory() as session:
+        # Startup, outside any request — no tenant is known yet, and this
+        # lookup is inherently cross-tenant (by email, same as login). RLS
+        # (migration 0b7b9a5dbd11) would otherwise fail it closed.
+        await bypass_rls(session)
         result = await session.execute(
             select(User).where(User.email == settings.platform_admin_email.lower())
         )

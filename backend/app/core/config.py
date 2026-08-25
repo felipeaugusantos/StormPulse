@@ -48,9 +48,24 @@ class Settings(BaseSettings):
     # --- Database (PostgreSQL + PostGIS) ---
     postgres_host: str = "localhost"
     postgres_port: int = 5432
+    # Bootstrap/superuser role — Docker's `POSTGRES_USER` (or the platform
+    # equivalent) is created a Postgres *superuser*, which unconditionally
+    # bypasses row-level security regardless of `FORCE ROW LEVEL SECURITY`
+    # (verified live against a real Postgres before this was added —
+    # Postgres also refuses to strip superuser from its own bootstrap
+    # role). So this identity is used for Alembic migrations only —
+    # DDL, `CREATE ROLE`, `GRANT` — never for a live app/worker connection,
+    # which is exactly the role RLS is meant to constrain (migration
+    # ``0b7b9a5dbd11``).
     postgres_user: str = "stormpulse"
     postgres_password: str = "stormpulse"
     postgres_db: str = "stormpulse"
+    # Runtime role the API and Celery workers actually connect as — an
+    # ordinary (non-superuser) role the RLS migration creates and grants
+    # DML on every table, nothing more. Default matches the dev/CI
+    # convenience default above; production sets its own via env vars.
+    postgres_app_user: str = "stormpulse_app"
+    postgres_app_password: str = "stormpulse_app"
 
     # --- Redis ---
     redis_host: str = "localhost"
@@ -265,6 +280,12 @@ class Settings(BaseSettings):
                 "JWT_SECRET_KEY must be set to a strong secret in production "
                 "(the built-in development secret is refused)."
             )
+        if self.environment == "production" and self.postgres_app_password == "stormpulse_app":
+            raise ValueError(
+                "POSTGRES_APP_PASSWORD must be set to a strong secret in production — "
+                "this is the role RLS policies (migration 0b7b9a5dbd11) actually rely on "
+                "to keep the runtime app/workers non-superuser; the dev default is refused."
+            )
         if (
             self.environment == "production"
             and self.refresh_cookie_enabled
@@ -299,11 +320,13 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def database_url(self) -> str:
-        """Async SQLAlchemy URL (asyncpg driver)."""
+        """Async SQLAlchemy URL (asyncpg driver) — the FastAPI app's own
+        runtime connection. Uses the restricted `postgres_app_*` role, not
+        the migration superuser (see that field's docstring)."""
         dsn = PostgresDsn.build(
             scheme="postgresql+asyncpg",
-            username=self.postgres_user,
-            password=self.postgres_password,
+            username=self.postgres_app_user,
+            password=self.postgres_app_password,
             host=self.postgres_host,
             port=self.postgres_port,
             path=self.postgres_db,
@@ -313,7 +336,26 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def sync_database_url(self) -> str:
-        """Sync URL used by Alembic migrations (psycopg/psycopg2 style)."""
+        """Sync URL (psycopg2) — the Celery workers' runtime connection.
+        Same restricted `postgres_app_*` role as `database_url`; see
+        `migration_database_url` for the one place the superuser is
+        actually still used."""
+        dsn = PostgresDsn.build(
+            scheme="postgresql+psycopg2",
+            username=self.postgres_app_user,
+            password=self.postgres_app_password,
+            host=self.postgres_host,
+            port=self.postgres_port,
+            path=self.postgres_db,
+        )
+        return str(dsn)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def migration_database_url(self) -> str:
+        """Sync URL (psycopg2) used only by Alembic — needs the superuser
+        role to run DDL, `CREATE ROLE`, and `GRANT` (migration
+        ``0b7b9a5dbd11``). Never used by the running app or workers."""
         dsn = PostgresDsn.build(
             scheme="postgresql+psycopg2",
             username=self.postgres_user,

@@ -36,6 +36,7 @@ from engine.pipeline import StormEngine, TrackedStorm
 from engine.provider_types import FrameInput, RawCellInput
 from engine.risk.engine import RiskAssessment, RiskInput, StormRiskEngine
 from engine.trajectory.estimator import eta_minutes_to
+from workers.db import bypass_rls
 
 
 @dataclass
@@ -176,6 +177,11 @@ def run_ingestion_cycle(
     # instead of the stale demo leftovers they are.
     _prune_old_mock_cells(session, older_than=timedelta(hours=2))
     session.commit()
+    # commit() ends the transaction session_scope()'s RLS bypass (migration
+    # 0b7b9a5dbd11) was scoped to — without this, the `Location` query
+    # below silently comes back empty under RLS (no error), and the whole
+    # rest of the cycle quietly no-ops.
+    bypass_rls(session)
 
     frames = asyncio.run(provider.get_radar_frames(limit=6))
     tracked_storms = StormEngine().process(_to_frame_inputs(frames))

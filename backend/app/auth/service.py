@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.schemas import RegisterIn
 from app.core.enums import UserRole
+from app.core.rls import bypass_rls, set_tenant_context
 from app.core.security import hash_password, verify_password
 from app.tenants.models import Tenant
 from app.users.models import User
@@ -26,6 +27,11 @@ def _slugify(value: str) -> str:
 
 
 async def _email_exists(session: AsyncSession, email: str) -> bool:
+    # Every function in this module runs *before* a tenant is known — email
+    # uniqueness and login lookups are inherently cross-tenant (an email
+    # isn't scoped to one tenant), so RLS (migration 0b7b9a5dbd11) would
+    # otherwise fail every one of them closed.
+    await bypass_rls(session)
     result = await session.execute(select(User.id).where(User.email == email))
     return result.first() is not None
 
@@ -47,6 +53,7 @@ async def _create_tenant_and_user(
     ADMIN is an explicit administrative action (later phase), never something a
     self-registration (password or Google) can grant.
     """
+    await bypass_rls(session)
     base = tenant_name or email.split("@", 1)[0]
     tenant = Tenant(
         name=tenant_name or f"{base} (pessoal)",
@@ -68,6 +75,11 @@ async def _create_tenant_and_user(
     )
     session.add(user)
     await session.commit()
+    # `commit()` ends the transaction `bypass_rls` above was scoped to —
+    # the refresh below is a fresh SELECT in a new transaction, so it
+    # needs its own GUC. Now that `tenant.id` is known, scope to it
+    # precisely rather than bypassing again.
+    await set_tenant_context(session, tenant.id)
     await session.refresh(user)
     return user
 
@@ -104,6 +116,7 @@ async def authenticate_google(
     ``authenticate``) — a disabled account can't come back via Google either.
     """
     email = email.lower()
+    await bypass_rls(session)
 
     result = await session.execute(select(User).where(User.google_sub == google_sub))
     user = result.scalar_one_or_none()
@@ -117,6 +130,8 @@ async def authenticate_google(
             return None
         user.google_sub = google_sub
         await session.commit()
+        # Same post-commit GUC loss as in `_create_tenant_and_user` above.
+        await set_tenant_context(session, user.tenant_id)
         await session.refresh(user)
         return user
 
@@ -132,6 +147,7 @@ async def authenticate_google(
 
 async def authenticate(session: AsyncSession, email: str, password: str) -> User | None:
     """Return the user if credentials are valid and the account is active."""
+    await bypass_rls(session)
     result = await session.execute(select(User).where(User.email == email.lower()))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:

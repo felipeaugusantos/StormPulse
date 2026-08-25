@@ -24,6 +24,7 @@ from app.admin.schemas import (
 )
 from app.alerts.models import Alert
 from app.core.enums import UserRole
+from app.core.rls import bypass_rls
 from app.locations.models import Location
 from app.tenants.models import Tenant
 from app.users.models import User
@@ -209,6 +210,11 @@ async def update_user(
         target.role = data.role
 
     await session.commit()
+    # commit() ends the transaction require_platform_admin's bypass was
+    # scoped to (RLS, migration 0b7b9a5dbd11) — re-apply before the
+    # post-commit re-fetch, which is legitimately cross-tenant (target may
+    # belong to a different tenant than the acting admin).
+    await bypass_rls(session)
 
     updated = await get_user(session, target_user_id)
     assert updated is not None  # the row we just updated can't have vanished

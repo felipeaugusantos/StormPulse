@@ -7,10 +7,12 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
 from app.core.enums import UserRole
+from app.core.rls import bypass_rls, set_tenant_context
 from app.core.security import TokenError, decode_token
 from app.users.models import User
 
@@ -43,7 +45,17 @@ async def get_current_user(
     session: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_request_settings),
 ) -> User:
-    """Resolve the authenticated user from a Bearer access token."""
+    """Resolve the authenticated user from a Bearer access token.
+
+    Row-level security (migration ``0b7b9a5dbd11``) protects every
+    tenant-scoped table, including ``users`` itself — but the lookup below
+    is exactly how a request's tenant gets known in the first place, so it
+    can't be filtered by a tenant GUC that doesn't exist yet. The JWT's
+    signature already authenticates *which* row this is allowed to read
+    (``user_id`` came from a token this server issued), so bypass is safe
+    here specifically. It's narrowed back off immediately after, replaced
+    with the real tenant, before any other query runs in this request.
+    """
     unauthorized = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Não autenticado",
@@ -58,9 +70,12 @@ async def get_current_user(
     except (TokenError, ValueError) as exc:
         raise unauthorized from exc
 
+    await bypass_rls(session)
     user = await session.get(User, user_id)
     if user is None or not user.is_active:
         raise unauthorized
+    await set_tenant_context(session, user.tenant_id)
+    await session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
     return user
 
 
@@ -82,13 +97,24 @@ def require_roles(*roles: UserRole) -> Callable[[User], Awaitable[User]]:
 require_admin = require_roles(UserRole.ADMIN)
 
 
-async def require_platform_admin(current_user: User = Depends(get_current_user)) -> User:
+async def require_platform_admin(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> User:
     """Cross-tenant guard (FASE 28, ADR-0048) — distinct from `require_admin`
     above, which only checks the tenant-scoped `role`. A tenant's own ADMIN
-    still can't see other tenants' data; only `is_platform_admin` can."""
+    still can't see other tenants' data; only `is_platform_admin` can.
+
+    `current_user.is_platform_admin` is checked on their own,
+    already-tenant-scoped row (fetched by `get_current_user` above) —
+    only once that's confirmed does RLS bypass turn on, for the rest of
+    this request. The whole point of the admin panel is cross-tenant
+    visibility (aggregate stats, every tenant's users), so this is the one
+    place bypass is meant to outlive a single query."""
     if not current_user.is_platform_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Permissão insuficiente",
         )
+    await bypass_rls(session)
     return current_user
