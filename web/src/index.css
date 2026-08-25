@@ -569,6 +569,9 @@ button {
 .satellite-image-toggle input {
   cursor: pointer;
 }
+.satellite-coverage-warning {
+  color: var(--yellow);
+}
 .draw-mode-bar {
   position: absolute;
   top: 10px;

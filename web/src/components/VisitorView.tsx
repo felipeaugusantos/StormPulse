@@ -71,6 +71,23 @@ export function VisitorView({ onBack }: Props) {
     [reference],
   )
 
+  // The satellite image is one frame covering a fixed region for the whole
+  // deployment (SATELLITE_EXTENT), not something that follows any single
+  // visitor — a chosen point outside that region shows stale/wrong-looking
+  // imagery with no indication why. Flagged explicitly rather than left
+  // silent (FASE 34 follow-up: user asked whether cloud cover over their
+  // city would show up here).
+  const outsideSatelliteCoverage = useMemo(() => {
+    if (!satelliteImage) return false
+    const [lonMin, latMin, lonMax, latMax] = satelliteImage.bbox
+    return (
+      reference.lon < lonMin ||
+      reference.lon > lonMax ||
+      reference.lat < latMin ||
+      reference.lat > latMax
+    )
+  }, [satelliteImage, reference])
+
   const load = useCallback(async () => {
     try {
       const [stormsRes, warningsRes, satelliteRes, satelliteImageRes, lightningRes] =
@@ -190,6 +207,11 @@ export function VisitorView({ onBack }: Props) {
                   />
                   imagem de satélite (IR) · {timeAgo(satelliteImage.captured_at)}
                 </label>
+              )}
+              {outsideSatelliteCoverage && (
+                <span className="legend-item satellite-coverage-warning">
+                  ⚠️ imagem de satélite não cobre {reference.label}
+                </span>
               )}
             </div>
           )}
