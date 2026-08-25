@@ -125,12 +125,26 @@ export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
             ← Voltar
           </button>
         )}
-        <div className="brand">
-          <span aria-hidden>⚡</span>
-          <span>
-            Storm<strong>Pulse</strong>
-          </span>
-        </div>
+        {onBack ? (
+          <button
+            type="button"
+            className="brand brand-link"
+            onClick={onBack}
+            title="Voltar para a página inicial"
+          >
+            <span aria-hidden>⚡</span>
+            <span>
+              Storm<strong>Pulse</strong>
+            </span>
+          </button>
+        ) : (
+          <div className="brand">
+            <span aria-hidden>⚡</span>
+            <span>
+              Storm<strong>Pulse</strong>
+            </span>
+          </div>
+        )}
         <p className="muted">
           {isRegister
             ? 'Criar conta — leva menos de um minuto.'

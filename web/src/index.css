@@ -55,6 +55,14 @@ body {
 .brand strong {
   color: var(--accent);
 }
+.brand-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
 .muted {
   color: var(--ink-mute);
   font-size: 0.85rem;
