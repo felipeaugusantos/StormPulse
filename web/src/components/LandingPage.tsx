@@ -17,6 +17,7 @@ export function LandingPage({ onEnter, onVisitor }: Props) {
             Storm<strong>Pulse</strong>
           </span>
         </div>
+        <span className="landing-eyebrow">Monitoramento em tempo real · grátis pra começar</span>
         <h1>Monitoramento meteorológico que avisa antes de virar problema</h1>
         <p className="landing-lede">
           Transformamos dados de radar, satélite e estações em alertas simples e diretos
@@ -34,8 +35,11 @@ export function LandingPage({ onEnter, onVisitor }: Props) {
       </header>
 
       <section className="landing-modules">
-        <div className="landing-module-card">
-          <h2>⛈️ Tempestade</h2>
+        <div className="landing-module-card landing-module-card--storm">
+          <span className="landing-module-icon" aria-hidden>
+            ⛈️
+          </span>
+          <h2>Tempestade</h2>
           <p>
             Chuva forte, granizo, raios, vento e acompanhamento de células de tempestade —
             alertas acionáveis por local monitorado, não só um número de previsão.
@@ -48,8 +52,11 @@ export function LandingPage({ onEnter, onVisitor }: Props) {
           </ul>
         </div>
 
-        <div className="landing-module-card">
-          <h2>🌾 Agro</h2>
+        <div className="landing-module-card landing-module-card--agro">
+          <span className="landing-module-icon" aria-hidden>
+            🌾
+          </span>
+          <h2>Agro</h2>
           <p>
             Sinais agronômicos por talhão — do risco de geada ao vigor da vegetação vistos
             do espaço.
@@ -64,6 +71,9 @@ export function LandingPage({ onEnter, onVisitor }: Props) {
       </section>
 
       <section className="landing-note">
+        <span className="landing-note-icon" aria-hidden>
+          ✓
+        </span>
         <p>
           A classificação meteorológica é determinística — baseada em modelos e regras
           específicas, nunca inventada por IA generativa.
