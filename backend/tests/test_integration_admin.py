@@ -505,9 +505,9 @@ async def test_pipeline_health_reflects_fresh_and_stale_data(client: AsyncClient
         assert by_name["storms"]["stale"] is True
 
     with session_scope() as session:
-        for stale in session.scalars(select(SatelliteImage)).all():
-            session.delete(stale)
-        for stale in session.scalars(select(LightningStrike)).all():
-            session.delete(stale)
-        for stale in session.scalars(select(StormCell)).all():
-            session.delete(stale)
+        for stale_image in session.scalars(select(SatelliteImage)).all():
+            session.delete(stale_image)
+        for stale_strike in session.scalars(select(LightningStrike)).all():
+            session.delete(stale_strike)
+        for stale_cell in session.scalars(select(StormCell)).all():
+            session.delete(stale_cell)
