@@ -8,6 +8,29 @@
 
 const DIRECTIONS = ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO']
 
+// Brasília time (UTC-3, no DST since 2019) — explicit rather than relying
+// on the visitor's device timezone, which isn't guaranteed to match even
+// for a Brazil-only audience (a misconfigured device, a browser testing
+// tool, a traveler). Every absolute-time display in the app goes through
+// one of these three instead of a bare `toLocale*Date('pt-BR')` call.
+const BR_TIMEZONE = 'America/Sao_Paulo'
+
+function toDate(value: Date | string): Date {
+  return typeof value === 'string' ? new Date(value) : value
+}
+
+export function formatDateBR(value: Date | string, opts: Intl.DateTimeFormatOptions = {}): string {
+  return toDate(value).toLocaleDateString('pt-BR', { timeZone: BR_TIMEZONE, ...opts })
+}
+
+export function formatTimeBR(value: Date | string, opts: Intl.DateTimeFormatOptions = {}): string {
+  return toDate(value).toLocaleTimeString('pt-BR', { timeZone: BR_TIMEZONE, ...opts })
+}
+
+export function formatDateTimeBR(value: Date | string, opts: Intl.DateTimeFormatOptions = {}): string {
+  return toDate(value).toLocaleString('pt-BR', { timeZone: BR_TIMEZONE, ...opts })
+}
+
 export function kelvinToCelsius(kelvin: number): number {
   return kelvin - 273.15
 }

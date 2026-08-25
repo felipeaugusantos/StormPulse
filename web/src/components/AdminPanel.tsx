@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api'
+import { formatDateBR, formatDateTimeBR } from '../format'
 import type { AdminAuditLogEntry, AdminStats, AdminTenant, AdminUser } from '../types'
 
 interface Props {
@@ -224,11 +225,8 @@ export function AdminPanel({ onBack, meId }: Props) {
                           {u.full_name || 'sem nome'} · {u.tenant_name}
                         </div>
                         <div className="sub muted">
-                          criado em {new Date(u.created_at).toLocaleDateString('pt-BR')} · último
-                          login:{' '}
-                          {u.last_login_at
-                            ? new Date(u.last_login_at).toLocaleString('pt-BR')
-                            : 'nunca'}
+                          criado em {formatDateBR(u.created_at)} · último login:{' '}
+                          {u.last_login_at ? formatDateTimeBR(u.last_login_at) : 'nunca'}
                         </div>
                       </div>
                       <select
@@ -278,9 +276,7 @@ export function AdminPanel({ onBack, meId }: Props) {
                         {t.user_count} usuário{t.user_count === 1 ? '' : 's'} · {t.location_count}{' '}
                         {t.location_count === 1 ? 'local monitorado' : 'locais monitorados'}
                       </div>
-                      <div className="sub muted">
-                        criado em {new Date(t.created_at).toLocaleDateString('pt-BR')}
-                      </div>
+                      <div className="sub muted">criado em {formatDateBR(t.created_at)}</div>
                     </div>
                   </div>
                 ))}
@@ -305,9 +301,7 @@ export function AdminPanel({ onBack, meId }: Props) {
                         {entry.actor_email} → {entry.target_email || '—'}
                       </div>
                       <div className="sub">{JSON.stringify(entry.detail)}</div>
-                      <div className="sub muted">
-                        {new Date(entry.created_at).toLocaleString('pt-BR')}
-                      </div>
+                      <div className="sub muted">{formatDateTimeBR(entry.created_at)}</div>
                     </div>
                   </div>
                 ))}

@@ -31,7 +31,7 @@ import {
 } from '../agro'
 import { classifyCape, estimateStormEta, type CapeLevel } from '../storm'
 import { cropColor } from '../cropColors'
-import { riskLevelLabel, timeAgo } from '../format'
+import { formatDateBR, formatTimeBR, riskLevelLabel, timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { AdminPanel } from './AdminPanel'
 import { LocationSearchCard } from './LocationSearchCard'
@@ -505,7 +505,7 @@ export function Dashboard({ onLogout }: Props) {
 
         {updatedAt && (
           <div className="updated">
-            Atualizado {updatedAt.toLocaleTimeString('pt-BR')} · atualização automática 30s
+            Atualizado {formatTimeBR(updatedAt)} · atualização automática 30s
           </div>
         )}
         <SafetyDisclaimer />
@@ -564,7 +564,7 @@ function StormsPanel({ storms }: { storms: StormCell[] }) {
               </div>
               <div className="sub">
                 {s.max_reflectivity ? `${s.max_reflectivity.toFixed(0)} dBZ · ` : ''}
-                {new Date(s.detected_at).toLocaleTimeString('pt-BR')}
+                {formatTimeBR(s.detected_at)}
               </div>
             </div>
             {s.is_mock && <span className="mock-tag">MOCK</span>}
@@ -1247,7 +1247,7 @@ function NdviPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
                     {entry.ndvi ? (
                       <div className="agro-row">
                         NDVI {entry.ndvi.ndvi_mean.toFixed(2)} —{' '}
-                        {new Date(entry.ndvi.observed_at).toLocaleDateString('pt-BR', {
+                        {formatDateBR(entry.ndvi.observed_at, {
                           day: '2-digit',
                           month: '2-digit',
                         })}{' '}

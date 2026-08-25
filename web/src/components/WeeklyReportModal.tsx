@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiError, api } from '../api'
 import { classifyNdvi, NDVI_LABEL } from '../agro'
+import { formatDateBR, formatDateTimeBR } from '../format'
 import type { WeeklyReport } from '../types'
 
 interface Props {
@@ -10,7 +11,7 @@ interface Props {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+  return formatDateBR(iso, { day: '2-digit', month: '2-digit' })
 }
 
 /** Weekly report for a single talhão (FASE 32) — last 7 full days of
@@ -110,7 +111,7 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
             )}
 
             <p className="report-generated no-print">
-              Gerado em {new Date(report.generated_at).toLocaleString('pt-BR')}
+              Gerado em {formatDateTimeBR(report.generated_at)}
             </p>
 
             <div className="modal-actions no-print">

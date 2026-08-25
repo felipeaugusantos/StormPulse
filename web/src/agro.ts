@@ -4,6 +4,7 @@
  * `dry_streak_days` client-side since only raw daily totals are exposed via
  * `/agro/rainfall`, not the computed streak itself (FASE 22, ADR-0018). */
 
+import { formatDateBR } from './format'
 import type { DailyRainfall, ForecastPoint } from './types'
 
 export interface FrostDayTiers {
@@ -31,7 +32,7 @@ export function classifyFrostDays(
 export function formatFrostDays(points: ForecastPoint[]): string {
   return points
     .map((p) => {
-      const day = new Date(p.time).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+      const day = formatDateBR(p.time, { day: '2-digit', month: '2-digit' })
       const temp = p.temperature_min_c != null ? `${p.temperature_min_c.toFixed(1)}°C` : '—'
       return `${day} (${temp})`
     })

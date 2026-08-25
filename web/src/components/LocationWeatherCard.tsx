@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { classifyFrostDays, evaluateTrafficability, formatFrostDays } from '../agro'
+import { formatDateBR } from '../format'
 import { classifyCape } from '../storm'
 import type {
   CurrentConditions,
@@ -130,7 +131,7 @@ export function LocationWeatherCard({ location }: Props) {
           {upcoming.map((p, i) => (
             <div className="forecast-strip-day" key={i}>
               <div className="sub">
-                {new Date(p.time).toLocaleDateString('pt-BR', { weekday: 'short' })}
+                {formatDateBR(p.time, { weekday: 'short' })}
               </div>
               <div>{p.temperature_c != null ? `${p.temperature_c.toFixed(0)}°` : '—'}</div>
               <div className="sub">
