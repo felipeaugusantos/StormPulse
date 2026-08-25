@@ -128,6 +128,14 @@ export function classifyNdvi(ndviMean: number | null): NdviLevel {
   return 'vigorous'
 }
 
+export const NDVI_LABEL: Record<NdviLevel, string> = {
+  bare: 'solo exposto/sem vegetação',
+  stressed: 'vegetação esparsa ou em estresse',
+  moderate: 'vegetação moderada',
+  vigorous: 'vegetação vigorosa',
+  unknown: 'sem leitura ainda',
+}
+
 export type Trafficability = 'trafficable' | 'not_trafficable' | 'unknown'
 
 /** Whether the soil is dry enough for machinery/harvest: a real dry streak

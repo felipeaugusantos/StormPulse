@@ -136,6 +136,22 @@ export interface ReadyStatus {
   checks: Record<string, 'ok' | 'error' | 'skipped'>
 }
 
+// Weekly report per talhão (FASE 32) — last 7 full days of rainfall,
+// agro alerts and NDVI readings, meant to be printed/shown to an
+// agronomist or bank.
+export interface WeeklyReport {
+  location_id: string
+  location_name: string
+  crop: string | null
+  period_start: string
+  period_end: string
+  rainfall_total_mm: number
+  dry_days_count: number
+  alerts: AlertItem[]
+  ndvi_readings: NdviReading[]
+  generated_at: string
+}
+
 export interface ForecastPoint {
   time: string
   temperature_c: number | null

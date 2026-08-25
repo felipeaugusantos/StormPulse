@@ -21,6 +21,7 @@ import {
   evaluateTrafficability,
   formatFrostDays,
   growingDegreeDays,
+  NDVI_LABEL,
   vaporPressureDeficitKpa,
   waterBalanceMm,
   type DiseaseRisk,
@@ -1195,14 +1196,6 @@ function DiseaseRiskPanel({ activeLocations, entries, onSelect }: AgroPanelProps
       </div>
     </section>
   )
-}
-
-const NDVI_LABEL: Record<NdviLevel, string> = {
-  bare: 'solo exposto/sem vegetação',
-  stressed: 'vegetação esparsa ou em estresse',
-  moderate: 'vegetação moderada',
-  vigorous: 'vegetação vigorosa',
-  unknown: 'sem leitura ainda',
 }
 
 /** Only ever shows talhões (a plot with a drawn boundary) — NDVI has no

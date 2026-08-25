@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.alerts.schemas import AlertOut
 from app.core.enums import AlertType
+from app.ndvi.schemas import NdviOut
 
 _MIN_POLYGON_RING_POINTS = 4
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -144,3 +146,22 @@ class SprayWindowOut(BaseModel):
     inversion_risk: bool
     # None when wind wasn't reported at all — never guessed.
     safe: bool | None
+
+
+class WeeklyReportOut(BaseModel):
+    """Weekly summary for a single talhão (FASE 32) — something concrete to
+    show an agronomist or a bank, not just live numbers on a dashboard.
+    Only ever built from data already real: rainfall history from the
+    weather provider, alerts and NDVI readings already persisted. Never
+    fabricates a week of history that wasn't actually observed."""
+
+    location_id: uuid.UUID
+    location_name: str
+    crop: str | None
+    period_start: date
+    period_end: date
+    rainfall_total_mm: float
+    dry_days_count: int
+    alerts: list[AlertOut]
+    ndvi_readings: list[NdviOut]
+    generated_at: datetime

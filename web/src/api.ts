@@ -19,6 +19,7 @@ import type {
   SprayWindow,
   StormCell,
   WarningItem,
+  WeeklyReport,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -269,6 +270,9 @@ export const api = {
   // ADR-0053) — 404s for a farm-level point or a talhão the background
   // pipeline hasn't checked yet, same "no data" shape as everything else.
   ndvi: (locationId: string) => request<NdviReading>(`/locations/${locationId}/agro/ndvi`),
+  // Talhão-only (FASE 32) — 404s for a farm-level point, same shape as ndvi().
+  weeklyReport: (locationId: string) =>
+    request<WeeklyReport>(`/locations/${locationId}/agro/weekly-report`),
   // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever
   // called when `Me.is_platform_admin` is true; the backend 403s otherwise.
   adminUsers: (opts: { search?: string; limit?: number; offset?: number } = {}) => {

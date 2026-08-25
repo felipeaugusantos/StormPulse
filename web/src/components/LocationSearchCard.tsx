@@ -3,6 +3,7 @@ import { ApiError, api } from '../api'
 import { cropColor } from '../cropColors'
 import { reverseGeocodeCity, searchCity } from '../geocode'
 import type { CitySearchResult, LocationItem } from '../types'
+import { WeeklyReportModal } from './WeeklyReportModal'
 
 const SEARCH_DEBOUNCE_MS = 400
 
@@ -67,6 +68,8 @@ export function LocationSearchCard({
   const [plotColor, setPlotColor] = useState(cropColor(null))
   const [creatingPlot, setCreatingPlot] = useState(false)
   const [updatingColorFor, setUpdatingColorFor] = useState<string | null>(null)
+  // Weekly report (FASE 32) — which talhão's report modal is open, if any.
+  const [reportFor, setReportFor] = useState<LocationItem | null>(null)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -330,6 +333,16 @@ export function LocationSearchCard({
                     />
                     <button
                       className="btn ghost small"
+                      title="Relatório semanal"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setReportFor(plot)
+                      }}
+                    >
+                      📄
+                    </button>
+                    <button
+                      className="btn ghost small"
                       onClick={(e) => {
                         e.stopPropagation()
                         removeLocation(plot.id)
@@ -405,6 +418,14 @@ export function LocationSearchCard({
             )
           })}
       </div>
+
+      {reportFor && (
+        <WeeklyReportModal
+          locationId={reportFor.id}
+          locationName={reportFor.name}
+          onClose={() => setReportFor(null)}
+        />
+      )}
     </section>
   )
 }

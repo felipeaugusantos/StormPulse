@@ -734,3 +734,118 @@ button {
   border: 1px solid var(--line-soft);
   font-size: 0.82rem;
 }
+
+/* ---------- Modal / weekly report ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 9, 18, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+.modal-card {
+  width: min(560px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.modal-header h2 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+.modal-actions .btn {
+  width: auto;
+  margin-top: 0;
+}
+.report-period {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  margin: 4px 0 16px;
+}
+.report-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.report-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 100px;
+}
+.report-stat-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.report-stat-label {
+  font-size: 0.75rem;
+  color: var(--ink-mute);
+}
+.report-list {
+  margin: 8px 0 18px;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  line-height: 1.7;
+  color: var(--ink-dim);
+}
+.report-generated {
+  color: var(--ink-mute);
+  font-size: 0.75rem;
+  margin-top: 16px;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .report-print,
+  .report-print * {
+    visibility: visible;
+  }
+  .report-print {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    max-height: none;
+    box-shadow: none;
+    background: #fff;
+    color: #000;
+    /* Re-scope the theme tokens to print-friendly values — nested elements
+       (report-stat, report-list, etc.) read off these vars, not literal
+       colors, so this alone fixes readability without touching each one. */
+    --panel: #fff;
+    --panel-2: #f3f4f6;
+    --line: #ccc;
+    --line-soft: #ddd;
+    --ink: #000;
+    --ink-dim: #333;
+    --ink-mute: #666;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
