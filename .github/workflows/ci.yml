@@ -221,7 +221,25 @@ jobs:
           docker images stormpulse-api --format '{{.Repository}} (runtime-base)  {{.Size}}'
           docker images stormpulse-backend --format '{{.Repository}}:{{.Tag}} (runtime-satellite)  {{.Size}}'
 
-      - name: Start the stack
+      - name: Start db/redis
+        # Same order as infra/deploy.sh: db/redis first, then migrate,
+        # then api/worker/beat/web — required since RLS (ADR-0054,
+        # migration 0b7b9a5dbd11) made the API/workers connect as a role
+        # (`stormpulse_app`) that only exists *after* migrations run.
+        # Starting api before that migration meant `/ready` could never
+        # succeed (the role didn't exist yet) — caught by this exact job.
+        run: docker compose up -d db redis
+
+      - name: Run migrations (Alembic + PostGIS)
+        run: docker compose run --rm api alembic upgrade head
+
+      - name: Verify PostGIS and schema
+        run: |
+          docker compose exec -T db psql -U stormpulse -d stormpulse -c "SELECT postgis_version();"
+          docker compose exec -T db psql -U stormpulse -d stormpulse -c "\dt" | grep -q storm_cells
+          docker compose exec -T db psql -U stormpulse -d stormpulse -c "\dt" | grep -q locations
+
+      - name: Start api/worker/beat/web
         run: docker compose up -d
 
       - name: Wait for API liveness (/health)
@@ -257,15 +275,6 @@ jobs:
           grep -q '"status":"ready"' /tmp/ready.json
           grep -q '"database":"ok"' /tmp/ready.json
           grep -q '"redis":"ok"' /tmp/ready.json
-
-      - name: Run migrations (Alembic + PostGIS)
-        run: docker compose exec -T api alembic upgrade head
-
-      - name: Verify PostGIS and schema
-        run: |
-          docker compose exec -T db psql -U stormpulse -d stormpulse -c "SELECT postgis_version();"
-          docker compose exec -T db psql -U stormpulse -d stormpulse -c "\dt" | grep -q storm_cells
-          docker compose exec -T db psql -U stormpulse -d stormpulse -c "\dt" | grep -q locations
 
       - name: Integration — register, login, /users/me (FASE 3)
         run: |
