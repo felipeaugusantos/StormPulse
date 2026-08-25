@@ -16,3 +16,9 @@ class LightningStrikeOut(BaseModel):
     latitude: float
     longitude: float
     is_mock: bool
+
+
+class NearbyLightningStrikeOut(LightningStrikeOut):
+    """A lightning strike plus its distance to the query point."""
+
+    distance_km: float

@@ -15,9 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, get_request_settings
 from app.core.config import Settings
 from app.lightning import service as lightning_service
-from app.lightning.schemas import LightningStrikeOut
+from app.lightning.schemas import LightningStrikeOut, NearbyLightningStrikeOut
 from app.satellite import service as satellite_service
-from app.satellite.schemas import ConvectiveWatchOut, SatelliteImageMetaOut
+from app.satellite.schemas import (
+    ConvectiveWatchOut,
+    NearbyConvectiveWatchOut,
+    SatelliteImageMetaOut,
+)
 from app.storms import service as storm_service
 from app.storms.schemas import NearbyStormCellOut, StormCellOut
 from app.weather.factory import get_weather_provider
@@ -67,6 +71,29 @@ async def public_satellite_watches(
     limit: int = Query(default=100, ge=1, le=500),
 ) -> object:
     return await satellite_service.list_active_watches(session, limit=limit)
+
+
+@router.get(
+    "/satellite/watches/nearby",
+    response_model=list[NearbyConvectiveWatchOut],
+    summary="Observações via satélite próximas de um ponto (público, ST_DWithin)",
+)
+async def public_satellite_watches_nearby(
+    session: AsyncSession = Depends(get_db),
+    lat: float = Query(ge=-90, le=90),
+    lon: float = Query(ge=-180, le=180),
+    radius_km: float = Query(default=50.0, gt=0, le=500),
+) -> list[NearbyConvectiveWatchOut]:
+    pairs = await satellite_service.watches_within_radius(
+        session, latitude=lat, longitude=lon, radius_km=radius_km
+    )
+    return [
+        NearbyConvectiveWatchOut(
+            **ConvectiveWatchOut.model_validate(watch).model_dump(),
+            distance_km=round(dist, 2),
+        )
+        for watch, dist in pairs
+    ]
 
 
 @router.get(
@@ -124,6 +151,29 @@ async def public_lightning(
     limit: int = Query(default=1000, ge=1, le=5000),
 ) -> object:
     return await lightning_service.list_recent_strikes(session, limit=limit)
+
+
+@router.get(
+    "/lightning/nearby",
+    response_model=list[NearbyLightningStrikeOut],
+    summary="Raios próximos de um ponto (público)",
+)
+async def public_lightning_nearby(
+    session: AsyncSession = Depends(get_db),
+    lat: float = Query(ge=-90, le=90),
+    lon: float = Query(ge=-180, le=180),
+    radius_km: float = Query(default=50.0, gt=0, le=500),
+) -> list[NearbyLightningStrikeOut]:
+    pairs = await lightning_service.strikes_within_radius(
+        session, latitude=lat, longitude=lon, radius_km=radius_km
+    )
+    return [
+        NearbyLightningStrikeOut(
+            **LightningStrikeOut.model_validate(strike).model_dump(),
+            distance_km=round(dist, 2),
+        )
+        for strike, dist in pairs
+    ]
 
 
 @router.get(

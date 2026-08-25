@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, publicApi } from '../api'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ApiError, publicApi, VISITOR_SEARCH_RADIUS_KM } from '../api'
 import { timeAgo } from '../format'
 import { reverseGeocodeCity, searchCity } from '../geocode'
 import { SafetyDisclaimer } from './SafetyDisclaimer'
@@ -8,6 +8,7 @@ import type {
   CitySearchResult,
   ConvectiveWatch,
   LightningStrike,
+  LocationItem,
   SatelliteImageMeta,
   StormCell,
   WarningItem,
@@ -46,15 +47,39 @@ export function VisitorView({ onBack }: Props) {
   const [locating, setLocating] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Not a real monitored location (visitor mode has none — no account) —
+  // just enough of the shape StormMap expects to draw a marker at the
+  // chosen point. `radius_km` isn't actually rendered as a circle by
+  // StormMap today (it only draws a fixed-size dot), but it's set to
+  // VISITOR_SEARCH_RADIUS_KM anyway so it stays honest if that ever changes.
+  const referenceMarker = useMemo<LocationItem>(
+    () => ({
+      id: 'visitor-reference',
+      name: reference.label,
+      kind: 'reference',
+      latitude: reference.lat,
+      longitude: reference.lon,
+      radius_km: VISITOR_SEARCH_RADIUS_KM,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      alert_preferences: [],
+      parent_location_id: null,
+      crop: null,
+      boundary_geojson: null,
+      color: null,
+    }),
+    [reference],
+  )
+
   const load = useCallback(async () => {
     try {
       const [stormsRes, warningsRes, satelliteRes, satelliteImageRes, lightningRes] =
         await Promise.all([
-          publicApi.storms(),
+          publicApi.storms(reference.lat, reference.lon),
           publicApi.warnings(reference.lat, reference.lon),
-          publicApi.satelliteWatches(),
+          publicApi.satelliteWatches(reference.lat, reference.lon),
           publicApi.satelliteImage(),
-          publicApi.lightning(),
+          publicApi.lightning(reference.lat, reference.lon),
         ])
       setStorms(stormsRes)
       setWarnings(warningsRes)
@@ -143,7 +168,7 @@ export function VisitorView({ onBack }: Props) {
           <StormMap
             ref={mapRef}
             storms={storms}
-            locations={[]}
+            locations={[referenceMarker]}
             satelliteWatches={satelliteWatches}
             satelliteImage={showSatelliteImage ? satelliteImage : null}
             lightning={lightning}

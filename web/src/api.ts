@@ -309,14 +309,30 @@ export const api = {
   adminStats: () => request<AdminStats>('/admin/stats'),
 }
 
+// Radius publicApi's nearby calls query with — wider than the 50km default
+// authenticated locations use (that's a tight personal-alert radius);
+// visitor mode is an exploratory regional view.
+export const VISITOR_SEARCH_RADIUS_KM = 150
+
 // No token required (visitor mode) — same request() helper, it just won't
 // attach an Authorization header when there isn't one.
 export const publicApi = {
-  storms: () => request<StormCell[]>('/public/storms?limit=200'),
+  // Nearby (not the global/unfiltered list endpoints) — the visitor's
+  // chosen reference point actually has to change what these show.
+  storms: (lat: number, lon: number) =>
+    request<StormCell[]>(
+      `/public/storms/nearby?lat=${lat}&lon=${lon}&radius_km=${VISITOR_SEARCH_RADIUS_KM}`,
+    ),
   warnings: (lat: number, lon: number) =>
     request<WarningItem[]>(`/public/warnings?lat=${lat}&lon=${lon}`),
-  satelliteWatches: () => request<ConvectiveWatch[]>('/public/satellite/watches'),
-  lightning: () => request<LightningStrike[]>('/public/lightning'),
+  satelliteWatches: (lat: number, lon: number) =>
+    request<ConvectiveWatch[]>(
+      `/public/satellite/watches/nearby?lat=${lat}&lon=${lon}&radius_km=${VISITOR_SEARCH_RADIUS_KM}`,
+    ),
+  lightning: (lat: number, lon: number) =>
+    request<LightningStrike[]>(
+      `/public/lightning/nearby?lat=${lat}&lon=${lon}&radius_km=${VISITOR_SEARCH_RADIUS_KM}`,
+    ),
   // No cycle has run yet (or SATELLITE_ENABLED=false) is a normal, common
   // state — treated as "no image", not an error, same spirit as an empty
   // watches list.
