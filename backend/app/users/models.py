@@ -9,20 +9,32 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import UserRole
 from app.db.base import Base
+from app.db.encrypted_types import EncryptedString
 from app.db.mixins import TenantMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class User(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
-    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
-    full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Encrypted at rest (AES-256-GCM, ADR-0055) — the ORM attribute still
+    # reads/writes plaintext (EncryptedString), so every existing call site
+    # is unchanged. Because AES-GCM uses a random nonce per row, the
+    # ciphertext itself is never equal across two rows with the same
+    # plaintext — `email_index` (deterministic HMAC-SHA256,
+    # `app.core.crypto.blind_index`) is the actual uniqueness/lookup key;
+    # always keep it in sync when writing `email`.
+    email: Mapped[str] = mapped_column(EncryptedString, nullable=False)
+    email_index: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    full_name: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     # Stable Google account id ("sub" claim) for Google-only or linked
     # accounts. NULL for accounts that never used Google sign-in. Kept
-    # separate from email (which can change) as the link key.
-    google_sub: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, unique=True, index=True
+    # separate from email (which can change) as the link key. Encrypted
+    # like `email` above — `google_sub_index` is the real lookup/uniqueness
+    # key (nullable, since most accounts never link Google).
+    google_sub: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+    google_sub_index: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
     )
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", native_enum=True),

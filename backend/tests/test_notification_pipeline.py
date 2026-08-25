@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.alerts.models import Alert
 from app.core.config import Settings
+from app.core.crypto import blind_index
 from app.core.enums import AlertEventType, NotificationStatus, RiskLevel
 from app.locations.models import Location
 from app.notifications.models import Notification, PushSubscription
@@ -41,9 +42,11 @@ def _make_user_and_alert(session: Session) -> tuple[User, Alert]:
     tenant = Tenant(name=f"Test {unique}", slug=f"test-{unique}")
     session.add(tenant)
     session.flush()
+    email = f"push-{unique}@example.com"
     user = User(
         tenant_id=tenant.id,
-        email=f"push-{unique}@example.com",
+        email=email,
+        email_index=blind_index(email),
         hashed_password="not-a-real-hash",
         is_active=True,
     )

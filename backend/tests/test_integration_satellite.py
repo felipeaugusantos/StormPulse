@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.alerts.models import Alert
+from app.core.crypto import blind_index
 from app.core.enums import AlertEventType
 from app.locations.models import Location
 from app.satellite.models import ConvectiveWatch
@@ -45,9 +46,11 @@ def _make_location(
     tenant = Tenant(name=f"Test {unique}", slug=f"test-{unique}")
     session.add(tenant)
     session.flush()
+    email = f"sat-{unique}@example.com"
     user = User(
         tenant_id=tenant.id,
-        email=f"sat-{unique}@example.com",
+        email=email,
+        email_index=blind_index(email),
         hashed_password="not-a-real-hash",
         is_active=True,
     )

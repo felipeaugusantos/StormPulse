@@ -33,6 +33,7 @@ async def _bootstrap_platform_admin(app: FastAPI, settings: Settings) -> None:
         return
     from sqlalchemy import select
 
+    from app.core.crypto import blind_index
     from app.core.rls import bypass_rls
     from app.users.models import User
 
@@ -43,7 +44,9 @@ async def _bootstrap_platform_admin(app: FastAPI, settings: Settings) -> None:
         # (migration 0b7b9a5dbd11) would otherwise fail it closed.
         await bypass_rls(session)
         result = await session.execute(
-            select(User).where(User.email == settings.platform_admin_email.lower())
+            select(User).where(
+                User.email_index == blind_index(settings.platform_admin_email.lower())
+            )
         )
         user = result.scalar_one_or_none()
         if user is not None and not user.is_platform_admin:

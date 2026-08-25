@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.schemas import RegisterIn
+from app.core.crypto import blind_index
 from app.core.enums import UserRole
 from app.core.rls import bypass_rls, set_tenant_context
 from app.core.security import hash_password, verify_password
@@ -32,7 +33,7 @@ async def _email_exists(session: AsyncSession, email: str) -> bool:
     # isn't scoped to one tenant), so RLS (migration 0b7b9a5dbd11) would
     # otherwise fail every one of them closed.
     await bypass_rls(session)
-    result = await session.execute(select(User.id).where(User.email == email))
+    result = await session.execute(select(User.id).where(User.email_index == blind_index(email)))
     return result.first() is not None
 
 
@@ -67,9 +68,11 @@ async def _create_tenant_and_user(
     user = User(
         tenant_id=tenant.id,
         email=email,
+        email_index=blind_index(email),
         full_name=full_name,
         hashed_password=hashed_password,
         google_sub=google_sub,
+        google_sub_index=blind_index(google_sub) if google_sub is not None else None,
         role=UserRole.USER,
         is_active=True,
     )
@@ -118,17 +121,20 @@ async def authenticate_google(
     email = email.lower()
     await bypass_rls(session)
 
-    result = await session.execute(select(User).where(User.google_sub == google_sub))
+    result = await session.execute(
+        select(User).where(User.google_sub_index == blind_index(google_sub))
+    )
     user = result.scalar_one_or_none()
     if user is not None:
         return user if user.is_active else None
 
-    result = await session.execute(select(User).where(User.email == email))
+    result = await session.execute(select(User).where(User.email_index == blind_index(email)))
     user = result.scalar_one_or_none()
     if user is not None:
         if not user.is_active:
             return None
         user.google_sub = google_sub
+        user.google_sub_index = blind_index(google_sub)
         await session.commit()
         # Same post-commit GUC loss as in `_create_tenant_and_user` above.
         await set_tenant_context(session, user.tenant_id)
@@ -148,7 +154,9 @@ async def authenticate_google(
 async def authenticate(session: AsyncSession, email: str, password: str) -> User | None:
     """Return the user if credentials are valid and the account is active."""
     await bypass_rls(session)
-    result = await session.execute(select(User).where(User.email == email.lower()))
+    result = await session.execute(
+        select(User).where(User.email_index == blind_index(email.lower()))
+    )
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         return None

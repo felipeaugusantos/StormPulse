@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.core.crypto import blind_index
 from app.core.enums import WeatherSourceKind
 from app.locations.models import Location
 from app.ndvi.models import NdviReading
@@ -87,9 +88,11 @@ def _make_farm(session: Session) -> Location:
     tenant = Tenant(name=f"Test {unique}", slug=f"test-{unique}")
     session.add(tenant)
     session.flush()
+    email = f"ndvi-{unique}@example.com"
     user = User(
         tenant_id=tenant.id,
-        email=f"ndvi-{unique}@example.com",
+        email=email,
+        email_index=blind_index(email),
         hashed_password="not-a-real-hash",
         is_active=True,
     )

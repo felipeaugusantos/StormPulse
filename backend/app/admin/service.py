@@ -9,6 +9,7 @@ also recording who did it and what changed.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
@@ -62,15 +63,32 @@ async def list_users(
 ) -> tuple[list[AdminUserOut], int]:
     limit = min(limit, MAX_PAGE_SIZE)
     stmt = select(User, Tenant.name).join(Tenant, Tenant.id == User.tenant_id)
-    count_stmt = select(func.count()).select_from(User)
-    if search:
-        pattern = f"%{search.lower()}%"
-        stmt = stmt.where(func.lower(User.email).like(pattern))
-        count_stmt = count_stmt.where(func.lower(User.email).like(pattern))
+    stmt = stmt.order_by(User.created_at.desc())
 
-    total = (await session.execute(count_stmt)).scalar_one()
-    stmt = stmt.order_by(User.created_at.desc()).limit(limit).offset(offset)
-    rows = (await session.execute(stmt)).all()
+    rows: Sequence[tuple[User, str]]
+    if search:
+        # email/full_name are encrypted at rest (ADR-0055) — a random AES-GCM
+        # nonce per row means the ciphertext can never be filtered with SQL
+        # LIKE, so this decrypts (via the ORM's transparent EncryptedString)
+        # and filters in Python instead, then paginates the filtered list.
+        # Acceptable at this platform's admin-panel scale; would need a
+        # dedicated search index if the user base grew far larger.
+        needle = search.lower()
+        all_rows = (await session.execute(stmt)).all()
+        matched = [
+            (user, tenant_name)
+            for user, tenant_name in all_rows
+            if needle in user.email.lower() or (user.full_name and needle in user.full_name.lower())
+        ]
+        total = len(matched)
+        rows = matched[offset : offset + limit]
+    else:
+        total = (await session.execute(select(func.count()).select_from(User))).scalar_one()
+        rows = [
+            (user, tenant_name)
+            for user, tenant_name in (await session.execute(stmt.limit(limit).offset(offset))).all()
+        ]
+
     items = [
         AdminUserOut(
             id=user.id,

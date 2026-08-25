@@ -21,6 +21,11 @@ Environment = Literal["local", "test", "staging", "production"]
 
 # Sentinel dev secret. Refused in production (see the validator below).
 _DEV_JWT_SECRET = "dev-insecure-change-me"
+# Sentinel dev keys for field-level encryption (ADR-0055). Both are valid
+# base64-encoded 32-byte values (so the crypto code path works unmodified
+# in dev/test) but are refused in production, same as _DEV_JWT_SECRET.
+_DEV_FIELD_ENCRYPTION_KEY = "ZGV2LWluc2VjdXJlLWVuY3J5cHRpb24ta2V5LTMyYmI="
+_DEV_FIELD_ENCRYPTION_INDEX_KEY = "ZGV2LWluc2VjdXJlLWJsaW5kLWluZGV4LWtleS0zMmI="
 
 
 class Settings(BaseSettings):
@@ -81,6 +86,19 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = Field(default=15, gt=0)
     refresh_token_expire_days: int = Field(default=7, gt=0)
+
+    # --- Field-level encryption at rest (ADR-0055) — base64-encoded raw
+    # 32-byte keys. Two independent keys on purpose: `field_encryption_key`
+    # (AES-256-GCM, random nonce per value) encrypts `users.email`,
+    # `users.full_name`, `users.google_sub`, and the audit-log email
+    # snapshots; `field_encryption_index_key` (HMAC-SHA256, deterministic)
+    # produces the separate blind-index columns that uniqueness constraints
+    # and exact-match lookups actually run against, since AES-GCM's random
+    # nonce means the encrypted column itself can never equal itself twice.
+    field_encryption_key: SecretStr = Field(default=SecretStr(_DEV_FIELD_ENCRYPTION_KEY))
+    field_encryption_index_key: SecretStr = Field(
+        default=SecretStr(_DEV_FIELD_ENCRYPTION_INDEX_KEY)
+    )
 
     # --- Rate limiting (auth endpoints) ---
     auth_rate_limit_max: int = Field(default=10, gt=0)
@@ -286,6 +304,17 @@ class Settings(BaseSettings):
                 "POSTGRES_APP_PASSWORD must be set to a strong secret in production — "
                 "this is the role RLS policies (migration 0b7b9a5dbd11) actually rely on "
                 "to keep the runtime app/workers non-superuser; the dev default is refused."
+            )
+        if self.environment == "production" and (
+            self.field_encryption_key.get_secret_value() == _DEV_FIELD_ENCRYPTION_KEY
+            or self.field_encryption_index_key.get_secret_value() == _DEV_FIELD_ENCRYPTION_INDEX_KEY
+        ):
+            raise ValueError(
+                "FIELD_ENCRYPTION_KEY and FIELD_ENCRYPTION_INDEX_KEY must both be set to "
+                "strong, distinct secrets in production — these are what migration "
+                "ab4b31a9059a actually encrypts users.email/full_name/google_sub under "
+                "(ADR-0055); the dev defaults are refused. Generate each with "
+                "`openssl rand -base64 32`."
             )
         if (
             self.environment == "production"
