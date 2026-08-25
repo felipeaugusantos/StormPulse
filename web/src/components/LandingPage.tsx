@@ -74,6 +74,12 @@ export function LandingPage({ onEnter, onVisitor }: Props) {
         <button className="link-btn" type="button" onClick={onEnter}>
           Já tem conta? Entrar
         </button>
+        <div className="enzova-credit">
+          <img src="/enzova-icon.svg" alt="" width={18} height={18} aria-hidden />
+          <span>
+            by <strong>Enzova</strong>
+          </span>
+        </div>
       </footer>
     </div>
   )

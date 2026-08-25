@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 140">
+  <!-- Primary lockup (Brand Starter §25): icon + ENZOVA in caps, TECH
+       smaller beneath — same visual weight relationship the doc asks for. -->
+  <g transform="translate(0,6)">
+    <rect width="64" height="64" rx="14" fill="#081A2B"/>
+    <g transform="rotate(-6 32 32)">
+      <rect x="15" y="16" width="18" height="8" rx="4" fill="#36E39F"/>
+      <rect x="15" y="28" width="27" height="8" rx="4" fill="#36E39F"/>
+      <rect x="15" y="40" width="36" height="8" rx="4" fill="#36E39F"/>
+    </g>
+  </g>
+  <text x="88" y="46" font-family="Manrope, Arial, sans-serif" font-weight="800" font-size="40" fill="#081A2B" letter-spacing="0.5">ENZOVA</text>
+  <text x="90" y="70" font-family="Manrope, Arial, sans-serif" font-weight="700" font-size="16" fill="#36E39F" letter-spacing="3">TECH</text>
+</svg>

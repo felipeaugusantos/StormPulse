@@ -282,6 +282,18 @@ button {
 .landing-footer {
   text-align: center;
 }
+.enzova-credit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 18px;
+  color: var(--ink-mute);
+  font-size: 0.78rem;
+}
+.enzova-credit strong {
+  color: var(--ink-dim);
+}
 
 /* ---------- Layout ---------- */
 .topbar {
