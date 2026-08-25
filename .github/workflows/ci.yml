@@ -473,6 +473,13 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+          # VAPID *public* key (Web Push opt-in, FASE 22) — not sensitive,
+          # a repo variable rather than a secret, but still has to match
+          # this deployment's VAPID_PRIVATE_KEY on the backend's own .env.
+          # Empty (unset vars.*) falls back to the Dockerfile's own empty
+          # default — push opt-in fails honestly instead of silently.
+          build-args: |
+            VITE_VAPID_PUBLIC_KEY=${{ vars.VITE_VAPID_PUBLIC_KEY }}
 
   # -----------------------------------------------------------------------
   # Deploy: only reachable once both publish jobs succeeded (which in turn
