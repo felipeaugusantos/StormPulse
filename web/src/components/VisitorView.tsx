@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, publicApi } from '../api'
 import { timeAgo } from '../format'
+import { reverseGeocodeCity, searchCity } from '../geocode'
 import { SafetyDisclaimer } from './SafetyDisclaimer'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
 import type {
+  CitySearchResult,
   ConvectiveWatch,
   LightningStrike,
   SatelliteImageMeta,
@@ -17,10 +19,11 @@ interface Props {
 }
 
 const REFRESH_MS = 30_000
+const SEARCH_DEBOUNCE_MS = 400
 
-// Same reference point StormMap itself centers on by default — visitor
-// mode has no user location to go on, so warnings are scoped to here.
-const REFERENCE_POINT = { lat: -23.55, lon: -46.63 }
+// Same reference point StormMap itself centers on by default — a visitor
+// who hasn't searched their own city yet sees this instead.
+const DEFAULT_REFERENCE = { label: 'São Paulo, SP (referência padrão)', lat: -23.55, lon: -46.63 }
 
 export function VisitorView({ onBack }: Props) {
   const mapRef = useRef<StormMapHandle>(null)
@@ -32,12 +35,23 @@ export function VisitorView({ onBack }: Props) {
   const [lightning, setLightning] = useState<LightningStrike[]>([])
   const [error, setError] = useState<string | null>(null)
 
+  // Visitor mode has no account/monitored location — the reference point
+  // for "Avisos oficiais" starts at a fixed default (São Paulo) but can be
+  // moved to wherever the visitor actually is, same search UX logged-in
+  // users get for adding a location (FASE 33).
+  const [reference, setReference] = useState(DEFAULT_REFERENCE)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<CitySearchResult[]>([])
+  const [searching, setSearching] = useState(false)
+  const [locating, setLocating] = useState(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const load = useCallback(async () => {
     try {
       const [stormsRes, warningsRes, satelliteRes, satelliteImageRes, lightningRes] =
         await Promise.all([
           publicApi.storms(),
-          publicApi.warnings(REFERENCE_POINT.lat, REFERENCE_POINT.lon),
+          publicApi.warnings(reference.lat, reference.lon),
           publicApi.satelliteWatches(),
           publicApi.satelliteImage(),
           publicApi.lightning(),
@@ -51,13 +65,59 @@ export function VisitorView({ onBack }: Props) {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Erro ao carregar')
     }
-  }, [])
+  }, [reference])
 
   useEffect(() => {
     load()
     const t = setInterval(load, REFRESH_MS)
     return () => clearInterval(t)
   }, [load])
+
+  useEffect(() => {
+    mapRef.current?.flyTo(reference.lat, reference.lon)
+  }, [reference])
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (query.trim().length < 2) {
+      setResults([])
+      return
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true)
+      setResults(await searchCity(query))
+      setSearching(false)
+    }, SEARCH_DEBOUNCE_MS)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [query])
+
+  function pickCity(r: CitySearchResult) {
+    setReference({ label: r.label.split(',').slice(0, 2).join(','), lat: r.latitude, lon: r.longitude })
+    setResults([])
+    setQuery('')
+  }
+
+  function useMyLocation() {
+    if (!navigator.geolocation) return
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords
+        reverseGeocodeCity(latitude, longitude, (place) => {
+          setLocating(false)
+          setReference({
+            label: place ?? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+            lat: latitude,
+            lon: longitude,
+          })
+        })
+      },
+      () => setLocating(false),
+      { timeout: 10_000 },
+    )
+  }
 
   const mock = storms.some((s) => s.is_mock)
 
@@ -113,6 +173,39 @@ export function VisitorView({ onBack }: Props) {
         <div className="side">
           {error && <div className="panel error">⚠️ {error}</div>}
           <section className="panel">
+            <h2>📍 Sua região</h2>
+            <p className="panel-hint">
+              "Avisos oficiais" abaixo é buscado perto deste ponto — atualmente{' '}
+              <strong>{reference.label}</strong>.
+            </p>
+            <div className="location-search-row">
+              <input
+                placeholder="Buscar cidade (ex: Ribeirão Preto)"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn ghost small"
+                onClick={useMyLocation}
+                disabled={locating}
+                title="Usar minha localização"
+              >
+                {locating ? '…' : '📍 usar minha localização'}
+              </button>
+            </div>
+            {searching && <p className="panel-hint">buscando…</p>}
+            {results.length > 0 && (
+              <div className="list search-results">
+                {results.map((r) => (
+                  <div className="row clickable" key={`${r.latitude},${r.longitude}`} onClick={() => pickCity(r)}>
+                    <span className="grow">{r.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+          <section className="panel">
             <h2>
               Observações via satélite <span className="count">{satelliteWatches.length}</span>
             </h2>
@@ -143,7 +236,9 @@ export function VisitorView({ onBack }: Props) {
               Avisos oficiais <span className="count">{warnings.length}</span>
             </h2>
             <div className="list">
-              {warnings.length === 0 && <p className="empty">Nenhum aviso ativo perto de SP.</p>}
+              {warnings.length === 0 && (
+                <p className="empty">Nenhum aviso ativo perto de {reference.label}.</p>
+              )}
               {warnings.map((w, i) => (
                 <div className="row" key={i}>
                   <span className="badge sev">{w.severity}</span>
