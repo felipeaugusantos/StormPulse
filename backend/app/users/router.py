@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
+from app.apikeys import service as apikey_service
+from app.apikeys.schemas import ApiKeyCreateIn, ApiKeyCreateOut, ApiKeyListOut, ApiKeyOut
 from app.notifications import service as push_service
 from app.notifications.schemas import (
     ExpoPushTokenDeleteIn,
@@ -113,3 +117,58 @@ async def unregister_expo_push_token(
     current_user: User = Depends(get_current_user),
 ) -> None:
     await push_service.delete_expo_token(session, current_user, data.expo_push_token)
+
+
+@router.post(
+    "/me/api-keys",
+    response_model=ApiKeyCreateOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Criar uma chave de API para integração externa (item 1)",
+)
+async def create_api_key(
+    data: ApiKeyCreateIn,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiKeyCreateOut:
+    key, raw_key = await apikey_service.create_api_key(session, user=current_user, name=data.name)
+    return ApiKeyCreateOut(
+        id=key.id,
+        name=key.name,
+        key_prefix=key.key_prefix,
+        created_at=key.created_at,
+        last_used_at=key.last_used_at,
+        revoked_at=key.revoked_at,
+        key=raw_key,
+    )
+
+
+@router.get(
+    "/me/api-keys",
+    response_model=ApiKeyListOut,
+    summary="Listar as próprias chaves de API (nunca o valor bruto)",
+)
+async def list_api_keys(
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ApiKeyListOut:
+    keys = await apikey_service.list_api_keys(session, user=current_user)
+    return ApiKeyListOut(items=[ApiKeyOut.model_validate(k) for k in keys])
+
+
+@router.delete(
+    "/me/api-keys/{key_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Revogar uma chave de API",
+)
+async def revoke_api_key(
+    key_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    try:
+        await apikey_service.revoke_api_key(session, user=current_user, key_id=key_id)
+    except apikey_service.ApiKeyNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chave de API não encontrada",
+        ) from exc

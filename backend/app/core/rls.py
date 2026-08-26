@@ -43,6 +43,7 @@ _TENANT_SCOPED_TABLES = (
     "push_subscriptions",
     "user_reports",
     "storm_risks",
+    "api_keys",
 )
 
 

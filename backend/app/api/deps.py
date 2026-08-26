@@ -10,6 +10,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.apikeys.service import resolve_api_key
 from app.core.config import Settings
 from app.core.enums import UserRole
 from app.core.rls import bypass_rls, set_tenant_context
@@ -72,6 +73,44 @@ async def get_current_user(
 
     await bypass_rls(session)
     user = await session.get(User, user_id)
+    if user is None or not user.is_active:
+        raise unauthorized
+    await set_tenant_context(session, user.tenant_id)
+    await session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
+    return user
+
+
+async def require_api_key(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+) -> User:
+    """Resolves the authenticated user from an `X-API-Key` header (item 1,
+    ADR-0062) — the external/public API's own auth, parallel to
+    `get_current_user`'s Bearer JWT for the dashboard. Returns a plain
+    `User` on purpose: every external endpoint reuses the exact same
+    service-layer functions the dashboard's own routes call, just gated by
+    a different credential.
+
+    `apikeys.service.resolve_api_key` already does its own `bypass_rls` +
+    commits (to stamp `last_used_at`) — that commit ends the transaction
+    its bypass was scoped to, so it's re-applied here before the
+    cross-tenant user lookup, same reasoning as `get_current_user` above.
+    """
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Chave de API ausente ou inválida",
+        headers={"WWW-Authenticate": "ApiKey"},
+    )
+    raw_key = request.headers.get("x-api-key")
+    if not raw_key:
+        raise unauthorized
+
+    key = await resolve_api_key(session, raw_key)
+    if key is None:
+        raise unauthorized
+
+    await bypass_rls(session)
+    user = await session.get(User, key.user_id)
     if user is None or not user.is_active:
         raise unauthorized
     await set_tenant_context(session, user.tenant_id)

@@ -165,6 +165,15 @@ class Settings(BaseSettings):
     public_rate_limit_max: int = Field(default=120, gt=0)
     public_rate_limit_window_seconds: int = Field(default=60, gt=0)
 
+    # --- Rate limiting (external/public API, item 1, ADR-0062) ---
+    # Deliberately much stricter than the dashboard's own limit — a
+    # programmatic client is expected to poll on its own schedule
+    # (typically minutes, not seconds), and this scope is keyed by IP
+    # (RateLimiter has no per-API-key keying yet), so this also has to
+    # tolerate several keys sharing one IP without one starving the rest.
+    api_rate_limit_max: int = Field(default=60, gt=0)
+    api_rate_limit_window_seconds: int = Field(default=60, gt=0)
+
     # --- Rate limiting: trusted proxy policy (hardening ADR-0033) ---
     # Empty by default — fail-safe-closed. With no trusted proxy configured,
     # `Forwarded`/`X-Forwarded-For` are never trusted and the limiter always

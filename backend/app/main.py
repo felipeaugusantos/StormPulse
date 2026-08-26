@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api.router import public_v1_router, root_router, v1_router
+from app.api.router import external_api_v1_router, public_v1_router, root_router, v1_router
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.core.metrics import configure_metrics
@@ -128,6 +128,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         public_v1_router,
         prefix=settings.api_v1_prefix,
         dependencies=[Depends(public_rate_limit)],
+    )
+    api_rate_limit = RateLimiter(
+        max_requests=settings.api_rate_limit_max,
+        window_seconds=settings.api_rate_limit_window_seconds,
+        scope="external-api",
+    )
+    app.include_router(
+        external_api_v1_router,
+        prefix=settings.api_v1_prefix,
+        dependencies=[Depends(api_rate_limit)],
     )
 
     if settings.otel_enabled and settings.environment != "test":
