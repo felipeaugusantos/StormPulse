@@ -10,23 +10,41 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, get_request_settings
-from app.auth.schemas import GoogleAuthIn, LoginIn, RefreshIn, RegisterIn, TokenPair
+from app.api.deps import get_current_user, get_db, get_request_settings
+from app.auth.schemas import (
+    ForgotPasswordIn,
+    GoogleAuthIn,
+    LoginIn,
+    RefreshIn,
+    RegisterIn,
+    ResendVerificationOut,
+    ResetPasswordIn,
+    TokenPair,
+    VerifyEmailIn,
+)
 from app.auth.service import (
     EmailAlreadyRegistered,
+    InvalidToken,
     authenticate,
     authenticate_google,
     register_user,
+    request_password_reset,
+    reset_password_with_token,
+    verify_email_with_token,
 )
+from app.core.captcha import verify_captcha
 from app.core.config import Settings
 from app.core.ratelimit import RateLimiter
 from app.core.rls import bypass_rls
 from app.core.security import (
     TokenError,
     create_access_token,
+    create_email_verification_token,
+    create_password_reset_token,
     create_refresh_token,
     decode_token,
 )
+from app.core.tasks import send_transactional_email
 from app.users.models import User
 from app.users.schemas import UserOut
 
@@ -69,6 +87,16 @@ def _issue_tokens(user: User, settings: Settings) -> TokenPair:
         access_token=create_access_token(subject, settings, extra_claims=claims),
         refresh_token=create_refresh_token(subject, settings),
     )
+
+
+async def _require_captcha(token: str | None, request: Request, settings: Settings) -> None:
+    remote_ip = request.client.host if request.client else None
+    ok = await verify_captcha(token, settings, remote_ip=remote_ip)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Verificação anti-abuso falhou. Tente novamente.",
+        )
 
 
 def _is_mobile_client(request: Request) -> bool:
@@ -130,8 +158,11 @@ def _clear_refresh_cookie(response: Response, settings: Settings) -> None:
 )
 async def register(
     data: RegisterIn,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_request_settings),
 ) -> UserOut:
+    await _require_captcha(data.captcha_token, request, settings)
     try:
         user = await register_user(session, data)
     except EmailAlreadyRegistered as exc:
@@ -139,6 +170,10 @@ async def register(
             status_code=status.HTTP_409_CONFLICT,
             detail="E-mail já cadastrado",
         ) from exc
+    if not user.email_verified:
+        token = create_email_verification_token(str(user.id), settings)
+        link = f"{settings.frontend_base_url}/verificar-email?token={token}"
+        send_transactional_email("email_verification", user.email, link, settings)
     # Module flags live on Tenant, not User (see users/router.py's read_me)
     # — known here directly from what the caller just requested, no extra
     # fetch needed.
@@ -153,6 +188,7 @@ async def register(
         created_at=user.created_at,
         storm_module_enabled=data.storm_module,
         agro_module_enabled=data.agro_module,
+        email_verified=user.email_verified,
     )
 
 
@@ -169,6 +205,7 @@ async def login(
     session: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_request_settings),
 ) -> TokenPair:
+    await _require_captcha(data.captcha_token, request, settings)
     user = await authenticate(session, data.email, data.password)
     if user is None:
         raise HTTPException(
@@ -295,3 +332,82 @@ async def logout(
     # off (default), this is a no-op 204, which is still the correct
     # contract for a client that always calls it on sign-out.
     _clear_refresh_cookie(response, settings)
+
+
+@router.post(
+    "/verify-email",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Confirmar e-mail a partir do token enviado por e-mail",
+)
+async def verify_email(
+    data: VerifyEmailIn,
+    session: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_request_settings),
+) -> None:
+    try:
+        await verify_email_with_token(session, data.token, settings)
+    except InvalidToken as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link de verificação inválido ou expirado",
+        ) from exc
+
+
+@router.post(
+    "/resend-verification",
+    response_model=ResendVerificationOut,
+    dependencies=[Depends(_auth_rate_limit)],
+    summary="Reenviar o e-mail de verificação para a conta autenticada",
+)
+async def resend_verification(
+    current_user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_request_settings),
+) -> ResendVerificationOut:
+    if current_user.email_verified:
+        return ResendVerificationOut(sent=False)
+    token = create_email_verification_token(str(current_user.id), settings)
+    link = f"{settings.frontend_base_url}/verificar-email?token={token}"
+    send_transactional_email("email_verification", current_user.email, link, settings)
+    return ResendVerificationOut(sent=True)
+
+
+@router.post(
+    "/forgot-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(_auth_rate_limit)],
+    summary="Solicitar redefinição de senha por e-mail",
+)
+async def forgot_password(
+    data: ForgotPasswordIn,
+    session: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_request_settings),
+) -> None:
+    # Always 204, whether or not the email exists — a different response
+    # for "not found" would let an attacker enumerate registered emails.
+    user = await request_password_reset(session, data.email)
+    if user is not None:
+        token = create_password_reset_token(str(user.id), user.hashed_password, settings)
+        link = f"{settings.frontend_base_url}/redefinir-senha?token={token}"
+        send_transactional_email("password_reset", user.email, link, settings)
+
+
+@router.post(
+    "/reset-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(_auth_rate_limit)],
+    summary="Definir uma nova senha a partir do token enviado por e-mail",
+)
+async def reset_password(
+    data: ResetPasswordIn,
+    session: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_request_settings),
+) -> None:
+    try:
+        await reset_password_with_token(
+            session, token=data.token, new_password=data.new_password, settings=settings
+        )
+    except InvalidToken as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Link de redefinição inválido, expirado ou já usado",
+        ) from exc

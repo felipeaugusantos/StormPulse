@@ -41,6 +41,7 @@ async def read_me(
         created_at=current_user.created_at,
         storm_module_enabled=tenant.storm_enabled if tenant is not None else True,
         agro_module_enabled=tenant.agro_enabled if tenant is not None else False,
+        email_verified=current_user.email_verified,
     )
 
 

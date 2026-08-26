@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from app.core.config import get_settings
 from app.core.metrics import (
     alerts_generated,
     alerts_suppressed,
@@ -14,6 +15,7 @@ from app.core.metrics import (
 from workers.agro_pipeline import run_agro_advisory_cycle
 from workers.celery_app import celery_app
 from workers.db import session_scope
+from workers.email import EmailKind, render_email, send_email
 from workers.lightning_pipeline import run_lightning_detection_cycle
 from workers.ndvi_pipeline import run_ndvi_pipeline_cycle
 from workers.notification_pipeline import run_notification_delivery_cycle
@@ -134,4 +136,18 @@ def run_lightning_detection_task() -> dict[str, Any]:
         "points_active": summary.points_active,
     }
     logger.info("lightning detection cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.send_transactional_email_task")
+def send_transactional_email_task(kind: EmailKind, to_email: str, link: str) -> dict[str, Any]:
+    """Sends one account-cycle email (verification/password reset, FASE 8)
+    fire-and-forget from the request path — see `app.core.tasks.send_transactional_email`
+    for the API-side dispatcher. Never raises: a bounced/misconfigured SES
+    must not retry-storm the queue; `send_email` already logs the failure."""
+    settings = get_settings()
+    content = render_email(kind, link=link)
+    sent = send_email(to_email, content, settings)
+    result = {"kind": kind, "sent": sent}
+    logger.info("transactional email cycle complete", extra=result)
     return result

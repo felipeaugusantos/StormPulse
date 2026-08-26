@@ -27,6 +27,7 @@ dependencies = [
     "google-auth>=2.35",
     "pywebpush>=2.0",
     "cryptography>=43.0",
+    "boto3>=1.35",
 ]
 
 [project.optional-dependencies]
@@ -139,6 +140,13 @@ disallow_untyped_decorators = false
 [[tool.mypy.overrides]]
 # pywebpush ships without inline types/py.typed.
 module = ["pywebpush.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# boto3/botocore ship without inline types/py.typed (full typing needs the
+# optional boto3-stubs/botocore-stubs packages, not worth the extra
+# dependency for the single `ses.send_email` call this project makes).
+module = ["boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------

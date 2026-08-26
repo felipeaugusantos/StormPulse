@@ -7,6 +7,7 @@ never be used as an access token, and vice versa.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -18,7 +19,7 @@ from app.core.config import Settings
 
 _password_hash = PasswordHash.recommended()
 
-TokenType = Literal["access", "refresh"]
+TokenType = Literal["access", "refresh", "email_verification", "password_reset"]
 
 
 def hash_password(plain: str) -> str:
@@ -72,6 +73,36 @@ def create_refresh_token(subject: str, settings: Settings) -> str:
         token_type="refresh",
         settings=settings,
         expires_delta=timedelta(days=settings.refresh_token_expire_days),
+    )
+
+
+def password_fingerprint(hashed_password: str) -> str:
+    """Short, non-reversible fingerprint of a user's current password hash
+    — embedded as a claim in a password-reset token so that changing the
+    password (which changes `hashed_password`) naturally invalidates every
+    reset token issued before that change, without a separate DB table to
+    track single-use tokens (FASE 8, ADR-0059)."""
+    return hashlib.sha256(hashed_password.encode()).hexdigest()[:16]
+
+
+def create_email_verification_token(subject: str, settings: Settings) -> str:
+    """24h-lived — verifying twice is harmless, so no single-use tracking
+    is needed (unlike the password-reset token below)."""
+    return _create_token(
+        subject=subject,
+        token_type="email_verification",
+        settings=settings,
+        expires_delta=timedelta(hours=24),
+    )
+
+
+def create_password_reset_token(subject: str, hashed_password: str, settings: Settings) -> str:
+    return _create_token(
+        subject=subject,
+        token_type="password_reset",
+        settings=settings,
+        expires_delta=timedelta(hours=1),
+        extra_claims={"pwd_fp": password_fingerprint(hashed_password)},
     )
 
 

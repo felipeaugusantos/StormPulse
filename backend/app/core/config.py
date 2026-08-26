@@ -312,6 +312,31 @@ class Settings(BaseSettings):
     vapid_public_key: str | None = None
     vapid_subject: str = "mailto:contato@stormpulse.example"
 
+    # --- Ciclo de conta: e-mail transacional (AWS SES, FASE 8) ---
+    # Credenciais nunca são um campo próprio aqui — vêm só de variável de
+    # ambiente/IAM role da instância (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY
+    # ou a role da própria máquina), lidas pelo boto3 sozinho, mesmo
+    # princípio já usado pro backup em S3 (infra/backup-postgres.sh). Sem
+    # `ses_from_email` configurado, o envio é honestamente pulado (loga e
+    # retorna) em vez de fingir que mandou — mesmo espírito de
+    # `vapid_private_key` acima.
+    aws_region: str = "us-east-1"
+    ses_from_email: str | None = None
+    # Base pública do frontend — usada só para montar os links de
+    # verificação de e-mail/redefinição de senha enviados por e-mail
+    # (ex.: "{frontend_base_url}/verificar-email?token=..."). Nunca usada
+    # para nada que precise ser uma origem confiável de CORS/cookie.
+    frontend_base_url: str = "http://localhost:5173"
+
+    # --- Anti-abuso: hCaptcha (FASE 8) ---
+    # Opcional — sem `hcaptcha_secret_key` configurada, /auth/register e
+    # /auth/login não exigem `captcha_token` (dev/test não precisa de conta
+    # hCaptcha). Configurada, passa a ser obrigatório e verificado contra a
+    # API do hCaptcha a cada tentativa. `hcaptcha_site_key` é pública (vai
+    # pro frontend, igual a `vapid_public_key`).
+    hcaptcha_secret_key: SecretStr | None = None
+    hcaptcha_site_key: str | None = None
+
     @model_validator(mode="after")
     def _forbid_dev_secret_in_production(self) -> Settings:
         if self.environment == "production" and (

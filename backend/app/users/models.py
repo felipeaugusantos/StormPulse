@@ -56,3 +56,21 @@ class User(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     # is the platform-admin "active users" metric — nothing in the app's
     # own auth/authorization logic depends on it.
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Account cycle (FASE 8, ADR-0059) — informational, never gates login:
+    # flipping every pre-existing unverified account to locked-out on
+    # deploy would be a breaking change to already-working accounts, not a
+    # security fix. A Google sign-in sets this True immediately (Google
+    # already checked `email_verified` on its own token, see
+    # `auth/router.py::login_google`); a password account starts False and
+    # flips True only via `/auth/verify-email`.
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When the account holder accepted the current Terms/Privacy Policy —
+    # NULL for every account that registered before this existed (there
+    # was nothing to accept yet; never backfilled to "accepted" after the
+    # fact, that would be fabricating consent that was never given).
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

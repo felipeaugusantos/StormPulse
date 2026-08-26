@@ -30,6 +30,10 @@ class UserOut(BaseModel):
     # ``from_attributes`` alone.
     storm_module_enabled: bool
     agro_module_enabled: bool
+    # FASE 8 (ADR-0059) — informational only, never gates login (see
+    # `User.email_verified`'s own docstring). Drives a "confirme seu
+    # e-mail" banner in the frontend, nothing more.
+    email_verified: bool
 
 
 class DeleteAccountIn(BaseModel):

@@ -34,3 +34,14 @@ def trigger_pipeline(name: str, settings: Settings) -> None:
     task_name = PIPELINE_TASK_NAMES[name]
     client = Celery("stormpulse-api-sender", broker=settings.redis_url)
     client.send_task(task_name)
+
+
+def send_transactional_email(kind: str, to_email: str, link: str, settings: Settings) -> None:
+    """Enqueue one account-cycle email (verification/password reset,
+    FASE 8) — same fire-and-forget shape as `trigger_pipeline` above, so
+    /auth/register and /auth/forgot-password never block the response on
+    an SES network call. The `api` image never imports `workers.email`
+    (which imports `boto3`) directly — this only needs a broker
+    connection, the task body lives entirely in the `worker` image."""
+    client = Celery("stormpulse-api-sender", broker=settings.redis_url)
+    client.send_task("workers.tasks.send_transactional_email_task", args=[kind, to_email, link])

@@ -22,6 +22,12 @@ class RegisterIn(BaseModel):
     # UI alone, since this is a request-validation concern.
     storm_module: bool = True
     agro_module: bool = False
+    # Must be explicitly true — a client that omits it or sends false gets
+    # a 422, not a silent "assume yes" (FASE 8, ADR-0059).
+    accept_terms: bool = Field(default=False)
+    # Present only when ANTI_CAPTCHA is configured server-side
+    # (`Settings.hcaptcha_secret_key`) — otherwise ignored entirely.
+    captcha_token: str | None = Field(default=None, max_length=4000)
 
     @model_validator(mode="after")
     def _at_least_one_module(self) -> RegisterIn:
@@ -29,10 +35,34 @@ class RegisterIn(BaseModel):
             raise ValueError("Selecione pelo menos um módulo: Tempestade ou Agro")
         return self
 
+    @model_validator(mode="after")
+    def _must_accept_terms(self) -> RegisterIn:
+        if not self.accept_terms:
+            raise ValueError("É preciso aceitar os Termos de Uso e a Política de Privacidade")
+        return self
+
 
 class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+    captcha_token: str | None = Field(default=None, max_length=4000)
+
+
+class VerifyEmailIn(BaseModel):
+    token: str = Field(min_length=1)
+
+
+class ResendVerificationOut(BaseModel):
+    sent: bool
+
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class RefreshIn(BaseModel):
