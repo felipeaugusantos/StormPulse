@@ -309,7 +309,7 @@ jobs:
           email="ci-$RANDOM@example.com"
           # register
           curl -fsS -X POST "$base/auth/register" -H 'Content-Type: application/json' \
-            -d "{\"email\":\"$email\",\"password\":\"supersecret123\",\"full_name\":\"CI\"}" \
+            -d "{\"email\":\"$email\",\"password\":\"supersecret123\",\"full_name\":\"CI\",\"accept_terms\":true}" \
             | tee /tmp/reg.json
           grep -q "\"email\":\"$email\"" /tmp/reg.json
           # login
@@ -331,7 +331,7 @@ jobs:
           base=http://localhost:8000/api/v1
           email="ci-loc-$RANDOM@example.com"
           curl -fsS -X POST "$base/auth/register" -H 'Content-Type: application/json' \
-            -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" > /dev/null
+            -d "{\"email\":\"$email\",\"password\":\"supersecret123\",\"accept_terms\":true}" > /dev/null
           access="$(curl -fsS -X POST "$base/auth/login" -H 'Content-Type: application/json' \
             -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" \
             | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')"
@@ -357,7 +357,7 @@ jobs:
           base=http://localhost:8000/api/v1
           email="ci-pipe-$RANDOM@example.com"
           curl -fsS -X POST "$base/auth/register" -H 'Content-Type: application/json' \
-            -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" > /dev/null
+            -d "{\"email\":\"$email\",\"password\":\"supersecret123\",\"accept_terms\":true}" > /dev/null
           access="$(curl -fsS -X POST "$base/auth/login" -H 'Content-Type: application/json' \
             -d "{\"email\":\"$email\",\"password\":\"supersecret123\"}" \
             | python3 -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')"
