@@ -69,6 +69,19 @@ Ganhou também suporte opcional (`BACKUP_S3_BUCKET`) pra copiar o backup
 pra S3 depois do dump local — desligado por padrão, nunca loga
 credenciais (vêm só de variável de ambiente/IAM role da instância).
 
+**Correção adicional (encontrada só pelo drill de restore real no CI, não
+pelos testes com stub):** `--exclude-schema=tiger/tiger_data/topology`
+remove os objetos *dentro* desses schemas, mas não impede o `pg_dump` de
+continuar emitindo `CREATE EXTENSION IF NOT EXISTS postgis_tiger_geocoder
+WITH SCHEMA tiger;` — restaurar isso falha com "schema tiger does not
+exist" contra o mesmo alvo do qual acabamos de excluir aquele schema. Como
+o alvo de restore (e a própria instância de produção) já instala essas
+duas extensions via inicialização padrão do `postgis/postgis`, o dump
+agora também filtra (`grep -v`) as linhas `CREATE EXTENSION`/`COMMENT ON
+EXTENSION` de `postgis_tiger_geocoder` e `postgis_topology` — sem perda,
+nada ali é dado de aplicação. `postgis`/`fuzzystrmatch` (schema `public`)
+não precisam desse filtro porque `WITH SCHEMA public` nunca colide.
+
 ## Verificação
 
 `infra/tests/test_deploy_rollback.sh` e `infra/tests/test_backup_postgres.sh`
@@ -98,8 +111,27 @@ expansão de variável dentro de aspas simples usadas de propósito).
 - Migrations continuam nunca sendo revertidas automaticamente, em nenhum
   caminho (deploy normal ou rollback) — decisão humana, documentada em
   `infra/README.md § Rollback`.
-- Fora de escopo desta ADR: teste de restore automatizado em ambiente
-  descartável no CI (ver `infra/README.md § Backup` pro procedimento
-  manual atual) e upload S3 real (a variável existe e é testável
-  localmente, mas nenhum bucket/IAM role foi provisionado ainda — decisão
-  do operador).
+- Fora de escopo desta ADR: upload S3 real (a variável existe e é
+  testável localmente, mas nenhum bucket/IAM role foi provisionado ainda
+  — decisão do operador).
+
+## Atualização — drill de restore real no CI
+
+O drill de restore contra um Postgres descartável de verdade (não só os
+testes com `docker`/`curl` simulados) foi adicionado ao job `docker` do
+CI. Rodá-lo de verdade (não só localmente) revelou dois problemas que os
+testes com stub, por natureza, não conseguiriam pegar:
+
+1. O bug de `--exclude-schema` descrito acima na seção "Backup
+   obrigatório" (`CREATE EXTENSION ... WITH SCHEMA tiger` sobrevivendo à
+   exclusão do schema) — só apareceu contra um Postgres real, os testes
+   com stub nunca executam SQL de verdade.
+2. Uma race de inicialização do próprio image `postgis/postgis:16-3.4`
+   (não deste repositório): o script de init do image às vezes falha com
+   `duplicate key value violates unique constraint "pg_extension_name_index"`
+   ao criar a extensão `postgis`/`postgis_tiger_geocoder` no banco recém
+   copiado do template — confirmado reproduzindo o boot do container
+   isoladamente várias vezes (falha intermitente, não determinística). O
+   passo de CI agora tenta subir o container de restore descartável até 5
+   vezes, descartando e recriando se ele sair sozinho (`docker inspect
+   --format '{{.State.Status}}'`) antes de tentar o restore.
