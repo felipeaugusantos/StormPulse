@@ -164,3 +164,26 @@ def test_non_production_still_defaults_to_mock() -> None:
     # production (every test in this suite implicitly relies on this).
     settings = Settings()
     assert settings.weather_provider == "mock"
+
+
+def test_blank_optional_secret_env_vars_become_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`.env.example` ships every optional secret as a *present but empty*
+    line (`HCAPTCHA_SECRET_KEY=`, `VAPID_PRIVATE_KEY=`, ...) — confirmed
+    live (item 8/FASE 8) that a plain `cp .env.example .env` left these as
+    `SecretStr('')`, not `None`, silently making `verify_captcha` (and the
+    same-shaped VAPID/INMET/etc. checks) treat an unconfigured feature as
+    configured with an empty credential."""
+    monkeypatch.setenv("HCAPTCHA_SECRET_KEY", "")
+    monkeypatch.setenv("VAPID_PRIVATE_KEY", "")
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "")
+    settings = Settings(environment="test")
+    assert settings.hcaptcha_secret_key is None
+    assert settings.vapid_private_key is None
+    assert settings.google_client_id is None
+
+
+def test_non_blank_optional_secret_env_vars_are_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HCAPTCHA_SECRET_KEY", "a-real-secret")
+    settings = Settings(environment="test")
+    assert settings.hcaptcha_secret_key is not None
+    assert settings.hcaptcha_secret_key.get_secret_value() == "a-real-secret"

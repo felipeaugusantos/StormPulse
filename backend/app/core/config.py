@@ -38,6 +38,36 @@ _DEV_FIELD_ENCRYPTION_INDEX_KEY = "ZGV2LWluc2VjdXJlLWJsaW5kLWluZGV4LWtleS0zMmI="
 # configurability, not a real feature.
 POSTGRES_APP_ROLE = "stormpulse_app"
 
+# Every genuinely-optional `Settings` field (`X: T | None = None`) that a
+# feature checks with `is None`/`is not None` to decide whether it's
+# configured. `.env.example` ships every one of these as an *empty* line
+# (`HCAPTCHA_SECRET_KEY=`, `VAPID_PRIVATE_KEY=`, ...) rather than omitted
+# entirely — confirmed live that pydantic-settings treats an env var
+# that's present-but-empty as the literal empty string, not unset, so a
+# plain `cp .env.example .env` left every one of these as
+# `SecretStr('')`/`""` instead of `None`. That silently made
+# `verify_captcha` (and, by the same bug, the VAPID/INMET/REDEMET/NDVI/SES
+# checks elsewhere) treat an unconfigured feature as configured with an
+# empty credential — caught by actually registering through the real
+# frontend against a real `.env`, not by reading the code. Must live at
+# module level, not as a class attribute on `Settings`: pydantic v2 treats
+# an underscore-prefixed class attribute as a private model attribute even
+# without a type annotation, not a plain constant.
+_OPTIONAL_FIELDS_EMPTY_MEANS_UNSET = (
+    "otel_exporter_otlp_endpoint",
+    "refresh_cookie_domain",
+    "google_client_id",
+    "platform_admin_email",
+    "inmet_api_token",
+    "redemet_api_key",
+    "ndvi_sh_client_id",
+    "ndvi_sh_client_secret",
+    "vapid_private_key",
+    "vapid_public_key",
+    "ses_from_email",
+    "hcaptcha_secret_key",
+)
+
 
 class Settings(BaseSettings):
     """Application settings.
@@ -332,10 +362,21 @@ class Settings(BaseSettings):
     # Opcional — sem `hcaptcha_secret_key` configurada, /auth/register e
     # /auth/login não exigem `captcha_token` (dev/test não precisa de conta
     # hCaptcha). Configurada, passa a ser obrigatório e verificado contra a
-    # API do hCaptcha a cada tentativa. `hcaptcha_site_key` é pública (vai
-    # pro frontend, igual a `vapid_public_key`).
+    # API do hCaptcha a cada tentativa. A *site key* (pública) não tem
+    # campo aqui — diferente da VAPID public key, o backend nunca a usa
+    # (só o `siteverify` do secret importa); ela só existe do lado do
+    # frontend, via `VITE_HCAPTCHA_SITE_KEY` (ver `.env.example`).
     hcaptcha_secret_key: SecretStr | None = None
-    hcaptcha_site_key: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_optional_fields_become_unset(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        for field_name in _OPTIONAL_FIELDS_EMPTY_MEANS_UNSET:
+            if data.get(field_name) == "":
+                data[field_name] = None
+        return data
 
     @model_validator(mode="after")
     def _forbid_dev_secret_in_production(self) -> Settings:
