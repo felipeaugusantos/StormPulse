@@ -30,25 +30,29 @@ mkdir -p "$BACKUP_DIR"
 # alone) is simpler and doesn't depend on that at all.
 #
 # --exclude-schema=tiger/tiger_data/topology: PostGIS's own "tiger
-# geocoder" extension schemas (addr, county, edges, ...) — the
-# postgis/postgis image auto-creates these in every fresh database, so a
-# plain dump/restore round-trip always collided with "schema already
-# exists" restoring into any freshly-bootstrapped target (confirmed live
-# testing the actual restore procedure, not assumed). Never application
-# data, safe to exclude; they come back on their own from the image.
+# geocoder" extension schemas — the postgis/postgis image auto-creates
+# these in every fresh database, so a plain dump/restore round-trip always
+# collided with "schema already exists" restoring into any
+# freshly-bootstrapped target (confirmed live). Never application data,
+# safe to exclude; they come back on their own from the image.
 #
-# --no-owner --no-privileges: without these, the dump embeds GRANT/ALTER
-# OWNER statements naming the RLS runtime role (`stormpulse_app`, migration
-# 0b7b9a5dbd11) — restoring into anything that hasn't already run that
-# migration (a truly fresh Postgres, or a fresh disposable one for a
-# restore drill) fails on "role stormpulse_app does not exist" (confirmed
-# live). The role/RLS/grants are already fully reproducible by running
-# migrations; a restore only needs the *data* back, then `alembic upgrade
-# head` re-establishes ownership/RLS on top of it.
+# The `grep -v` below removes the `CREATE EXTENSION`/`COMMENT ON EXTENSION`
+# statements for `postgis_tiger_geocoder`/`postgis_topology` specifically.
+# --exclude-schema only drops objects *inside* those schemas — it does NOT
+# stop pg_dump from still emitting `CREATE EXTENSION IF NOT EXISTS
+# postgis_tiger_geocoder WITH SCHEMA tiger;`, which then fails with
+# "schema tiger does not exist" against the very target we just excluded
+# it from (confirmed live: this was the second, distinct bug found only by
+# testing an actual restore, not the "already exists" one --exclude-schema
+# alone was written to fix). Both extensions are already installed by the
+# target's own postgis/postgis init scripts, so dropping these two
+# statements loses nothing — `postgis`/`fuzzystrmatch` stay untouched
+# since their `WITH SCHEMA public` form is unaffected either way.
 if ! docker compose "${COMPOSE_FILES[@]}" exec -T db \
   pg_dump -U "${POSTGRES_USER:-stormpulse}" -d "${POSTGRES_DB:-stormpulse}" \
   --exclude-schema=tiger --exclude-schema=tiger_data --exclude-schema=topology \
   --no-owner --no-privileges \
+  | grep -v -e 'postgis_tiger_geocoder' -e 'postgis_topology' \
   >"$RAW_FILE"; then
   echo "ERROR: pg_dump failed." >&2
   rm -f "$RAW_FILE"
