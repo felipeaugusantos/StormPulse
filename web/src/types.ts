@@ -1,6 +1,28 @@
 export type RiskLevel = 'green' | 'yellow' | 'orange' | 'red'
 export type StormSeverity = 'weak' | 'moderate' | 'strong' | 'severe'
 
+// Materialized risk assessment for one location (GET /locations/:id/risk).
+export interface LocationRisk {
+  id: string
+  location_id: string
+  storm_cell_id: string | null
+  severity: RiskLevel
+  rain_risk: number
+  wind_risk: number
+  hail_risk: number
+  lightning_risk: number
+  storm_distance_km: number | null
+  storm_speed_kmh: number | null
+  eta_minutes: number | null
+  computed_at: string
+  is_mock: boolean
+  experimental: boolean
+  // FASE 9 (ADR-0060) — null quando ANTHROPIC_API_KEY não está
+  // configurada, a geração ainda não rodou, ou a severidade é "green"
+  // (nada a explicar).
+  ai_summary: string | null
+}
+
 export interface Me {
   id: string
   tenant_id: string

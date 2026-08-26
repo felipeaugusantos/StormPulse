@@ -10,6 +10,7 @@ import type {
   Forecast,
   LightningStrike,
   LocationItem,
+  LocationRisk,
   Me,
   NdviReading,
   PipelineHealth,
@@ -289,6 +290,9 @@ export const api = {
   deleteLocation: (locationId: string) =>
     request<void>(`/locations/${locationId}`, { method: 'DELETE' }),
   alerts: () => request<AlertItem[]>('/alerts'),
+  // 404 quando nenhuma avaliação de risco foi calculada ainda para o
+  // local — caller trata isso como "sem risco por enquanto", não erro.
+  risk: (locationId: string) => request<LocationRisk>(`/locations/${locationId}/risk`),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
   // Always Open-Meteo, bypassing INMET/CPTEC — the only source with a real
   // numeric rain forecast (backend: get_numeric_rain_forecast_provider,

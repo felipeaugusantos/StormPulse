@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { classifyFrostDays, evaluateTrafficability, formatFrostDays } from '../agro'
-import { formatDateBR } from '../format'
+import { formatDateBR, riskLevelLabel } from '../format'
 import { classifyCape } from '../storm'
 import type {
   CurrentConditions,
   DailyRainfall,
   ForecastPoint,
   LocationItem,
+  LocationRisk,
   SprayWindow,
 } from '../types'
 
@@ -25,6 +26,7 @@ interface Props {
 }
 
 export function LocationWeatherCard({ location }: Props) {
+  const [risk, setRisk] = useState<LocationRisk | null>(null)
   const [current, setCurrent] = useState<CurrentConditions | null>(null)
   const [forecast, setForecast] = useState<ForecastPoint[] | null>(null)
   const [sprayWindow, setSprayWindow] = useState<SprayWindow | null>(null)
@@ -40,6 +42,7 @@ export function LocationWeatherCard({ location }: Props) {
       setSprayWindow(null)
       setRainfall(null)
       setRainForecast(null)
+      setRisk(null)
       setError(null)
       return
     }
@@ -48,8 +51,8 @@ export function LocationWeatherCard({ location }: Props) {
     setError(null)
 
     async function load() {
-      const [currentRes, forecastRes, sprayRes, rainfallRes, rainForecastRes] = await Promise.all(
-        [
+      const [currentRes, forecastRes, sprayRes, rainfallRes, rainForecastRes, riskRes] =
+        await Promise.all([
           api.currentConditions(location!.id).catch(() => null),
           api.forecast(location!.id).catch(() => null),
           api.sprayWindow(location!.id).catch(() => null),
@@ -58,14 +61,17 @@ export function LocationWeatherCard({ location }: Props) {
           // comes from CPTEC instead (whenever INMET is down), which never
           // has a rain number at all.
           api.rainForecast(location!.id).catch(() => null),
-        ],
-      )
+          // 404 (nenhuma avaliação de risco calculada ainda) é esperado e
+          // silencioso — não é um estado de erro do card.
+          api.risk(location!.id).catch(() => null),
+        ])
       if (cancelled) return
       setCurrent(currentRes)
       setForecast(forecastRes?.points ?? null)
       setSprayWindow(sprayRes)
       setRainfall(rainfallRes?.daily ?? null)
       setRainForecast(rainForecastRes?.points ?? null)
+      setRisk(riskRes)
       setLoading(false)
       if (currentRes == null && forecastRes == null) {
         setError('Dados indisponíveis para este local no momento')
@@ -113,6 +119,13 @@ export function LocationWeatherCard({ location }: Props) {
       <h2>🌡️ {location.name}</h2>
       {loading && !current && <p className="panel-hint">carregando…</p>}
       {error && <p className="error">⚠️ {error}</p>}
+
+      {risk && (
+        <div className={`risk-badge risk-${risk.severity}`}>
+          <span className="risk-badge-level">{riskLevelLabel(risk.severity)}</span>
+          {risk.ai_summary && <p className="risk-badge-summary">{risk.ai_summary}</p>}
+        </div>
+      )}
 
       {current && (
         <div className="weather-current">
