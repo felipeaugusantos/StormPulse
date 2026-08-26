@@ -30,6 +30,7 @@ from app.locations.models import Location
 from app.notifications.models import Notification
 from app.storms.models import StormCell, StormObservation, StormRisk, StormTrack
 from app.weather.factory import get_weather_provider
+from app.weather.models import RadarFrame, WeatherSource
 from app.weather.provider import RadarFrameData, WeatherProvider
 from engine.geo import haversine_km
 from engine.pipeline import StormEngine, TrackedStorm
@@ -88,6 +89,56 @@ def _prune_old_mock_cells(session: Session, *, older_than: timedelta) -> None:
     ).all()
     for cell in stale:
         session.delete(cell)
+
+
+def _get_or_create_weather_source(session: Session, provider: WeatherProvider) -> WeatherSource:
+    source = session.scalars(
+        select(WeatherSource).where(WeatherSource.name == provider.name)
+    ).first()
+    if source is not None:
+        return source
+    source = WeatherSource(name=provider.name, kind=provider.kind, is_active=True)
+    session.add(source)
+    session.flush()  # assigns source.id, needed as RadarFrame's FK below
+    return source
+
+
+def _persist_raw_frames(
+    session: Session, frames: list[RadarFrameData], source: WeatherSource
+) -> None:
+    """Retains exactly what the provider returned this cycle (item 4,
+    ADR-0065) — independent of whatever the storm engine derives from it.
+    ``StormEngine`` clusters/tracks these raw cells into ``StormCell``
+    rows below; without this, the pre-tracking shape was never written
+    anywhere."""
+    for frame in frames:
+        session.add(
+            RadarFrame(
+                weather_source_id=source.id,
+                captured_at=frame.captured_at,
+                is_mock=frame.provenance.is_mock,
+                meta={
+                    "source_name": frame.provenance.source_name,
+                    "cells": [
+                        {
+                            "latitude": c.latitude,
+                            "longitude": c.longitude,
+                            "max_reflectivity": c.max_reflectivity,
+                            "average_reflectivity": c.average_reflectivity,
+                            "area_km2": c.area_km2,
+                        }
+                        for c in frame.cells
+                    ],
+                },
+            )
+        )
+
+
+def _prune_old_raw_frames(session: Session, *, older_than: timedelta) -> None:
+    cutoff = datetime.now(UTC) - older_than
+    stale = session.scalars(select(RadarFrame).where(RadarFrame.captured_at < cutoff)).all()
+    for frame in stale:
+        session.delete(frame)
 
 
 def _persist_tracked(session: Session, tracked: TrackedStorm) -> StormCell:
@@ -194,6 +245,14 @@ def run_ingestion_cycle(
     bypass_rls(session)
 
     frames = asyncio.run(provider.get_radar_frames(limit=6))
+
+    # Raw retention (item 4, ADR-0065) — persisted *before* the engine
+    # below clusters/tracks these into StormCell rows, so the exact shape
+    # the provider returned this cycle is never lost.
+    weather_source = _get_or_create_weather_source(session, provider)
+    _persist_raw_frames(session, frames, weather_source)
+    _prune_old_raw_frames(session, older_than=timedelta(days=settings.raw_frame_retention_days))
+
     tracked_storms = StormEngine().process(_to_frame_inputs(frames))
 
     persisted: list[tuple[StormCell, TrackedStorm]] = [

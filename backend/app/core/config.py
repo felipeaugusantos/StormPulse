@@ -290,6 +290,15 @@ class Settings(BaseSettings):
     open_meteo_http_timeout_seconds: float = Field(default=10.0, gt=0)
     open_meteo_fallback_enabled: bool = True
 
+    # --- Retenção de histórico bruto dos providers (item 4, ADR-0065) ---
+    # `RadarFrame` guarda a lista de células brutas que o provider ativo
+    # devolveu em cada ciclo, antes do StormEngine agrupar/rastrear — sem
+    # isso, o dado bruto de cada ciclo de ingestão nunca era escrito em
+    # lugar nenhum (só a saída derivada/rastreada, StormCell, sobrevivia).
+    # Poda automática evita crescimento indefinido de uma tabela alimentada
+    # a cada 5 minutos.
+    raw_frame_retention_days: int = Field(default=30, gt=0)
+
     # --- Boletins oficiais (item 3, ADR-0064) ---
     # Reusa WeatherProvider.get_warnings (INMET `/avisos/ativos`) já
     # existente — a única fonte nacional, pública, sem cadastro, de alertas

@@ -78,6 +78,25 @@ class AdminAuditLogListOut(BaseModel):
     total: int
 
 
+class AdminRawFrameOut(BaseModel):
+    """One raw radar-frame snapshot, exactly as a provider returned it
+    (item 4, ADR-0065) — before StormEngine clusters/tracks it into a
+    StormCell. `meta.cells` carries the raw per-cell reflectivity list."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    weather_source_id: uuid.UUID
+    captured_at: datetime
+    is_mock: bool
+    meta: dict[str, Any]
+
+
+class AdminRawFrameListOut(BaseModel):
+    items: list[AdminRawFrameOut]
+    total: int
+
+
 class AdminStatsOut(BaseModel):
     """Aggregate counters for the platform-admin dashboard (FASE 28 Fase 3,
     ADR-0051). Deliberately simple totals/windows — no per-tenant

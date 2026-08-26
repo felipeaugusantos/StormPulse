@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.admin import service
 from app.admin.schemas import (
     AdminAuditLogListOut,
+    AdminRawFrameListOut,
     AdminStatsOut,
     AdminTenantListOut,
     AdminUserListOut,
@@ -120,6 +121,21 @@ async def list_audit_log(
 ) -> AdminAuditLogListOut:
     items, total = await service.list_audit_log(session, limit=limit, offset=offset)
     return AdminAuditLogListOut(items=items, total=total)
+
+
+@router.get(
+    "/raw-frames",
+    response_model=AdminRawFrameListOut,
+    summary="Histórico bruto de radar por ciclo de ingestão (item 4, operador da plataforma)",
+)
+async def list_raw_frames(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_db),
+    _: User = Depends(require_platform_admin),
+) -> AdminRawFrameListOut:
+    items, total = await service.list_raw_frames(session, limit=limit, offset=offset)
+    return AdminRawFrameListOut(items=items, total=total)
 
 
 @router.get(

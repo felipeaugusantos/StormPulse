@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.admin.models import AdminAuditLog
 from app.admin.schemas import (
     AdminAuditLogOut,
+    AdminRawFrameOut,
     AdminStatsOut,
     AdminTenantOut,
     AdminUserOut,
@@ -38,6 +39,7 @@ from app.satellite.models import SatelliteImage
 from app.storms.models import StormCell, StormRisk
 from app.tenants.models import Tenant
 from app.users.models import User
+from app.weather.models import RadarFrame
 from engine.validation import EtaSample, PredictionOutcome, mean_absolute_eta_error_minutes
 from engine.validation import precision_recall as _precision_recall
 
@@ -260,6 +262,19 @@ async def list_audit_log(
     )
     rows = (await session.execute(stmt)).scalars().all()
     items = [AdminAuditLogOut.model_validate(row) for row in rows]
+    return items, total
+
+
+async def list_raw_frames(
+    session: AsyncSession, *, limit: int, offset: int
+) -> tuple[list[AdminRawFrameOut], int]:
+    """Item 4, ADR-0065 — raw radar frames retained per ingestion cycle,
+    exactly as the active provider returned them."""
+    limit = min(limit, MAX_PAGE_SIZE)
+    total = (await session.execute(select(func.count()).select_from(RadarFrame))).scalar_one()
+    stmt = select(RadarFrame).order_by(RadarFrame.captured_at.desc()).limit(limit).offset(offset)
+    rows = (await session.execute(stmt)).scalars().all()
+    items = [AdminRawFrameOut.model_validate(row) for row in rows]
     return items, total
 
 
