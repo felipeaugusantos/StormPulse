@@ -5,6 +5,8 @@ import type {
   AdminUser,
   AdminUserList,
   AlertItem,
+  ApiKey,
+  ApiKeyCreated,
   ConvectiveWatch,
   CurrentConditions,
   Forecast,
@@ -273,6 +275,12 @@ export const api = {
     request<void>('/users/me', { method: 'DELETE', body: JSON.stringify({ confirm: true }) }),
   registerPushSubscription: (data: PushSubscriptionInput) =>
     request<void>('/users/me/push-subscription', { method: 'POST', body: JSON.stringify(data) }),
+  createApiKey: (name: string) =>
+    request<ApiKeyCreated>('/users/me/api-keys', { method: 'POST', body: JSON.stringify({ name }) }),
+  listApiKeys: () =>
+    request<{ items: ApiKey[] }>('/users/me/api-keys').then((r) => r.items),
+  revokeApiKey: (keyId: string) =>
+    request<void>(`/users/me/api-keys/${keyId}`, { method: 'DELETE' }),
   deletePushSubscription: (endpoint: string) =>
     request<void>('/users/me/push-subscription', {
       method: 'DELETE',

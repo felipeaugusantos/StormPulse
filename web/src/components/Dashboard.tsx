@@ -34,6 +34,7 @@ import { cropColor } from '../cropColors'
 import { formatDateBR, formatTimeBR, riskLevelLabel, timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { AdminPanel } from './AdminPanel'
+import { ApiKeysModal } from './ApiKeysModal'
 import { LocationSearchCard } from './LocationSearchCard'
 import { LocationWeatherCard } from './LocationWeatherCard'
 import { SafetyDisclaimer } from './SafetyDisclaimer'
@@ -81,6 +82,7 @@ export function Dashboard({ onLogout }: Props) {
   const [pushStatus, setPushStatus] = useState<'idle' | 'subscribing' | 'on' | 'error'>('idle')
   const [pushError, setPushError] = useState<string | null>(null)
   const [showAdmin, setShowAdmin] = useState(false)
+  const [showApiKeys, setShowApiKeys] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -298,6 +300,9 @@ export function Dashboard({ onLogout }: Props) {
           </button>
         )}
         {pushStatus === 'on' && <span className="pill">🔔 Notificações ativas</span>}
+        <button className="btn ghost" onClick={() => setShowApiKeys(true)}>
+          🔑 API
+        </button>
         <button className="btn ghost" onClick={handleDeleteAccount} disabled={deletingAccount}>
           {deletingAccount ? 'Excluindo…' : 'Excluir conta'}
         </button>
@@ -305,6 +310,8 @@ export function Dashboard({ onLogout }: Props) {
           Sair
         </button>
       </header>
+
+      {showApiKeys && <ApiKeysModal onClose={() => setShowApiKeys(false)} />}
 
       <div className="dashboard-body">
         {me && !me.email_verified && (

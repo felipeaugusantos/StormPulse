@@ -41,6 +41,21 @@ export interface Me {
   email_verified: boolean
 }
 
+// API pública/externa (item 1, ADR-0062) — gestão de chaves.
+export interface ApiKey {
+  id: string
+  name: string
+  key_prefix: string
+  created_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+export interface ApiKeyCreated extends ApiKey {
+  // Só vem preenchido na resposta de criação — nunca mais depois disso.
+  key: string
+}
+
 // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever
 // fetched when `Me.is_platform_admin` is true.
 export interface AdminUser {
