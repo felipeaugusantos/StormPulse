@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { ApiError, login, loginWithGoogle, register } from '../api'
+import { ApiError, forgotPassword, login, loginWithGoogle, register } from '../api'
+import { TermsModal } from './TermsModal'
 
 interface Props {
   onAuthenticated: () => void
@@ -9,6 +10,8 @@ interface Props {
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client'
+const HCAPTCHA_SITE_KEY = import.meta.env.VITE_HCAPTCHA_SITE_KEY
+const HCAPTCHA_SCRIPT_SRC = 'https://js.hcaptcha.com/1/api.js?render=explicit'
 const MIN_PASSWORD_LENGTH = 8
 
 function loadGoogleScript(): Promise<void> {
@@ -28,28 +31,73 @@ function loadGoogleScript(): Promise<void> {
   })
 }
 
+function loadHcaptchaScript(): Promise<void> {
+  if (window.hcaptcha) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[src="${HCAPTCHA_SCRIPT_SRC}"]`)
+    if (existing) {
+      existing.addEventListener('load', () => resolve())
+      return
+    }
+    const script = document.createElement('script')
+    script.src = HCAPTCHA_SCRIPT_SRC
+    script.async = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Falha ao carregar o hCaptcha'))
+    document.head.appendChild(script)
+  })
+}
+
+type Mode = 'login' | 'register' | 'forgot'
+
 export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [mode, setMode] = useState<Mode>('login')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [wantStorm, setWantStorm] = useState(true)
   const [wantAgro, setWantAgro] = useState(false)
+  const [acceptTerms, setAcceptTerms] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
+  const [forgotSent, setForgotSent] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const googleButtonRef = useRef<HTMLDivElement>(null)
+  const captchaRef = useRef<HTMLDivElement>(null)
+  const captchaWidgetId = useRef<string | null>(null)
+  const captchaToken = useRef<string>('')
 
-  function switchMode(next: 'login' | 'register') {
+  function switchMode(next: Mode) {
     setMode(next)
     setError(null)
+    setInfo(null)
     setPassword('')
     setConfirmPassword('')
+    setForgotSent(false)
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    setInfo(null)
+
+    if (mode === 'forgot') {
+      setLoading(true)
+      try {
+        await forgotPassword(email)
+      } catch {
+        // Ignored on purpose: the backend always responds 204 whether or
+        // not the e-mail exists, so any error here is a real network/
+        // server problem, not "e-mail não encontrado" — the message below
+        // stays the same either way, never revealing which case happened.
+      } finally {
+        setLoading(false)
+        setForgotSent(true)
+      }
+      return
+    }
 
     if (mode === 'register' && password !== confirmPassword) {
       setError('As senhas não coincidem')
@@ -63,23 +111,48 @@ export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
       setError('Selecione pelo menos um módulo: Tempestade ou Agro')
       return
     }
+    if (mode === 'register' && !acceptTerms) {
+      setError('É preciso aceitar os Termos de Uso e a Política de Privacidade')
+      return
+    }
+    if (HCAPTCHA_SITE_KEY && !captchaToken.current) {
+      setError('Confirme que você não é um robô')
+      return
+    }
 
     setLoading(true)
     try {
       if (mode === 'register') {
-        await register(email, password, fullName.trim() || undefined, {
-          storm: wantStorm,
-          agro: wantAgro,
-        })
+        const autoLoggedIn = await register(
+          email,
+          password,
+          fullName.trim() || undefined,
+          { storm: wantStorm, agro: wantAgro },
+          acceptTerms,
+          captchaToken.current || undefined,
+        )
+        if (autoLoggedIn) {
+          onAuthenticated()
+        } else {
+          // The account was created — only the auto-login right after it
+          // couldn't reuse the same (single-use) captcha token. Not an
+          // error: send them to the login form instead of a scary message.
+          switchMode('login')
+          setInfo('Conta criada! Entre com seu e-mail e senha.')
+        }
       } else {
-        await login(email, password)
+        await login(email, password, captchaToken.current || undefined)
+        onAuthenticated()
       }
-      onAuthenticated()
     } catch (err) {
       const fallback = mode === 'register' ? 'Falha ao criar conta' : 'Falha ao entrar'
       setError(err instanceof ApiError ? err.message : fallback)
     } finally {
       setLoading(false)
+      if (window.hcaptcha && captchaWidgetId.current) {
+        window.hcaptcha.reset(captchaWidgetId.current)
+        captchaToken.current = ''
+      }
     }
   }
 
@@ -115,10 +188,35 @@ export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
     }
   }, [onAuthenticated])
 
+  // No VITE_HCAPTCHA_SITE_KEY configured → the widget just doesn't render,
+  // and captcha_token is never required (matches the backend, which only
+  // requires it when HCAPTCHA_SECRET_KEY is set). Re-rendered for both
+  // login and register modes (the "forgot" mode never shows it).
+  useEffect(() => {
+    if (!HCAPTCHA_SITE_KEY || !captchaRef.current || mode === 'forgot') return
+    let cancelled = false
+    loadHcaptchaScript()
+      .then(() => {
+        if (cancelled || !window.hcaptcha || !captchaRef.current) return
+        captchaWidgetId.current = window.hcaptcha.render(captchaRef.current, {
+          sitekey: HCAPTCHA_SITE_KEY,
+          callback: (token) => {
+            captchaToken.current = token
+          },
+        })
+      })
+      .catch(() => setError('Não foi possível carregar a verificação anti-abuso'))
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
+
   const isRegister = mode === 'register'
+  const isForgot = mode === 'forgot'
 
   return (
     <div className="login-wrap">
+      {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
       <form className="login-card" onSubmit={submit}>
         {onBack && (
           <button type="button" className="link-btn back-link" onClick={onBack}>
@@ -146,9 +244,11 @@ export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
           </div>
         )}
         <p className="muted">
-          {isRegister
-            ? 'Criar conta — leva menos de um minuto.'
-            : 'Painel administrativo — entre com sua conta.'}
+          {isForgot
+            ? 'Redefinir senha — informe seu e-mail.'
+            : isRegister
+              ? 'Criar conta — leva menos de um minuto.'
+              : 'Painel administrativo — entre com sua conta.'}
         </p>
 
         {isRegister && (
@@ -175,57 +275,109 @@ export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
           required
         />
 
-        <label htmlFor="password">Senha</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          autoComplete={isRegister ? 'new-password' : 'current-password'}
-          onChange={(e) => setPassword(e.target.value)}
-          minLength={isRegister ? MIN_PASSWORD_LENGTH : undefined}
-          required
-        />
-
-        {isRegister && (
+        {isForgot && forgotSent ? (
+          <p className="muted">
+            Se esse e-mail estiver cadastrado, enviamos um link de redefinição de senha para
+            ele. Confira sua caixa de entrada (e o spam).
+          </p>
+        ) : (
           <>
-            <label htmlFor="confirmPassword">Confirmar senha</label>
-            <input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              autoComplete="new-password"
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              minLength={MIN_PASSWORD_LENGTH}
-              required
-            />
+            {!isForgot && (
+              <>
+                <label htmlFor="password">Senha</label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                  onChange={(e) => setPassword(e.target.value)}
+                  minLength={isRegister ? MIN_PASSWORD_LENGTH : undefined}
+                  required
+                />
+              </>
+            )}
 
-            <label>Módulos</label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={wantStorm}
-                onChange={(e) => setWantStorm(e.target.checked)}
-              />
-              ⛈️ Tempestade
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={wantAgro}
-                onChange={(e) => setWantAgro(e.target.checked)}
-              />
-              🌾 Agro
-            </label>
+            {!isRegister && !isForgot && (
+              <p className="muted center" style={{ marginTop: -8 }}>
+                <button type="button" className="link-btn" onClick={() => switchMode('forgot')}>
+                  Esqueci minha senha
+                </button>
+              </p>
+            )}
+
+            {isRegister && (
+              <>
+                <label htmlFor="confirmPassword">Confirmar senha</label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  autoComplete="new-password"
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  minLength={MIN_PASSWORD_LENGTH}
+                  required
+                />
+
+                <label>Módulos</label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={wantStorm}
+                    onChange={(e) => setWantStorm(e.target.checked)}
+                  />
+                  ⛈️ Tempestade
+                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={wantAgro}
+                    onChange={(e) => setWantAgro(e.target.checked)}
+                  />
+                  🌾 Agro
+                </label>
+
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={acceptTerms}
+                    onChange={(e) => setAcceptTerms(e.target.checked)}
+                    required
+                  />
+                  Li e aceito os{' '}
+                  <button type="button" className="link-btn" onClick={() => setShowTerms(true)}>
+                    Termos de Uso e a Política de Privacidade
+                  </button>
+                </label>
+              </>
+            )}
+
+            {HCAPTCHA_SITE_KEY && !isForgot && <div ref={captchaRef} style={{ margin: '4px 0' }} />}
+
+            <button className="btn" type="submit" disabled={loading}>
+              {isForgot
+                ? loading
+                  ? 'Enviando…'
+                  : 'Enviar link de redefinição'
+                : loading
+                  ? isRegister
+                    ? 'Criando conta…'
+                    : 'Entrando…'
+                  : isRegister
+                    ? 'Criar conta'
+                    : 'Entrar'}
+            </button>
           </>
         )}
 
-        <button className="btn" type="submit" disabled={loading}>
-          {loading ? (isRegister ? 'Criando conta…' : 'Entrando…') : isRegister ? 'Criar conta' : 'Entrar'}
-        </button>
         {error && <p className="error">⚠️ {error}</p>}
+        {info && <p className="muted">✅ {info}</p>}
 
         <p className="muted center">
-          {isRegister ? (
+          {isForgot ? (
+            <button type="button" className="link-btn" onClick={() => switchMode('login')}>
+              Voltar para entrar
+            </button>
+          ) : isRegister ? (
             <>
               Já tem conta?{' '}
               <button type="button" className="link-btn" onClick={() => switchMode('login')}>
@@ -242,16 +394,18 @@ export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
           )}
         </p>
 
-        {GOOGLE_CLIENT_ID && !isRegister && (
+        {GOOGLE_CLIENT_ID && !isRegister && !isForgot && (
           <>
             <p className="muted center">ou</p>
             <div ref={googleButtonRef} className="google-btn" />
           </>
         )}
 
-        <button type="button" className="btn ghost" onClick={onVisitor}>
-          Ver sem login
-        </button>
+        {!isForgot && (
+          <button type="button" className="btn ghost" onClick={onVisitor}>
+            Ver sem login
+          </button>
+        )}
       </form>
     </div>
   )

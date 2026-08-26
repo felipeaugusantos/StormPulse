@@ -901,6 +901,16 @@ button {
   width: auto;
   margin-top: 0;
 }
+.terms-body h3 {
+  font-size: 0.95rem;
+  margin: 18px 0 6px;
+}
+.terms-body p {
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--ink-mute);
+  margin: 0 0 8px;
+}
 .report-period {
   color: var(--ink-dim);
   font-size: 0.85rem;

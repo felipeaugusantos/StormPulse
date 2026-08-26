@@ -600,8 +600,11 @@ jobs:
           # this deployment's VAPID_PRIVATE_KEY on the backend's own .env.
           # Empty (unset vars.*) falls back to the Dockerfile's own empty
           # default — push opt-in fails honestly instead of silently.
+          # Same reasoning for the hCaptcha *site* key (FASE 8) — public,
+          # has to match HCAPTCHA_SECRET_KEY on the backend.
           build-args: |
             VITE_VAPID_PUBLIC_KEY=${{ vars.VITE_VAPID_PUBLIC_KEY }}
+            VITE_HCAPTCHA_SITE_KEY=${{ vars.VITE_HCAPTCHA_SITE_KEY }}
 
   # -----------------------------------------------------------------------
   # Deploy: only reachable once both publish jobs succeeded (which in turn

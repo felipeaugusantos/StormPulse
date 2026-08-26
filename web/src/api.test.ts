@@ -87,6 +87,8 @@ describe('register', () => {
       full_name: 'Nova Usuária',
       storm_module: true,
       agro_module: false,
+      accept_terms: false,
+      captcha_token: null,
     })
     const [loginUrl] = fetchMock.mock.calls[1]
     expect(String(loginUrl)).toContain('/auth/login')

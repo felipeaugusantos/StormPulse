@@ -14,6 +14,9 @@ export interface Me {
   // dashboard should show for this tenant.
   storm_module_enabled: boolean
   agro_module_enabled: boolean
+  // FASE 8 — informativo, nunca bloqueia login. Drives a "confirme seu
+  // e-mail" banner no Dashboard.
+  email_verified: boolean
 }
 
 // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever

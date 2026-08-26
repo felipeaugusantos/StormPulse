@@ -23,6 +23,12 @@ ENV VITE_API_URL=$VITE_API_URL
 # "not configured" error (web/src/push.ts) instead of pretending to work.
 ARG VITE_VAPID_PUBLIC_KEY=""
 ENV VITE_VAPID_PUBLIC_KEY=$VITE_VAPID_PUBLIC_KEY
+# hCaptcha site key (FASE 8) — public by design (same reasoning as the
+# VAPID public key above). Empty by default: the captcha widget just
+# doesn't render, matching the backend not requiring captcha_token either
+# when HCAPTCHA_SECRET_KEY is unset.
+ARG VITE_HCAPTCHA_SITE_KEY=""
+ENV VITE_HCAPTCHA_SITE_KEY=$VITE_HCAPTCHA_SITE_KEY
 RUN npm run build
 
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10

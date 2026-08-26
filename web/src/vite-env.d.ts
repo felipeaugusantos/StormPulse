@@ -4,6 +4,7 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string
   readonly VITE_GOOGLE_CLIENT_ID?: string
   readonly VITE_VAPID_PUBLIC_KEY?: string
+  readonly VITE_HCAPTCHA_SITE_KEY?: string
 }
 
 interface ImportMeta {
@@ -27,5 +28,15 @@ interface Window {
         renderButton(parent: HTMLElement, options: Record<string, unknown>): void
       }
     }
+  }
+  // Minimal ambient typing for the hCaptcha script, loaded dynamically at
+  // runtime (not an npm dependency — see components/Login.tsx), same
+  // pattern as `google` above.
+  hcaptcha?: {
+    render(
+      container: HTMLElement,
+      options: { sitekey: string; callback: (token: string) => void },
+    ): string
+    reset(widgetId?: string): void
   }
 }

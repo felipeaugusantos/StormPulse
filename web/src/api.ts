@@ -151,12 +151,20 @@ async function request<T>(path: string, init: RequestInit = {}, isRetry = false)
 /** Creates the account, then immediately logs in with the same credentials
  * — /auth/register only returns the created user (201), never tokens, so a
  * session still has to be established the normal way right after. */
+/** Returns `true` if the auto-login after registration succeeded. `false`
+ * means the account was created but the caller must show the login form
+ * instead — happens when hCaptcha is configured, since the token just
+ * spent on /auth/register is single-use and can't be reused for the
+ * follow-up /auth/login call. Registration itself having failed still
+ * throws normally (never swallowed). */
 export async function register(
   email: string,
   password: string,
   fullName?: string,
   modules?: { storm: boolean; agro: boolean },
-): Promise<void> {
+  acceptTerms?: boolean,
+  captchaToken?: string,
+): Promise<boolean> {
   await request<void>('/auth/register', {
     method: 'POST',
     body: JSON.stringify({
@@ -165,17 +173,46 @@ export async function register(
       full_name: fullName || null,
       storm_module: modules?.storm ?? true,
       agro_module: modules?.agro ?? false,
+      accept_terms: acceptTerms ?? false,
+      captcha_token: captchaToken || null,
     }),
   })
-  await login(email, password)
+  try {
+    await login(email, password)
+    return true
+  } catch {
+    return false
+  }
 }
 
-export async function login(email: string, password: string): Promise<void> {
+export async function login(email: string, password: string, captchaToken?: string): Promise<void> {
   const data = await request<TokenPair>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, captcha_token: captchaToken || null }),
   })
   setToken(data.access_token)
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  await request<void>('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) })
+}
+
+export async function resendVerification(): Promise<{ sent: boolean }> {
+  return request<{ sent: boolean }>('/auth/resend-verification', { method: 'POST' })
+}
+
+export async function forgotPassword(email: string): Promise<void> {
+  await request<void>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await request<void>('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, new_password: newPassword }),
+  })
 }
 
 export async function loginWithGoogle(idToken: string): Promise<void> {

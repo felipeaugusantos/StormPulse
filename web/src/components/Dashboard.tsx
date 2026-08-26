@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, api, publicApi, readiness } from '../api'
+import { ApiError, api, publicApi, readiness, resendVerification } from '../api'
 import type {
   AlertItem,
   ConvectiveWatch,
@@ -75,6 +75,9 @@ export function Dashboard({ onLogout }: Props) {
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'storm' | 'agro'>('storm')
   const [deletingAccount, setDeletingAccount] = useState(false)
+  const [verificationSent, setVerificationSent] = useState<
+    'sent' | 'already-verified' | 'error' | null
+  >(null)
   const [pushStatus, setPushStatus] = useState<'idle' | 'subscribing' | 'on' | 'error'>('idle')
   const [pushError, setPushError] = useState<string | null>(null)
   const [showAdmin, setShowAdmin] = useState(false)
@@ -223,6 +226,16 @@ export function Dashboard({ onLogout }: Props) {
     onLogout()
   }
 
+  async function handleResendVerification() {
+    setVerificationSent(null)
+    try {
+      const { sent } = await resendVerification()
+      setVerificationSent(sent ? 'sent' : 'already-verified')
+    } catch {
+      setVerificationSent('error')
+    }
+  }
+
   const mock = storms.some((s) => s.is_mock)
   const selectedLocation = locations.find((l) => l.id === selectedLocationId) ?? null
   const { entries: agroEntries, activeLocations: agroActiveLocations } = useAgroEntries(locations)
@@ -294,6 +307,22 @@ export function Dashboard({ onLogout }: Props) {
       </header>
 
       <div className="dashboard-body">
+        {me && !me.email_verified && (
+          <div className="panel">
+            ✉️ Confirme seu e-mail para garantir acesso total à sua conta.{' '}
+            {verificationSent === 'sent' ? (
+              <span className="muted">Link reenviado — confira sua caixa de entrada.</span>
+            ) : verificationSent === 'already-verified' ? (
+              <span className="muted">Seu e-mail já foi confirmado — atualize a página.</span>
+            ) : verificationSent === 'error' ? (
+              <span className="error">Falha ao reenviar. Tente de novo em instantes.</span>
+            ) : (
+              <button type="button" className="link-btn" onClick={handleResendVerification}>
+                Reenviar e-mail de confirmação
+              </button>
+            )}
+          </div>
+        )}
         {error && <div className="panel error">⚠️ {error}</div>}
         {pushStatus === 'error' && pushError && (
           <div className="panel error">🔔 {pushError}</div>
