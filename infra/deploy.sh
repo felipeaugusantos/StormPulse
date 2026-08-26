@@ -173,7 +173,9 @@ elif [ "$ALLOW_DEPLOY_WITHOUT_BACKUP" = "true" ]; then
   echo "!!! If the migration below breaks the database, there is NO fresh  !!!"
   echo "!!! backup to restore from for this specific deploy.               !!!"
   echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-  audit_line="AUDIT $(date -u +%Y-%m-%dT%H:%M:%SZ): deploy proceeded WITHOUT a pre-deploy backup (ALLOW_DEPLOY_WITHOUT_BACKUP=true), commit=${GITHUB_SHA:-unknown}"
+  # COMMIT_SHA (not GITHUB_SHA) is what .github/workflows/ci.yml's `deploy`
+  # job actually exports into this script's environment over SSH.
+  audit_line="AUDIT $(date -u +%Y-%m-%dT%H:%M:%SZ): deploy proceeded WITHOUT a pre-deploy backup (ALLOW_DEPLOY_WITHOUT_BACKUP=true), commit=${COMMIT_SHA:-unknown}"
   echo "$audit_line" | tee -a /var/log/stormpulse-deploy-audit.log 2>/dev/null || echo "$audit_line"
 else
   echo "!!! Pre-deploy backup failed and ALLOW_DEPLOY_WITHOUT_BACKUP is not 'true' — aborting"
