@@ -234,6 +234,31 @@ pode perder dados de um jeito que um `docker compose up` com a imagem
 antiga não consegue desfazer sozinho — essa decisão exige um humano
 olhando o que a migração de fato mudou.
 
+### Disco cheio (imagens Docker acumuladas)
+
+Cada deploy publica uma tag imutável nova (`sha-<commit>`) — sem poda,
+imagens de deploys antigos se acumulam pra sempre e o disco enche,
+quebrando `docker compose pull` (e, pior, o próprio rollback, que também
+precisa de espaço pra recriar os containers). Aconteceu de verdade em
+produção em 2026-08-26 (ver [ADR-0067](../docs/adr/0067-fix-disco-cheio-deploy.md)).
+
+Desde então, `deploy.sh` poda proativamente as imagens do StormPulse que
+não são a que está rodando agora, **antes** de puxar as novas — a cada
+deploy, não só depois de um sucesso. Se mesmo assim o disco encher (ex.:
+volumes de log, backups do Postgres em `infra/backups/`), verifique
+manualmente por SSH:
+
+```bash
+df -h /
+docker system df
+docker images --format "{{.Repository}}:{{.Tag}}  {{.Size}}" | sort
+```
+
+`docker image prune -a -f` remove **toda** imagem não referenciada por um
+container em execução (mais agressivo que a poda automática do
+`deploy.sh`) — seguro de rodar manualmente numa instância dedicada ao
+StormPulse, mas nunca num host compartilhado com outros serviços.
+
 ## 8. Prevenção de múltiplos Celery Beat
 
 Só um `beat` roda (um serviço no compose, uma instância) — múltiplos beats

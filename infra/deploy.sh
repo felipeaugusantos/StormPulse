@@ -77,6 +77,33 @@ PREV_WORKER_IMAGE="$(docker inspect --format='{{.Config.Image}}' stormpulse-work
 PREV_BEAT_IMAGE="$(docker inspect --format='{{.Config.Image}}' stormpulse-beat-1 2>/dev/null || echo "")"
 echo "Previous images (kept for rollback): api=${PREV_API_IMAGE:-<none, first deploy>} web=${PREV_WEB_IMAGE:-<none>} worker=${PREV_WORKER_IMAGE:-<none>} beat=${PREV_BEAT_IMAGE:-<none>}"
 
+# Every deploy publishes brand-new, immutable per-commit tags
+# (sha-XXXXXXX) — nothing ever removes an *old* tagged image, only the
+# `docker image prune -f` at the very end of this script, which only ever
+# touches dangling (untagged) layers. Left unchecked, disk fills with
+# every superseded StormPulse image tag from every past deploy, and the
+# failure mode is exactly what this fixes: `docker compose pull` (and,
+# worse, the rollback it triggers) failing with "no space left on
+# device" — confirmed live in production (items 3/4/5 of the Radar
+# Competitivo sequence all failed to deploy this way on 2026-08-26,
+# see ADR-0067). Runs proactively, every deploy, *before* pulling new
+# images — not just as post-success cleanup — so a server that's already
+# jammed from a prior failed deploy still self-heals on the next attempt.
+# Scoped to this project's own image repository only (never `docker
+# system prune -a`, which could remove images belonging to something
+# else entirely on a shared host) and never removes an image this
+# deploy's own rollback might still need.
+echo "==> Pruning superseded StormPulse image tags (keeps only what's currently running)"
+{
+  docker images --filter "reference=ghcr.io/felipeaugusantos/stormpulse*" --format "{{.Repository}}:{{.Tag}}" |
+    while IFS= read -r img; do
+      case "$img" in
+      "$PREV_API_IMAGE" | "$PREV_WEB_IMAGE" | "$PREV_WORKER_IMAGE" | "$PREV_BEAT_IMAGE") continue ;;
+      esac
+      docker rmi "$img" >/dev/null 2>&1 || true
+    done
+} || echo "WARNING: image pruning step failed — continuing deploy anyway (not fatal)."
+
 rollback() {
   trap - ERR # never recurse if rollback itself fails
   echo "!!! Deploy failed — dumping the last 200 log lines per service:"
