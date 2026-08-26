@@ -2,12 +2,16 @@ import { API_URL } from './config'
 import * as authStorage from './authStorage'
 import type {
   AlertItem,
+  ConvectiveWatch,
   CreateLocationInput,
   CurrentConditions,
   Forecast,
+  LightningStrike,
   LocationItem,
+  Me,
   RainfallHistory,
   SprayWindow,
+  StormCell,
   StormRisk,
   UpdateLocationInput,
 } from './types'
@@ -135,6 +139,11 @@ export async function logout(): Promise<void> {
 }
 
 export const api = {
+  me: () => request<Me>('/users/me'),
+  resendVerification: () =>
+    request<{ sent: boolean }>('/auth/resend-verification', { method: 'POST' }),
+  deleteAccount: () =>
+    request<void>('/users/me', { method: 'DELETE', body: JSON.stringify({ confirm: true }) }),
   locations: () => request<LocationItem[]>('/locations'),
   createLocation: (data: CreateLocationInput) =>
     request<LocationItem>('/locations', { method: 'POST', body: JSON.stringify(data) }),
@@ -147,6 +156,9 @@ export const api = {
     request<void>(`/locations/${locationId}`, { method: 'DELETE' }),
   alerts: () => request<AlertItem[]>('/alerts'),
   risk: (locationId: string) => request<StormRisk>(`/locations/${locationId}/risk`),
+  storms: () => request<StormCell[]>('/storms?limit=200'),
+  lightning: () => request<LightningStrike[]>('/lightning'),
+  satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
   // Always Open-Meteo, bypassing INMET/CPTEC (ADR-0020) — the only source
   // with a real numeric rain forecast, needed for trafficability/water

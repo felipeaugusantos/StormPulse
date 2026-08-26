@@ -1,4 +1,21 @@
 export type RiskLevel = 'green' | 'yellow' | 'orange' | 'red'
+export type StormSeverity = 'weak' | 'moderate' | 'strong' | 'severe'
+
+export interface Me {
+  id: string
+  tenant_id: string
+  email: string
+  full_name: string | null
+  role: string
+  is_active: boolean
+  is_platform_admin: boolean
+  created_at: string
+  storm_module_enabled: boolean
+  agro_module_enabled: boolean
+  // Informativo, nunca bloqueia login — dirige o banner "confirme seu
+  // e-mail" (item 5, paridade com web/src/types.ts's Me).
+  email_verified: boolean
+}
 
 export interface LocationItem {
   id: string
@@ -33,6 +50,44 @@ export interface StormRisk {
   storm_distance_km: number | null
   storm_speed_kmh: number | null
   eta_minutes: number | null
+  is_mock: boolean
+  experimental: boolean
+  // FASE 9 (ADR-0060) — null quando ANTHROPIC_API_KEY não está
+  // configurada, a geração ainda não rodou, ou a severidade é "green".
+  ai_summary: string | null
+}
+
+export interface StormCell {
+  id: string
+  detected_at: string
+  latitude: number
+  longitude: number
+  severity: StormSeverity
+  max_reflectivity: number | null
+  average_reflectivity: number | null
+  area_km2: number | null
+  is_mock: boolean
+}
+
+export interface LightningStrike {
+  id: string
+  detected_at: string
+  latitude: number
+  longitude: number
+  is_mock: boolean
+}
+
+export interface ConvectiveWatch {
+  id: string
+  first_detected_at: string
+  detected_at: string
+  latitude: number
+  longitude: number
+  min_brightness_temp_k: number
+  area_km2: number | null
+  speed_kmh: number | null
+  direction_deg: number | null
+  is_active: boolean
   is_mock: boolean
   experimental: boolean
 }
