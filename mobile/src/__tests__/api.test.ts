@@ -204,3 +204,61 @@ describe('mobile session (Fase 3)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('paridade mobile (item 5)', () => {
+  beforeEach(async () => {
+    secureStoreMock.__reset()
+    await authStorage.setTokenPair('access-1', 'refresh-1')
+  })
+
+  test('me() fetches the authenticated user profile', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { id: 'user-1', email_verified: false }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const me = await api.me()
+
+    expect(me.email_verified).toBe(false)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/users/me')
+  })
+
+  test('deleteAccount() sends the required confirm flag', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce({ ok: true, status: 204 } as Response)
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await api.deleteAccount()
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/users/me')
+    expect(init.method).toBe('DELETE')
+    expect(JSON.parse(init.body)).toEqual({ confirm: true })
+  })
+
+  test('resendVerification() posts to the resend endpoint', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(jsonResponse(200, { sent: true }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await api.resendVerification()
+
+    expect(result).toEqual({ sent: true })
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/auth/resend-verification')
+  })
+
+  test('storms/lightning/satelliteWatches hit the expected endpoints', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, []))
+      .mockResolvedValueOnce(jsonResponse(200, []))
+      .mockResolvedValueOnce(jsonResponse(200, []))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await api.storms()
+    await api.lightning()
+    await api.satelliteWatches()
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/storms')
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/lightning')
+    expect(String(fetchMock.mock.calls[2][0])).toContain('/satellite')
+  })
+})
