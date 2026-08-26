@@ -147,6 +147,8 @@ echo "==> Pulling images for this deploy"
 
 echo "==> Ensuring Postgres/Redis are up and healthy"
 "${COMPOSE[@]}" up -d db redis
+# shellcheck disable=SC2016 # intentional: single-quoted so $(...) expands
+# inside the `bash -c` subshell (each loop iteration), not once here.
 timeout 60 bash -c '
   until [ "$(docker inspect --format="{{.State.Health.Status}}" stormpulse-db-1 2>/dev/null)" = healthy ] &&
         [ "$(docker inspect --format="{{.State.Health.Status}}" stormpulse-redis-1 2>/dev/null)" = healthy ]; do
