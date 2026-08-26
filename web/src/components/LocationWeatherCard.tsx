@@ -198,6 +198,19 @@ export function LocationWeatherCard({ location }: Props) {
                 : 'chuva prevista indisponível no momento (fonte ativa não fornece número)'}
           </div>
         )}
+        {(todayRain?.precipitation_probability != null || todayRain?.precipitation_mm != null) && (
+          <div className="agro-row">
+            🌧️ Chuva prevista hoje:{' '}
+            {[
+              todayRain.precipitation_probability != null
+                ? `${todayRain.precipitation_probability}% de chance`
+                : null,
+              todayRain.precipitation_mm != null ? `${todayRain.precipitation_mm.toFixed(1)}mm` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </div>
+        )}
         {todayRain?.wind_gusts_max_kmh != null && (
           <div className="agro-row">
             💨 Rajada máxima prevista hoje: {todayRain.wind_gusts_max_kmh.toFixed(0)} km/h
