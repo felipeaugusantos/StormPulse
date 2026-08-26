@@ -358,6 +358,40 @@ jobs:
           python3 -c 'import json; r=json.load(open("/tmp/prisk.json")); assert r["is_mock"] is True and r["experimental"] is True, r'
           echo "worker pipeline OK"
 
+      - name: Backup + restore drill against a real, disposable Postgres (ADR-0056)
+        # Not simulated — a real pg_dump of the data the steps above just
+        # created, restored into a brand-new postgis container, with the
+        # restored row count checked against the source. Two real bugs
+        # were only found by actually running this, not by reading the
+        # script: PostGIS's own "tiger geocoder" schemas collide with a
+        # plain restore into any fresh target, and the dump's GRANT/ALTER
+        # OWNER statements name the RLS runtime role, which doesn't exist
+        # until migrations have run against the restore target. Both are
+        # why backup-postgres.sh passes --exclude-schema=tiger/tiger_data/
+        # topology and --no-owner --no-privileges to pg_dump.
+        run: |
+          set -e
+          mkdir -p /tmp/backup-drill
+          BACKUP_DIR=/tmp/backup-drill POSTGRES_USER=stormpulse POSTGRES_DB=stormpulse ./infra/backup-postgres.sh
+          DUMP="$(ls /tmp/backup-drill/stormpulse_*.sql.gz | head -1)"
+          echo "Backup: $DUMP"
+          gzip -t "$DUMP"
+          SOURCE_COUNT="$(docker compose exec -T db psql -U stormpulse -d stormpulse -tAc 'SELECT count(*) FROM locations;')"
+          echo "Source locations count: $SOURCE_COUNT"
+          docker run -d --name restore-drill-db -e POSTGRES_PASSWORD=test \
+            -e POSTGRES_USER=stormpulse -e POSTGRES_DB=stormpulse postgis/postgis:16-3.4
+          for _ in $(seq 1 30); do
+            docker exec restore-drill-db pg_isready -U stormpulse >/dev/null 2>&1 && break
+            sleep 1
+          done
+          gunzip -c "$DUMP" | docker exec -i restore-drill-db psql -U stormpulse -d stormpulse -v ON_ERROR_STOP=1 >/tmp/restore-drill.log
+          RESTORED_COUNT="$(docker exec restore-drill-db psql -U stormpulse -d stormpulse -tAc 'SELECT count(*) FROM locations;')"
+          echo "Restored locations count: $RESTORED_COUNT"
+          docker rm -f restore-drill-db
+          test "$SOURCE_COUNT" = "$RESTORED_COUNT"
+          test "$RESTORED_COUNT" -ge 1
+          echo "backup + restore drill OK ($RESTORED_COUNT locations round-tripped)"
+
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs --no-color
@@ -367,13 +401,39 @@ jobs:
         run: docker compose down -v
 
   # -----------------------------------------------------------------------
+  # Infra: the deploy/backup/rollback shell scripts themselves — static
+  # analysis plus behavioral tests against a stubbed `docker`/`curl` (no
+  # real Docker daemon touched here; the real-Postgres backup/restore
+  # drill lives in the `docker` job above, where a live stack already
+  # exists to dump from). ADR-0056.
+  # -----------------------------------------------------------------------
+  infra:
+    name: Infra scripts (ShellCheck + rollback/backup tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: "./infra"
+
+      - name: docker compose config (validates both compose files parse and merge)
+        run: docker compose -f docker-compose.yml -f docker-compose.prod.yml config >/dev/null
+
+      - name: Rollback + mandatory-backup behavioral tests (stubbed docker/curl)
+        run: |
+          bash infra/tests/test_backup_postgres.sh
+          bash infra/tests/test_deploy_rollback.sh
+
+  # -----------------------------------------------------------------------
   # Publish: only reachable once every test job above has succeeded.
   # Build-only (no push) on PRs — still catches a broken Dockerfile early
   # without ever putting an unreviewed image in the registry.
   # -----------------------------------------------------------------------
   publish-backend:
     name: Publish backend image
-    needs: [backend, root, web, mobile, docker]
+    needs: [backend, root, web, mobile, docker, infra]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -430,7 +490,7 @@ jobs:
 
   publish-web:
     name: Publish web image
-    needs: [backend, root, web, mobile, docker]
+    needs: [backend, root, web, mobile, docker, infra]
     # Dashboard SPA + nginx reverse proxy (infra ADR-0038) — separate image,
     # separate repository name (`stormpulse-web`), same-origin deploy: this
     # image's own nginx serves the built SPA and proxies /api/* etc. to the
