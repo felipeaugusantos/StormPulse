@@ -21,11 +21,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.core.config import Settings
-from app.core.enums import StormSeverity
+from app.core.enums import StormSeverity, WeatherSourceKind
 from app.lightning.models import LightningStrike
 from app.main import create_app
 from app.satellite.models import SatelliteImage
 from app.storms.models import StormCell
+from app.weather.models import RadarFrame, WeatherSource
 from tests.conftest import register_and_login
 from workers.db import session_scope
 
@@ -588,3 +589,43 @@ async def test_pipeline_trigger_queues_a_known_pipeline(client: AsyncClient) -> 
         )
         assert resp.status_code == 200
         assert resp.json() == {"queued": True, "name": "storms"}
+
+
+async def test_non_admin_gets_403_on_raw_frames(client: AsyncClient) -> None:
+    token = await register_and_login(client)
+    resp = await client.get(
+        "/api/v1/admin/raw-frames", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 403
+
+
+async def test_raw_frames_lists_persisted_provider_history(client: AsyncClient) -> None:
+    admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
+    await _register(client, admin_email)
+
+    with session_scope() as session:
+        source = WeatherSource(
+            name=f"TEST-{uuid.uuid4().hex}", kind=WeatherSourceKind.MOCK, is_active=True
+        )
+        session.add(source)
+        session.flush()
+        session.add(
+            RadarFrame(
+                weather_source_id=source.id,
+                captured_at=datetime.now(UTC),
+                is_mock=True,
+                meta={"cells": [{"latitude": -23.5, "longitude": -46.6}]},
+            )
+        )
+
+    async for admin_client in _promoted_client(admin_email):
+        login = await admin_client.post(
+            "/api/v1/auth/login", json={"email": admin_email, "password": _PASSWORD}
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        resp = await admin_client.get("/api/v1/admin/raw-frames", headers=headers)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total"] >= 1
+        assert any(item["meta"].get("cells") for item in body["items"])
