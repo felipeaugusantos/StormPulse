@@ -240,8 +240,9 @@ uvicorn app.main:app --reload
 
 O workflow [`ci.yml`](.github/workflows/ci.yml) (jobs `publish-backend`/
 `publish-web`, hardening ADR-0043) builda as imagens e publica no GitHub
-Container Registry a cada push em `main` (e em tags `vX.Y.Z`) — só depois
-que todos os testes passarem para aquele commit. Não requer build local:
+Container Registry a cada push em qualquer branch (e em tags `vX.Y.Z`,
+quando existirem — nenhuma foi criada ainda) — só depois que todos os
+testes passarem para aquele commit. Não requer build local:
 
 ```bash
 docker pull ghcr.io/felipeaugusantos/stormpulse:latest
@@ -251,9 +252,12 @@ docker run --rm -p 8000:8000 \
   ghcr.io/felipeaugusantos/stormpulse:latest
 ```
 
-Tags disponíveis: `latest` (branch `main`), `main`, `sha-<curto>` e `vX.Y.Z`
-para releases. O mesmo binário serve API, `worker` e `beat` — só o `command`
-do container muda (ver `docker-compose.yml`).
+Tags disponíveis: `latest` (empurrado a cada push no branch padrão do
+repositório — hoje `claude/stormpulse-project-5a5mij`, ainda não renomeado
+para `main`, ver ADR sobre governança), `<nome-do-branch>`, `sha-<curto>` e
+`vX.Y.Z` quando uma tag de release existir (nenhuma criada ainda). O mesmo
+binário serve API, `worker` e `beat` — só o `command` do container muda
+(ver `docker-compose.yml`).
 
 > Build/push local de imagens **não funciona neste ambiente de
 > desenvolvimento remoto**: o proxy de rede da sandbox bloqueia o download de
@@ -401,8 +405,9 @@ stormpulse/
 
 Python 3.12 · FastAPI · Pydantic · SQLAlchemy (async) · asyncpg · Alembic ·
 PostgreSQL + PostGIS · Redis · Celery (workers, FASE 10) · Docker/Compose ·
-React+Vite (web) · React Native+Expo (mobile) · MapLibre · Firebase Cloud
-Messaging (notificações).
+React+Vite (web) · React Native+Expo (mobile) · MapLibre · Web Push nativo
+do navegador (VAPID, sem FCM/APNs) para o web e Expo Push para o mobile
+(notificações).
 
 ## Licença
 
