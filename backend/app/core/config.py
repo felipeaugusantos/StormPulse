@@ -290,6 +290,14 @@ class Settings(BaseSettings):
     open_meteo_http_timeout_seconds: float = Field(default=10.0, gt=0)
     open_meteo_fallback_enabled: bool = True
 
+    # --- Boletins oficiais (item 3, ADR-0064) ---
+    # Reusa WeatherProvider.get_warnings (INMET `/avisos/ativos`) já
+    # existente — a única fonte nacional, pública, sem cadastro, de alertas
+    # meteorológicos oficiais (o mesmo feed que a Defesa Civil de cada
+    # estado/município já redistribui). Ligado por padrão, sem custo de
+    # infra novo, mesma razão do agro_enabled acima.
+    official_warnings_enabled: bool = True
+
     # --- Sinais agronômicos (FASE 19) ---
     # Reusa get_forecast/get_recent_rainfall/get_current_data já existentes
     # — sem custo de infra novo (ao contrário do satélite), ligado por

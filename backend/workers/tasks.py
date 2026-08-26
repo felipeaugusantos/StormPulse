@@ -22,6 +22,7 @@ from workers.email import EmailKind, render_email, send_email
 from workers.lightning_pipeline import run_lightning_detection_cycle
 from workers.ndvi_pipeline import run_ndvi_pipeline_cycle
 from workers.notification_pipeline import run_notification_delivery_cycle
+from workers.official_warnings_pipeline import run_official_warnings_cycle
 from workers.pipeline_service import run_ingestion_cycle
 from workers.satellite_pipeline import run_satellite_detection_cycle
 
@@ -107,6 +108,24 @@ def run_agro_advisory_task() -> dict[str, Any]:
         "dry_spell_alerts": summary.dry_spell_alerts,
     }
     logger.info("agro advisory cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_official_warnings_task")
+def run_official_warnings_task() -> dict[str, Any]:
+    """Run one official-warnings-to-alerts cycle (item 3, ADR-0064).
+
+    No-op (returns immediately) when OFFICIAL_WARNINGS_ENABLED=false.
+    """
+    with track_pipeline_cycle("official_warnings"), session_scope() as session:
+        summary = run_official_warnings_cycle(session)
+    alerts_generated.add(summary.alerts_created, {"pipeline": "official_warnings"})
+    result = {
+        "enabled": summary.enabled,
+        "locations_checked": summary.locations_checked,
+        "alerts_created": summary.alerts_created,
+    }
+    logger.info("official warnings cycle complete", extra=result)
     return result
 
 

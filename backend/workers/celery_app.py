@@ -69,5 +69,12 @@ celery_app.conf.update(
             # quota for no new data most of the time.
             "schedule": 86_400.0,  # seconds
         },
+        "official-warnings-every-hour": {
+            "task": "workers.tasks.run_official_warnings_task",
+            # INMET issues/updates official warnings on the order of hours,
+            # not minutes (item 3, ADR-0064) — same "less frequent is
+            # honest and kinder to the API" reasoning as agro above.
+            "schedule": 3_600.0,  # seconds
+        },
     },
 )

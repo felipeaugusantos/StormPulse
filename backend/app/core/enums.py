@@ -88,6 +88,10 @@ class AlertEventType(StrEnum):
     # own schedule (see workers/agro_pipeline.py), not from the storm engine.
     FROST_WARNING = "frost_warning"
     DRY_SPELL_WARNING = "dry_spell_warning"
+    # Official meteorological warning (item 3, ADR-0064) — sourced from
+    # WeatherProvider.get_warnings (INMET `/avisos/ativos`), not derived
+    # from the storm engine's own risk assessment.
+    OFFICIAL_WARNING = "official_warning"
 
 
 class NotificationChannel(StrEnum):
