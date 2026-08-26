@@ -131,7 +131,10 @@ workflow".
 ## 5. Backup do Postgres
 
 `backup-postgres.sh` faz `pg_dump` + gzip, mantém os últimos 14 dias
-localmente:
+localmente. Desde a hardening ADR-0056, `infra/deploy.sh` **exige** um
+backup pré-deploy bem-sucedido antes de rodar qualquer migração — um
+`pg_dump` que falha, produz arquivo vazio, ou produz um `.gz` corrompido
+(verificado com `gzip -t`) bloqueia o deploy inteiro, não só um aviso.
 
 ```bash
 chmod +x infra/backup-postgres.sh
@@ -144,23 +147,37 @@ Crontab (`crontab -e`) — todo dia às 3h:
 0 3 * * * cd /home/ubuntu/StormPulse && ./infra/backup-postgres.sh >> /var/log/stormpulse-backup.log 2>&1
 ```
 
-**Durabilidade fora da instância** (o backup acima ainda está no mesmo
-volume EBS — se a instância for perdida, o backup vai junto): copiar o
-`.sql.gz` mais recente pra um bucket S3 depois do dump é o próximo passo
-natural, deliberadamente não automatizado aqui — decidir bucket/IAM role é
-uma escolha sua, não algo pra assumir.
+Variáveis (todas opcionais, todas com um default de desenvolvimento
+seguro):
+
+| Variável | Default | Efeito |
+|---|---|---|
+| `BACKUP_DIR` | `/var/backups/stormpulse` | Onde os `.sql.gz` ficam localmente. |
+| `RETENTION_DAYS` | `14` | Backups locais mais velhos que isso são apagados a cada execução. |
+| `BACKUP_S3_BUCKET` | *(vazio, desligado)* | Se definido, copia o `.sql.gz` pro bucket depois do dump local — precisa do `aws` CLI instalado e de credenciais via variável de ambiente/IAM role da instância, nunca uma flag de linha de comando (apareceria em `docker top`/logs de processo). Falha de upload nunca apaga o backup local nem falha o script — só avisa. |
+| `ALLOW_DEPLOY_WITHOUT_BACKUP` (lido por `deploy.sh`, não por este script) | `false` | Único jeito de um deploy prosseguir apesar do backup ter falhado — emite um aviso bem visível nos logs e grava uma linha `AUDIT ...` (com timestamp e commit) em `/var/log/stormpulse-deploy-audit.log`. Nunca ligue isso por padrão; é uma válvula de escape explícita pra quando a própria infra de backup está quebrada e uma correção urgente não pode esperar. |
+
+**Durabilidade fora da instância** (o backup local ainda está no mesmo
+volume EBS — se a instância for perdida, o backup vai junto): configure
+`BACKUP_S3_BUCKET` com um bucket já existente (criação de bucket/IAM role
+é uma decisão sua, deliberadamente não automatizada aqui) pra ter uma
+cópia off-instance automática a cada backup.
 
 ### Testando o restore
 
-Nunca confie num backup que nunca foi restaurado. Num Postgres
-descartável (não na instância de produção):
+Nunca confie num backup que nunca foi restaurado — automatizado no CI
+(job `infra`, ver `.github/workflows/ci.yml`) a cada push, contra um
+Postgres descartável de verdade, não simulado. Pra rodar manualmente
+(nunca na instância de produção):
 
 ```bash
-docker run -d --name restore-test -e POSTGRES_PASSWORD=test -p 55499:5432 postgis/postgis:16-3.4
-sleep 5
+docker run -d --name restore-test -e POSTGRES_PASSWORD=test \
+  -e POSTGRES_USER=stormpulse -e POSTGRES_DB=stormpulse \
+  postgis/postgis:16-3.4
+sleep 8
 gunzip -c /var/backups/stormpulse/stormpulse_<TIMESTAMP>.sql.gz | \
-  docker exec -i restore-test psql -U postgres
-# confirme os dados, depois:
+  docker exec -i restore-test psql -U stormpulse -d stormpulse -v ON_ERROR_STOP=1
+# confirme os dados (ex.: SELECT count(*) FROM tenants;), depois:
 docker rm -f restore-test
 ```
 
@@ -174,21 +191,43 @@ limit) é todo recriável, nunca é a fonte de verdade de nada.
 
 ## 7. Rollback
 
-**Automático**: `infra/deploy.sh` (hardening Fase 3, [ADR-0044](../docs/adr/0044-fase3-ordem-segura-migration-deploy.md))
-já grava qual imagem estava rodando antes de mexer em qualquer coisa — se
-a migração ou o smoke test falharem, ele mesmo restaura essas imagens
-automaticamente e sai com erro (nunca faz `alembic downgrade` sozinho —
-isso continua decisão humana, ver abaixo).
+**Automático**: `infra/deploy.sh` (hardening Fase 3,
+[ADR-0044](../docs/adr/0044-fase3-ordem-segura-migration-deploy.md);
+worker/beat independentes, [ADR-0056](../docs/adr/0056-rollback-worker-backup-obrigatorio.md))
+grava a imagem de **cada um** dos quatro serviços (api, web, worker, beat)
+antes de mexer em qualquer coisa — worker e beat podem estar em imagens
+diferentes da de api (`STORMPULSE_WORKER_IMAGE`, a variante `-satellite`
+quando `SATELLITE_ENABLED=true`), então cada um volta pra sua própria
+imagem anterior, nunca fica preso na imagem nova de um deploy que falhou.
+Se a migração ou o smoke test falharem, o rollback roda sozinho, confere
+que a imagem anterior de cada serviço ainda existe localmente antes de
+trocar, e **verifica de novo** (`/ready` + `docker compose ps`) que o
+estado revertido está saudável antes de declarar sucesso — se o próprio
+rollback falhar ou o estado revertido não ficar saudável, o script sai
+com uma mensagem bem visível de intervenção manual necessária, em vez de
+um "WARNING" fácil de perder no meio do log. Nunca faz `alembic
+downgrade` sozinho — isso continua decisão humana, ver abaixo.
+
+Coberto por teste automatizado, sem tocar Docker de verdade
+(`infra/tests/test_deploy_rollback.sh` — stub de `docker`/`curl`,
+cobrindo o caminho feliz, falha de migração com rollback dos 4 serviços,
+imagem anterior ausente, e as duas variações do backup obrigatório
+abaixo).
 
 **Manual — app**: `STORMPULSE_IMAGE=ghcr.io/felipeaugusantos/stormpulse:sha-<commit-anterior>
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` —
 troca pra uma imagem anterior já publicada (tags disponíveis: ver
-[README.md § Opção C](../README.md)).
+[README.md § Opção C](../README.md)). Pra reverter `worker`/`beat`
+também, exporte `STORMPULSE_WORKER_IMAGE`/inclua-os no mesmo `up -d`.
 
 **Manual — banco**: `alembic downgrade -1` reverte a migração mais recente
 (testado migração-a-migração desde a Fase 6, [ADR-0031](../docs/adr/0031-hardening-fase-6-baseline-alembic-ddl-congelado.md))
 — ou restaurar de um backup (passo 5), se o rollback de schema sozinho não
-bastar.
+bastar. **Migrations nunca são revertidas automaticamente** pelo
+`deploy.sh`, nem no caminho de rollback: um `alembic downgrade` errado
+pode perder dados de um jeito que um `docker compose up` com a imagem
+antiga não consegue desfazer sozinho — essa decisão exige um humano
+olhando o que a migração de fato mudou.
 
 ## 8. Prevenção de múltiplos Celery Beat
 
