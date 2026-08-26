@@ -22,6 +22,7 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
   const [report, setReport] = useState<WeeklyReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -45,6 +46,24 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
       cancelled = true
     }
   }, [locationId])
+
+  async function handleDownloadPdf() {
+    setDownloadingPdf(true)
+    setError(null)
+    try {
+      const blob = await api.weeklyReportPdf(locationId)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `relatorio-semanal-${locationName}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível gerar o PDF')
+    } finally {
+      setDownloadingPdf(false)
+    }
+  }
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -115,8 +134,16 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
             </p>
 
             <div className="modal-actions no-print">
-              <button type="button" className="btn" onClick={() => window.print()}>
-                🖨️ Imprimir / Salvar PDF
+              <button
+                type="button"
+                className="btn"
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
+              >
+                {downloadingPdf ? 'Gerando…' : '⬇️ Baixar PDF'}
+              </button>
+              <button type="button" className="btn ghost" onClick={() => window.print()}>
+                🖨️ Imprimir
               </button>
               <button type="button" className="btn ghost" onClick={onClose}>
                 Fechar

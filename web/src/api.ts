@@ -151,6 +151,24 @@ async function request<T>(path: string, init: RequestInit = {}, isRetry = false)
   return (res.status === 204 ? undefined : await res.json()) as T
 }
 
+/** Same auth/retry contract as `request`, but for a binary response (item
+ * 2's PDF export) — never tries to parse the body as JSON. */
+async function requestBlob(path: string, isRetry = false): Promise<Blob> {
+  const token = getToken()
+  const headers = new Headers()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+
+  const res = await fetch(`${V1}${path}`, { headers, credentials: 'include' })
+  if (!res.ok) {
+    if (res.status === 401 && !isRetry) {
+      await refreshAccessToken()
+      return requestBlob(path, true)
+    }
+    throw new ApiError(res.status, `HTTP ${res.status}`)
+  }
+  return res.blob()
+}
+
 /** Creates the account, then immediately logs in with the same credentials
  * — /auth/register only returns the created user (201), never tokens, so a
  * session still has to be established the normal way right after. */
@@ -323,6 +341,10 @@ export const api = {
   // Talhão-only (FASE 32) — 404s for a farm-level point, same shape as ndvi().
   weeklyReport: (locationId: string) =>
     request<WeeklyReport>(`/locations/${locationId}/agro/weekly-report`),
+  // Item 2 (ADR-0063) — same data as weeklyReport(), rendered server-side
+  // as a downloadable PDF.
+  weeklyReportPdf: (locationId: string) =>
+    requestBlob(`/locations/${locationId}/agro/weekly-report/pdf`),
   // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever
   // called when `Me.is_platform_admin` is true; the backend 403s otherwise.
   adminUsers: (opts: { search?: string; limit?: number; offset?: number } = {}) => {
