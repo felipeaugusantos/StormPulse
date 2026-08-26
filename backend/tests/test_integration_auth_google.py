@@ -52,6 +52,9 @@ async def test_google_login_creates_a_new_account(monkeypatch: pytest.MonkeyPatc
         me = await client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {access}"})
         assert me.status_code == 200
         assert me.json()["email"] == email
+        # Google already checked its own `email_verified` claim before this
+        # code path is reached — real fact, not an assumption (FASE 8).
+        assert me.json()["email_verified"] is True
 
 
 async def test_google_login_links_existing_password_account(
@@ -64,7 +67,8 @@ async def test_google_login_links_existing_password_account(
         AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client,
     ):
         reg = await client.post(
-            "/api/v1/auth/register", json={"email": email, "password": "supersecret123"}
+            "/api/v1/auth/register",
+            json={"accept_terms": True, "email": email, "password": "supersecret123"},
         )
         assert reg.status_code == 201
         original_user_id = reg.json()["id"]
@@ -141,7 +145,8 @@ async def test_google_login_does_not_link_account_with_unverified_email(
         AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client,
     ):
         reg = await client.post(
-            "/api/v1/auth/register", json={"email": victim_email, "password": "supersecret123"}
+            "/api/v1/auth/register",
+            json={"accept_terms": True, "email": victim_email, "password": "supersecret123"},
         )
         assert reg.status_code == 201
 

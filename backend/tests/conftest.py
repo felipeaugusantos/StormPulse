@@ -78,7 +78,10 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 async def register_and_login(client: AsyncClient, *, password: str = "supersecret123") -> str:
     """Register a user with a unique e-mail and return an access token."""
     email = f"test-{uuid.uuid4().hex}@example.com"
-    resp = await client.post("/api/v1/auth/register", json={"email": email, "password": password})
+    resp = await client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": password, "accept_terms": True},
+    )
     resp.raise_for_status()
     resp = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
     resp.raise_for_status()

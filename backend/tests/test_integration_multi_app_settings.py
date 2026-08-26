@@ -58,7 +58,9 @@ async def client_b() -> AsyncIterator[AsyncClient]:
 
 async def _register_and_login(client: AsyncClient) -> str:
     email = f"multi-app-{uuid.uuid4().hex}@example.com"
-    resp = await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    resp = await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     assert resp.status_code == 201
     resp = await client.post("/api/v1/auth/login", json={"email": email, "password": _PASSWORD})
     assert resp.status_code == 200
@@ -149,12 +151,13 @@ async def test_auth_rate_limit_does_not_leak_between_app_instances() -> None:
         # Exhaust the strict app's auth rate limit (max_requests=1).
         email = f"multi-app-rl-{uuid.uuid4().hex}@example.com"
         first = await strict_client.post(
-            "/api/v1/auth/register", json={"email": email, "password": _PASSWORD}
+            "/api/v1/auth/register",
+            json={"accept_terms": True, "email": email, "password": _PASSWORD},
         )
         assert first.status_code == 201
         second = await strict_client.post(
             "/api/v1/auth/register",
-            json={"email": f"{email}.2", "password": _PASSWORD},
+            json={"email": f"{email}.2", "password": _PASSWORD, "accept_terms": True},
         )
         assert second.status_code == 429
 
@@ -166,6 +169,7 @@ async def test_auth_rate_limit_does_not_leak_between_app_instances() -> None:
                 json={
                     "email": f"multi-app-rl-{uuid.uuid4().hex}@example.com",
                     "password": _PASSWORD,
+                    "accept_terms": True,
                 },
             )
             assert resp.status_code == 201, f"request {i} unexpectedly rate-limited"

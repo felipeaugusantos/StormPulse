@@ -57,7 +57,9 @@ async def _promoted_client(email: str) -> AsyncIterator[AsyncClient]:
 
 async def _register(client: AsyncClient, email: str) -> str:
     """Registers ``email`` and returns its user id."""
-    resp = await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    resp = await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     resp.raise_for_status()
     return str(resp.json()["id"])
 
@@ -76,7 +78,9 @@ async def test_non_admin_gets_403_on_tenant_list(client: AsyncClient) -> None:
 
 async def test_bootstrap_promotes_an_already_registered_email(client: AsyncClient) -> None:
     email = f"platform-admin-{uuid.uuid4().hex}@example.com"
-    resp = await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    resp = await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     assert resp.status_code == 201
 
     async for admin_client in _promoted_client(email):
@@ -105,10 +109,16 @@ async def test_bootstrap_never_promotes_an_unregistered_email(client: AsyncClien
 
 async def test_platform_admin_sees_users_across_tenants(client: AsyncClient) -> None:
     admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
-    await client.post("/api/v1/auth/register", json={"email": admin_email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register",
+        json={"accept_terms": True, "email": admin_email, "password": _PASSWORD},
+    )
     # A second, unrelated tenant/user that the platform admin should still see.
     other_email = f"other-tenant-{uuid.uuid4().hex}@example.com"
-    await client.post("/api/v1/auth/register", json={"email": other_email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register",
+        json={"accept_terms": True, "email": other_email, "password": _PASSWORD},
+    )
 
     async for admin_client in _promoted_client(admin_email):
         login = await admin_client.post(
@@ -130,10 +140,16 @@ async def test_platform_admin_sees_users_across_tenants(client: AsyncClient) -> 
 
 async def test_platform_admin_users_search_filters_by_email(client: AsyncClient) -> None:
     admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
-    await client.post("/api/v1/auth/register", json={"email": admin_email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register",
+        json={"accept_terms": True, "email": admin_email, "password": _PASSWORD},
+    )
     needle = uuid.uuid4().hex
     target_email = f"needle-{needle}@example.com"
-    await client.post("/api/v1/auth/register", json={"email": target_email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register",
+        json={"accept_terms": True, "email": target_email, "password": _PASSWORD},
+    )
 
     async for admin_client in _promoted_client(admin_email):
         login = await admin_client.post(
@@ -153,7 +169,10 @@ async def test_platform_admin_users_search_filters_by_email(client: AsyncClient)
 
 async def test_platform_admin_sees_tenant_counts(client: AsyncClient) -> None:
     admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
-    await client.post("/api/v1/auth/register", json={"email": admin_email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register",
+        json={"accept_terms": True, "email": admin_email, "password": _PASSWORD},
+    )
 
     location_payload = {
         "name": "Fazenda",

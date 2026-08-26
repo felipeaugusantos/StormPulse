@@ -53,7 +53,9 @@ async def client(settings: Settings) -> AsyncIterator[AsyncClient]:
 
 
 async def _register(client: AsyncClient, email: str) -> None:
-    resp = await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    resp = await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     assert resp.status_code == 201
 
 

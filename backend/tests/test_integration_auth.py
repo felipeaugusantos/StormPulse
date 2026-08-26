@@ -25,7 +25,8 @@ def _unique_email() -> str:
 async def test_register_returns_created_user(client: AsyncClient) -> None:
     email = _unique_email()
     resp = await client.post(
-        "/api/v1/auth/register", json={"email": email, "password": _PASSWORD, "full_name": "CI"}
+        "/api/v1/auth/register",
+        json={"accept_terms": True, "email": email, "password": _PASSWORD, "full_name": "CI"},
     )
     assert resp.status_code == 201
     body = resp.json()
@@ -36,7 +37,9 @@ async def test_register_returns_created_user(client: AsyncClient) -> None:
 
 async def test_register_defaults_to_storm_only(client: AsyncClient) -> None:
     email = _unique_email()
-    resp = await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    resp = await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     assert resp.status_code == 201
     body = resp.json()
     assert body["storm_module_enabled"] is True
@@ -50,6 +53,7 @@ async def test_register_with_agro_module_selected(client: AsyncClient) -> None:
         json={
             "email": email,
             "password": _PASSWORD,
+            "accept_terms": True,
             "storm_module": True,
             "agro_module": True,
         },
@@ -72,6 +76,7 @@ async def test_register_rejects_no_modules_selected(client: AsyncClient) -> None
         json={
             "email": email,
             "password": _PASSWORD,
+            "accept_terms": True,
             "storm_module": False,
             "agro_module": False,
         },
@@ -81,7 +86,7 @@ async def test_register_rejects_no_modules_selected(client: AsyncClient) -> None
 
 async def test_register_duplicate_email_returns_409(client: AsyncClient) -> None:
     email = _unique_email()
-    payload = {"email": email, "password": _PASSWORD}
+    payload = {"email": email, "password": _PASSWORD, "accept_terms": True}
     first = await client.post("/api/v1/auth/register", json=payload)
     assert first.status_code == 201
     second = await client.post("/api/v1/auth/register", json=payload)
@@ -90,7 +95,9 @@ async def test_register_duplicate_email_returns_409(client: AsyncClient) -> None
 
 async def test_login_with_wrong_password_returns_401(client: AsyncClient) -> None:
     email = _unique_email()
-    await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     resp = await client.post(
         "/api/v1/auth/login", json={"email": email, "password": "wrong-password"}
     )
@@ -99,7 +106,9 @@ async def test_login_with_wrong_password_returns_401(client: AsyncClient) -> Non
 
 async def test_login_returns_token_pair(client: AsyncClient) -> None:
     email = _unique_email()
-    await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     resp = await client.post("/api/v1/auth/login", json={"email": email, "password": _PASSWORD})
     assert resp.status_code == 200
     body = resp.json()
@@ -109,7 +118,9 @@ async def test_login_returns_token_pair(client: AsyncClient) -> None:
 
 async def test_users_me_with_valid_token(client: AsyncClient) -> None:
     email = _unique_email()
-    await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     login = await client.post("/api/v1/auth/login", json={"email": email, "password": _PASSWORD})
     access = login.json()["access_token"]
 
@@ -125,7 +136,9 @@ async def test_users_me_without_token_returns_401(client: AsyncClient) -> None:
 
 async def test_refresh_issues_a_new_token_pair(client: AsyncClient) -> None:
     email = _unique_email()
-    await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     login = await client.post("/api/v1/auth/login", json={"email": email, "password": _PASSWORD})
     refresh_token = login.json()["refresh_token"]
 
@@ -141,7 +154,9 @@ async def test_refresh_with_garbage_token_returns_401(client: AsyncClient) -> No
 
 async def test_delete_me_without_confirm_returns_400(client: AsyncClient) -> None:
     email = _unique_email()
-    await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     login = await client.post("/api/v1/auth/login", json={"email": email, "password": _PASSWORD})
     access = login.json()["access_token"]
 
@@ -156,7 +171,9 @@ async def test_delete_me_without_confirm_returns_400(client: AsyncClient) -> Non
 
 async def test_delete_me_removes_account_and_owned_data(client: AsyncClient) -> None:
     email = _unique_email()
-    await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     login = await client.post("/api/v1/auth/login", json={"email": email, "password": _PASSWORD})
     access = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {access}"}
@@ -182,6 +199,8 @@ async def test_delete_me_removes_account_and_owned_data(client: AsyncClient) -> 
     assert me_resp.status_code == 401
 
     # Can register the same e-mail again — nothing orphaned blocking it.
-    again = await client.post("/api/v1/auth/register", json={"email": email, "password": _PASSWORD})
+    again = await client.post(
+        "/api/v1/auth/register", json={"accept_terms": True, "email": email, "password": _PASSWORD}
+    )
     assert again.status_code == 201
     assert created["id"]  # sanity: the location really was created before deletion
