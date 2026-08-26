@@ -29,6 +29,7 @@ dependencies = [
     "cryptography>=43.0",
     "boto3>=1.35",
     "anthropic>=1.0",
+    "reportlab>=4.2",
 ]
 
 [project.optional-dependencies]
@@ -148,6 +149,13 @@ ignore_missing_imports = true
 # optional boto3-stubs/botocore-stubs packages, not worth the extra
 # dependency for the single `ses.send_email` call this project makes).
 module = ["boto3.*", "botocore.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# reportlab ships without inline types/py.typed (a types-reportlab package
+# exists but only covers a subset — not worth the extra dependency for the
+# handful of platypus/lib calls this project makes).
+module = ["reportlab.*"]
 ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
