@@ -105,7 +105,11 @@ services:
   # certbot ...` by infra/setup-tls.sh and infra/renew-tls.sh, never
   # started by a plain `up -d`.
   certbot:
-    image: certbot/certbot:latest
+    # Pinned by digest for reproducibility (item 7, hardening de
+    # vulnerabilidades/reprodutibilidade) — não "latest". O protocolo ACME
+    # muda ocasionalmente; revise esta versão de tempos em tempos em vez
+    # de deixar flutuar silenciosamente.
+    image: certbot/certbot:v2.11.0@sha256:ddf9e5d226a56e886986838fa0ebedc0237511c78664352e8d0f4346ee022cd8
     volumes:
       - certbot-etc:/etc/letsencrypt
       - certbot-webroot:/var/www/certbot
