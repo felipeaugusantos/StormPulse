@@ -221,6 +221,32 @@ jobs:
           docker images stormpulse-api --format '{{.Repository}} (runtime-base)  {{.Size}}'
           docker images stormpulse-backend --format '{{.Repository}}:{{.Tag}} (runtime-satellite)  {{.Size}}'
 
+      - name: Build web image (for vulnerability scanning below)
+        run: docker build -t stormpulse-web:ci -f web/Dockerfile web
+
+      - name: Vulnerability scan (Trivy) — CRITICAL with a fix available, blocking
+        # --ignore-unfixed: only fail on findings a rebuild can actually
+        # resolve today (matches pip-audit/npm-audit's philosophy elsewhere
+        # in this workflow) — a CRITICAL CVE the upstream distro hasn't
+        # patched yet isn't something this repo can fix by itself. Verified
+        # locally before adding this gate: this exact check caught a real,
+        # fixable CRITICAL (OpenSSL heap overflow in nginx:1.27-alpine,
+        # patched via `apk upgrade` in web/Dockerfile) and passes clean
+        # against the current backend image.
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --severity CRITICAL --ignore-unfixed --exit-code 1 stormpulse-api:latest
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --severity CRITICAL --ignore-unfixed --exit-code 1 stormpulse-web:ci
+
+      - name: Vulnerability scan (Trivy) — full report, informational
+        if: always()
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --severity HIGH,CRITICAL stormpulse-api:latest || true
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --severity HIGH,CRITICAL stormpulse-web:ci || true
+
       - name: Start db/redis
         # Same order as infra/deploy.sh: db/redis first, then migrate,
         # then api/worker/beat/web — required since RLS (ADR-0054,
@@ -518,6 +544,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.target }}
           cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+          # SBOM (item 7, hardening de reprodutibilidade) — attestation
+          # attached to the pushed image, inspecionável via `docker buildx
+          # imagetools inspect --format '{{ json .SBOM }}' <imagem>`.
+          sbom: true
 
   publish-web:
     name: Publish web image
@@ -564,6 +594,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+          sbom: true
           # VAPID *public* key (Web Push opt-in, FASE 22) — not sensitive,
           # a repo variable rather than a secret, but still has to match
           # this deployment's VAPID_PRIVATE_KEY on the backend's own .env.
