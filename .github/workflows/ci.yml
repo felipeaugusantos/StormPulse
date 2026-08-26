@@ -361,14 +361,23 @@ jobs:
       - name: Backup + restore drill against a real, disposable Postgres (ADR-0056)
         # Not simulated — a real pg_dump of the data the steps above just
         # created, restored into a brand-new postgis container, with the
-        # restored row count checked against the source. Two real bugs
-        # were only found by actually running this, not by reading the
-        # script: PostGIS's own "tiger geocoder" schemas collide with a
-        # plain restore into any fresh target, and the dump's GRANT/ALTER
-        # OWNER statements name the RLS runtime role, which doesn't exist
-        # until migrations have run against the restore target. Both are
-        # why backup-postgres.sh passes --exclude-schema=tiger/tiger_data/
-        # topology and --no-owner --no-privileges to pg_dump.
+        # restored row count checked against the source. Real bugs were
+        # only found by actually running this, not by reading the script:
+        # (1) PostGIS's own "tiger geocoder"/topology schemas collide with
+        # a plain restore into any fresh target; (2) the CREATE EXTENSION
+        # statements for those two extensions survive --exclude-schema and
+        # fail with "schema does not exist" against the very target that
+        # exclusion was for, since the target already installs both
+        # extensions itself — backup-postgres.sh also strips those two
+        # statements from the dump for this reason; (3) the dump's
+        # GRANT/ALTER OWNER statements name the RLS runtime role, which
+        # doesn't exist until migrations have run against the restore
+        # target, hence --no-owner --no-privileges. The retry loop below
+        # is a fourth, unrelated finding: the postgis/postgis image itself
+        # has a startup race (its own init script's `CREATE EXTENSION IF
+        # NOT EXISTS postgis` can fail with "duplicate key" against the
+        # freshly-templated database), confirmed by reproducing container
+        # boot failures directly — nothing to do with this repo's scripts.
         run: |
           set -e
           mkdir -p /tmp/backup-drill
@@ -378,12 +387,34 @@ jobs:
           gzip -t "$DUMP"
           SOURCE_COUNT="$(docker compose exec -T db psql -U stormpulse -d stormpulse -tAc 'SELECT count(*) FROM locations;')"
           echo "Source locations count: $SOURCE_COUNT"
-          docker run -d --name restore-drill-db -e POSTGRES_PASSWORD=test \
-            -e POSTGRES_USER=stormpulse -e POSTGRES_DB=stormpulse postgis/postgis:16-3.4
-          for _ in $(seq 1 30); do
-            docker exec restore-drill-db pg_isready -U stormpulse >/dev/null 2>&1 && break
-            sleep 1
+
+          ready=false
+          for boot_attempt in 1 2 3 4 5; do
+            docker rm -f restore-drill-db >/dev/null 2>&1 || true
+            docker run -d --name restore-drill-db -e POSTGRES_PASSWORD=test \
+              -e POSTGRES_USER=stormpulse -e POSTGRES_DB=stormpulse postgis/postgis:16-3.4
+            for _ in $(seq 1 30); do
+              status="$(docker inspect restore-drill-db --format '{{.State.Status}}' 2>/dev/null)"
+              [ "$status" = "exited" ] && break
+              docker exec restore-drill-db pg_isready -U stormpulse >/dev/null 2>&1 && break
+              sleep 1
+            done
+            # pg_isready can succeed against postgis's *temporary* init
+            # server moments before its own init script crashes the
+            # container — settle briefly and re-check before trusting it.
+            sleep 3
+            if [ "$(docker inspect restore-drill-db --format '{{.State.Status}}' 2>/dev/null)" = "running" ]; then
+              ready=true
+              break
+            fi
+            echo "restore-drill-db boot attempt $boot_attempt hit the known postgis image startup race, retrying..."
           done
+          if [ "$ready" != "true" ]; then
+            echo "ERROR: restore-drill-db never reached a stable running state." >&2
+            docker logs restore-drill-db || true
+            exit 1
+          fi
+
           gunzip -c "$DUMP" | docker exec -i restore-drill-db psql -U stormpulse -d stormpulse -v ON_ERROR_STOP=1 >/tmp/restore-drill.log
           RESTORED_COUNT="$(docker exec restore-drill-db psql -U stormpulse -d stormpulse -tAc 'SELECT count(*) FROM locations;')"
           echo "Restored locations count: $RESTORED_COUNT"

@@ -166,9 +166,14 @@ cópia off-instance automática a cada backup.
 ### Testando o restore
 
 Nunca confie num backup que nunca foi restaurado — automatizado no CI
-(job `infra`, ver `.github/workflows/ci.yml`) a cada push, contra um
-Postgres descartável de verdade, não simulado. Pra rodar manualmente
-(nunca na instância de produção):
+(step "Backup + restore drill" do job `docker`, ver
+`.github/workflows/ci.yml`) a cada push, contra um Postgres descartável de
+verdade, não simulado. Esse passo tem um retry de boot: o próprio image
+`postgis/postgis` tem uma race conhecida em que o script de inicialização
+falha com "duplicate key" na primeira tentativa (não relacionado a este
+repositório — confirmado reproduzindo o boot isoladamente, falha em torno
+de 1 em cada poucas tentativas). Pra rodar manualmente (nunca na instância
+de produção):
 
 ```bash
 docker run -d --name restore-test -e POSTGRES_PASSWORD=test \
