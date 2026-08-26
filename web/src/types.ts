@@ -114,6 +114,22 @@ export interface AdminStats {
   alerts_last_30d: number
 }
 
+// Raw radar-frame history (item 4, ADR-0065) — exactly what the active
+// provider returned each ingestion cycle, before StormEngine clusters it
+// into a StormCell.
+export interface AdminRawFrame {
+  id: string
+  weather_source_id: string
+  captured_at: string
+  is_mock: boolean
+  meta: { source_name?: string; cells?: Record<string, unknown>[] }
+}
+
+export interface AdminRawFrameList {
+  items: AdminRawFrame[]
+  total: number
+}
+
 export interface PipelineHealth {
   name: string
   last_updated_at: string | null

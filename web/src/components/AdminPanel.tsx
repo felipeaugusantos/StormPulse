@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ApiError, api } from '../api'
 import { formatDateBR, formatDateTimeBR } from '../format'
-import type { AdminAuditLogEntry, AdminStats, AdminTenant, AdminUser, PipelineHealth } from '../types'
+import type {
+  AdminAuditLogEntry,
+  AdminRawFrame,
+  AdminStats,
+  AdminTenant,
+  AdminUser,
+  PipelineHealth,
+} from '../types'
 
 const PIPELINE_LABELS: Record<string, string> = {
   satellite: 'Satélite (imagem + observações)',
@@ -18,7 +25,9 @@ const PAGE_SIZE = 100
 const ROLE_OPTIONS = ['user', 'admin']
 
 export function AdminPanel({ onBack, meId }: Props) {
-  const [tab, setTab] = useState<'stats' | 'users' | 'tenants' | 'audit' | 'pipelines'>('stats')
+  const [tab, setTab] = useState<
+    'stats' | 'users' | 'tenants' | 'audit' | 'pipelines' | 'raw-frames'
+  >('stats')
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -29,6 +38,8 @@ export function AdminPanel({ onBack, meId }: Props) {
   const [auditTotal, setAuditTotal] = useState(0)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [pipelineHealth, setPipelineHealth] = useState<PipelineHealth[]>([])
+  const [rawFrames, setRawFrames] = useState<AdminRawFrame[]>([])
+  const [rawFramesTotal, setRawFramesTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [mutatingId, setMutatingId] = useState<string | null>(null)
@@ -51,6 +62,10 @@ export function AdminPanel({ onBack, meId }: Props) {
         setTenantsTotal(res.total)
       } else if (tab === 'pipelines') {
         setPipelineHealth(await api.adminPipelineHealth())
+      } else if (tab === 'raw-frames') {
+        const res = await api.adminRawFrames({ limit: PAGE_SIZE })
+        setRawFrames(res.items)
+        setRawFramesTotal(res.total)
       } else {
         const res = await api.adminAuditLog({ limit: PAGE_SIZE })
         setAuditLog(res.items)
@@ -72,7 +87,9 @@ export function AdminPanel({ onBack, meId }: Props) {
     setSearchQuery(searchInput.trim())
   }
 
-  function switchTab(next: 'stats' | 'users' | 'tenants' | 'audit' | 'pipelines') {
+  function switchTab(
+    next: 'stats' | 'users' | 'tenants' | 'audit' | 'pipelines' | 'raw-frames',
+  ) {
     setTab(next)
     setSearchInput('')
     setSearchQuery('')
@@ -189,9 +206,16 @@ export function AdminPanel({ onBack, meId }: Props) {
             >
               Pipelines
             </button>
+            <button
+              type="button"
+              className={`btn small ${tab === 'raw-frames' ? '' : 'ghost'}`}
+              onClick={() => switchTab('raw-frames')}
+            >
+              Histórico bruto
+            </button>
           </div>
 
-          {tab !== 'audit' && tab !== 'stats' && tab !== 'pipelines' && (
+          {tab !== 'audit' && tab !== 'stats' && tab !== 'pipelines' && tab !== 'raw-frames' && (
             <form className="location-search-row" onSubmit={submitSearch}>
               <input
                 type="text"
@@ -388,6 +412,35 @@ export function AdminPanel({ onBack, meId }: Props) {
                       </div>
                       <div className="sub">{JSON.stringify(entry.detail)}</div>
                       <div className="sub muted">{formatDateTimeBR(entry.created_at)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {tab === 'raw-frames' && (
+            <>
+              <h2>
+                Histórico bruto de radar <span className="count">{rawFramesTotal}</span>
+              </h2>
+              <p className="panel-hint">
+                Exatamente o que o provider ativo devolveu em cada ciclo de ingestão, antes do
+                motor de rastreamento agrupar em células (item 4, ADR-0065).
+              </p>
+              <div className="list">
+                {!loading && rawFrames.length === 0 && (
+                  <p className="empty">Nenhum quadro bruto retido ainda.</p>
+                )}
+                {rawFrames.map((f) => (
+                  <div className="row" key={f.id}>
+                    <span className={`badge ${f.is_mock ? 'red' : 'green'}`}>
+                      {f.is_mock ? 'mock' : 'real'}
+                    </span>
+                    <div className="grow">
+                      <div>{f.meta.source_name ?? '—'}</div>
+                      <div className="sub">{(f.meta.cells ?? []).length} célula(s) bruta(s)</div>
+                      <div className="sub muted">{formatDateTimeBR(f.captured_at)}</div>
                     </div>
                   </div>
                 ))}

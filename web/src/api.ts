@@ -1,5 +1,6 @@
 import type {
   AdminAuditLogList,
+  AdminRawFrameList,
   AdminStats,
   AdminTenantList,
   AdminUser,
@@ -380,6 +381,14 @@ export const api = {
   },
   adminStats: () => request<AdminStats>('/admin/stats'),
   adminPipelineHealth: () => request<PipelineHealth[]>('/admin/pipeline-health'),
+  // Item 4 (ADR-0065) — raw radar-frame history retained per ingestion cycle.
+  adminRawFrames: (opts: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams()
+    if (opts.limit) params.set('limit', String(opts.limit))
+    if (opts.offset) params.set('offset', String(opts.offset))
+    const qs = params.toString()
+    return request<AdminRawFrameList>(`/admin/raw-frames${qs ? `?${qs}` : ''}`)
+  },
   adminTriggerPipeline: (name: string) =>
     request<{ queued: boolean; name: string }>('/admin/pipeline-health/trigger', {
       method: 'POST',
