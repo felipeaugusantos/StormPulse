@@ -113,6 +113,48 @@ suíte inteira de `/auth/register` em outros arquivos de teste precisou
 ganhar `accept_terms: true` no payload, mudança mecânica, não de
 comportamento).
 
+## Frontend
+
+`Login.tsx`: checkbox de aceite de termos (abre `TermsModal` — minuta,
+sinalizada como pendente de revisão jurídica no relatório final), widget
+hCaptcha opcional (só renderiza com `VITE_HCAPTCHA_SITE_KEY`), modo
+"esqueci minha senha". `App.tsx` reconhece `/verificar-email?token=...` e
+`/redefinir-senha?token=...` como deep links de e-mail (nginx já cai em
+`index.html` pra qualquer path, `try_files`) e mostra `VerifyEmail.tsx`/
+`ResetPassword.tsx` sem exigir sessão. `Dashboard.tsx` mostra um banner
+"confirme seu e-mail" com botão de reenvio quando `email_verified=false`.
+
+Detalhe de single-use: como o token do `/auth/register` é o mesmo captcha
+que seria reaproveitado no auto-login logo em seguida (hCaptcha só aceita
+cada token uma vez), `register()` no frontend não reenvia esse token pro
+login automático — se hCaptcha estiver configurado, esse auto-login
+específico falha e a tela volta pro formulário de login normal com "conta
+criada, faça login", em vez de mostrar um erro assustador (a conta foi
+criada de verdade).
+
+## Bug real encontrado ao testar via navegador (não hipotético)
+
+Testar o registro de ponta a ponta contra um `.env` real (`cp
+.env.example .env`) — não só os testes automatizados — expôs um bug de
+verdade: `pydantic-settings` trata uma variável de ambiente *presente mas
+vazia* (`HCAPTCHA_SECRET_KEY=`, exatamente como `.env.example` documenta
+todo campo opcional) como string vazia, não como ausente. Todo campo
+`X: T | None = None` do `Settings` — não só o do hCaptcha, também
+`VAPID_PRIVATE_KEY`, `INMET_API_TOKEN`, `SES_FROM_EMAIL` e outros — corria
+o mesmo risco de virar `SecretStr('')`/`""` em vez de `None`, fazendo o
+código de "essa feature está configurada?" (`is None`/`is not None`)
+achar que uma feature desligada estava ligada, com uma credencial vazia.
+
+Corrigido com um `model_validator(mode="before")` central em
+`app/core/config.py` que normaliza string vazia para `None` numa lista
+explícita desses campos, antes da validação de tipo do Pydantic — 2 testes
+novos em `test_config.py` cobrindo o comportamento (vazio vira `None`,
+valor real é preservado). Não é uma correção específica do hCaptcha: é uma
+correção de causa raiz que também deixa VAPID/INMET/REDEMET/NDVI/SES mais
+corretos, encontrada só porque o registro foi testado de verdade contra um
+`.env` real, não só contra a suíte automatizada (que nunca copia
+`.env.example` literalmente).
+
 ## Consequências
 
 - Nenhum código-fonte de terceiro (Google/hCaptcha) é confiado sem
