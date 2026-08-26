@@ -259,6 +259,41 @@ container em execução (mais agressivo que a poda automática do
 `deploy.sh`) — seguro de rodar manualmente numa instância dedicada ao
 StormPulse, mas nunca num host compartilhado com outros serviços.
 
+### Alerta de disco cheio
+
+`check-disk-space.sh` verifica o uso do disco e manda um e-mail (via SES)
+pro operador quando cruza um limite — o incidente acima só foi percebido
+lendo log de CI manualmente, nada avisou ninguém de verdade. Roda
+independente da stack estar de pé (um disco cheio pode até derrubar os
+containers, então o alerta não pode depender deles).
+
+```bash
+chmod +x infra/check-disk-space.sh
+sudo mkdir -p /var/lib/stormpulse
+```
+
+Crontab (`crontab -e`) — a cada 15 minutos:
+
+```cron
+*/15 * * * * cd /home/ubuntu/StormPulse && DISK_ALERT_EMAIL="$PLATFORM_ADMIN_EMAIL" SES_FROM_EMAIL="$SES_FROM_EMAIL" ./infra/check-disk-space.sh >> /var/log/stormpulse-disk-alert.log 2>&1
+```
+
+Variáveis (todas opcionais, todas com um default seguro):
+
+| Variável | Default | Efeito |
+|---|---|---|
+| `DISK_CHECK_PATH` | `/` | Qual filesystem checar. |
+| `DISK_ALERT_THRESHOLD_PERCENT` | `80` | A partir de quanto % de uso o alerta dispara. |
+| `DISK_ALERT_EMAIL` | valor de `PLATFORM_ADMIN_EMAIL` | Destinatário do alerta — mesma pessoa promovida a operador da plataforma, a menos que definido separadamente. |
+| `SES_FROM_EMAIL` | *(vazio)* | Remetente já verificado na conta SES — mesma variável que o backend usa pros e-mails transacionais. |
+| `AWS_REGION` | `us-east-1` | Região da chamada SES. |
+| `DISK_ALERT_STATE_FILE` | `/var/lib/stormpulse/disk-alert.state` | Marca um alerta como "em aberto" — evita reenviar a cada execução do cron enquanto o disco continuar acima do limite, e dispara um e-mail de "normalizado" quando volta a ficar abaixo. |
+
+Sem `DISK_ALERT_EMAIL`/`SES_FROM_EMAIL` configurados, o script nunca
+falha — só loga e segue (mesma filosofia do `BACKUP_S3_BUCKET` opcional
+acima). Coberto por teste automatizado com `df`/`aws` stubados
+(`infra/tests/test_check_disk_space.sh`).
+
 ## 8. Prevenção de múltiplos Celery Beat
 
 Só um `beat` roda (um serviço no compose, uma instância) — múltiplos beats
