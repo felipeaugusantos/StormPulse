@@ -66,6 +66,7 @@ _OPTIONAL_FIELDS_EMPTY_MEANS_UNSET = (
     "vapid_public_key",
     "ses_from_email",
     "hcaptcha_secret_key",
+    "anthropic_api_key",
 )
 
 
@@ -367,6 +368,15 @@ class Settings(BaseSettings):
     # (só o `siteverify` do secret importa); ela só existe do lado do
     # frontend, via `VITE_HCAPTCHA_SITE_KEY` (ver `.env.example`).
     hcaptcha_secret_key: SecretStr | None = None
+
+    # --- Resumo de risco por IA (Claude, FASE 9) ---
+    # Opcional — sem `anthropic_api_key`, `StormRisk.ai_summary` fica
+    # sempre `None` e o dashboard simplesmente não mostra aquela linha de
+    # texto (mesmo padrão honesto de VAPID/SES: nunca finge). O modelo é
+    # fixo em Haiku (não configurável) — é um resumo curto e determinístico
+    # de números já calculados pelo motor de risco, não uma tarefa que
+    # justifique um modelo mais caro.
+    anthropic_api_key: SecretStr | None = None
 
     @model_validator(mode="before")
     @classmethod

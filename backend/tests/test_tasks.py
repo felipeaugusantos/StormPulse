@@ -13,7 +13,9 @@ standard Celery testing practice.
 
 from __future__ import annotations
 
+import uuid
 from contextlib import contextmanager
+from types import SimpleNamespace
 from typing import Any
 
 import workers.tasks as tasks_module
@@ -39,7 +41,37 @@ def test_run_ingestion_cycle_task_returns_summary_dict(monkeypatch: Any) -> None
 
     result = tasks_module.run_ingestion_cycle_task()
 
-    assert result == {"frames": 1, "cells": 2, "risks": 3, "alerts": 4}
+    assert result == {
+        "frames": 1,
+        "cells": 2,
+        "risks": 3,
+        "alerts": 4,
+        "ai_summaries_queued": 0,
+    }
+
+
+def test_run_ingestion_cycle_task_dispatches_ai_summaries_after_commit(
+    monkeypatch: Any,
+) -> None:
+    """`session_scope()` here commits (or would, against a real DB) before
+    this `with` block exits — the dispatch loop must run only after that,
+    never from inside `run_ingestion_cycle` itself (ADR-0060: dispatching
+    before commit races the AI summary task's own, separate DB session)."""
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "run_ingestion_cycle",
+        lambda session: CycleSummary(
+            frames=1, cells=1, risks=2, alerts=0, risk_ids_for_ai_summary=["a", "b"]
+        ),
+    )
+    dispatched: list[str] = []
+    monkeypatch.setattr(tasks_module.generate_risk_ai_summary_task, "delay", dispatched.append)
+
+    result = tasks_module.run_ingestion_cycle_task()
+
+    assert dispatched == ["a", "b"]
+    assert result["ai_summaries_queued"] == 2
 
 
 def test_run_satellite_detection_task_returns_summary_dict(monkeypatch: Any) -> None:
@@ -175,3 +207,53 @@ def test_run_lightning_detection_task_reports_disabled(monkeypatch: Any) -> None
 
     assert result["enabled"] is False
     assert result["points_fetched"] == 0
+
+
+class _FakeSessionWithRisk:
+    def __init__(self, risk: Any) -> None:
+        self._risk = risk
+
+    def get(self, model: Any, risk_id: Any) -> Any:
+        return self._risk
+
+
+def _session_scope_yielding(risk: Any) -> Any:
+    @contextmanager
+    def _scope() -> Any:
+        yield _FakeSessionWithRisk(risk)
+
+    return _scope
+
+
+def test_generate_risk_ai_summary_task_saves_the_summary(monkeypatch: Any) -> None:
+    risk = SimpleNamespace(id=uuid.uuid4(), ai_summary=None)
+    monkeypatch.setattr(tasks_module, "session_scope", _session_scope_yielding(risk))
+    monkeypatch.setattr(
+        tasks_module, "generate_summary", lambda r, settings: "Risco alto de granizo."
+    )
+
+    result = tasks_module.generate_risk_ai_summary_task(str(risk.id))
+
+    assert result == {"risk_id": str(risk.id), "generated": True}
+    assert risk.ai_summary == "Risco alto de granizo."
+
+
+def test_generate_risk_ai_summary_task_handles_missing_risk(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _session_scope_yielding(None))
+
+    result = tasks_module.generate_risk_ai_summary_task(str(uuid.uuid4()))
+
+    assert result["generated"] is False
+    assert result["reason"] == "risk_not_found"
+
+
+def test_generate_risk_ai_summary_task_handles_unconfigured_or_failed(monkeypatch: Any) -> None:
+    risk = SimpleNamespace(id=uuid.uuid4(), ai_summary=None)
+    monkeypatch.setattr(tasks_module, "session_scope", _session_scope_yielding(risk))
+    monkeypatch.setattr(tasks_module, "generate_summary", lambda r, settings: None)
+
+    result = tasks_module.generate_risk_ai_summary_task(str(risk.id))
+
+    assert result["generated"] is False
+    assert result["reason"] == "unconfigured_or_failed"
+    assert risk.ai_summary is None

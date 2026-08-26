@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 from app.core.config import get_settings
@@ -12,7 +13,9 @@ from app.core.metrics import (
     notification_failures,
     track_pipeline_cycle,
 )
+from app.storms.models import StormRisk
 from workers.agro_pipeline import run_agro_advisory_cycle
+from workers.ai_summary import generate_summary
 from workers.celery_app import celery_app
 from workers.db import session_scope
 from workers.email import EmailKind, render_email, send_email
@@ -31,11 +34,19 @@ def run_ingestion_cycle_task() -> dict[str, Any]:
     with track_pipeline_cycle("ingestion"), session_scope() as session:
         summary = run_ingestion_cycle(session)
     alerts_generated.add(summary.alerts, {"pipeline": "ingestion"})
+    # Dispatched only *after* session_scope()'s commit above — see
+    # CycleSummary.risk_ids_for_ai_summary's docstring for why dispatching
+    # any earlier (e.g. from inside run_ingestion_cycle, before its own
+    # transaction commits) would be a race against the AI summary task's
+    # own, separate DB connection.
+    for risk_id in summary.risk_ids_for_ai_summary:
+        generate_risk_ai_summary_task.delay(risk_id)
     result = {
         "frames": summary.frames,
         "cells": summary.cells,
         "risks": summary.risks,
         "alerts": summary.alerts,
+        "ai_summaries_queued": len(summary.risk_ids_for_ai_summary),
     }
     logger.info("ingestion cycle complete", extra=result)
     return result
@@ -151,3 +162,24 @@ def send_transactional_email_task(kind: EmailKind, to_email: str, link: str) -> 
     result = {"kind": kind, "sent": sent}
     logger.info("transactional email cycle complete", extra=result)
     return result
+
+
+@celery_app.task(name="workers.tasks.generate_risk_ai_summary_task")
+def generate_risk_ai_summary_task(risk_id: str) -> dict[str, Any]:
+    """Generates and saves the AI summary for one `StormRisk` row already
+    committed by `run_ingestion_cycle` (FASE 9, ADR-0060) — dispatched
+    fire-and-forget right after that row is created, same shape as the
+    email task above, so the ingestion cycle itself never waits on a
+    Claude API call. A missing row (deleted before this ran) or an
+    unconfigured/failed generation are both silently no-ops, never a
+    retry-storm."""
+    settings = get_settings()
+    with session_scope() as session:
+        risk = session.get(StormRisk, uuid.UUID(risk_id))
+        if risk is None:
+            return {"risk_id": risk_id, "generated": False, "reason": "risk_not_found"}
+        summary = generate_summary(risk, settings)
+        if summary is None:
+            return {"risk_id": risk_id, "generated": False, "reason": "unconfigured_or_failed"}
+        risk.ai_summary = summary
+    return {"risk_id": risk_id, "generated": True}

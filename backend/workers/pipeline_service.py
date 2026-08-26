@@ -14,7 +14,7 @@ adequate for the MVP and explicitly replaceable.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from geoalchemy2.elements import WKTElement
@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.alerts.engine import AlertEngine, AlertState, active_hazards
 from app.alerts.models import Alert
 from app.core.config import Settings, get_settings
-from app.core.enums import NotificationChannel, NotificationStatus
+from app.core.enums import NotificationChannel, NotificationStatus, RiskLevel
 from app.core.thresholds import AlertPolicy
 from app.locations.models import Location
 from app.notifications.models import Notification
@@ -45,6 +45,16 @@ class CycleSummary:
     cells: int
     risks: int
     alerts: int
+    # IDs of StormRisk rows worth an AI summary (FASE 9, ADR-0060) —
+    # dispatched by the caller (run_ingestion_cycle_task) only *after*
+    # session_scope()'s commit, never from inside this function: this
+    # session's own transaction hasn't committed yet when this function
+    # returns, so a row only `flush()`-ed (visible in this transaction
+    # alone) isn't yet visible to the separate DB connection the Celery
+    # task's own session_scope() would use — dispatching any earlier is a
+    # real race (confirmed by reasoning through session_scope's commit
+    # timing, not observed live, but not a risk worth taking).
+    risk_ids_for_ai_summary: list[str] = field(default_factory=list)
 
 
 def _to_frame_inputs(frames: list[RadarFrameData]) -> list[FrameInput]:
@@ -195,6 +205,7 @@ def run_ingestion_cycle(
     alert_engine = AlertEngine(policy)
     risks = 0
     alerts = 0
+    risk_ids_for_ai_summary: list[str] = []
 
     locations = session.scalars(select(Location).where(Location.is_active.is_(True))).all()
     for location in locations:
@@ -234,26 +245,34 @@ def run_ingestion_cycle(
         ).first()
         previous_state = _alert_state_from_risk(previous_risk, policy) if previous_risk else None
 
-        session.add(
-            StormRisk(
-                tenant_id=location.tenant_id,
-                location_id=location.id,
-                storm_cell_id=cell.id,
-                severity=assessment.severity,
-                rain_risk=assessment.rain_risk,
-                wind_risk=assessment.wind_risk,
-                hail_risk=assessment.hail_risk,
-                lightning_risk=assessment.lightning_risk,
-                storm_distance_km=assessment.storm_distance_km,
-                storm_speed_kmh=assessment.storm_speed_kmh,
-                eta_minutes=assessment.eta_minutes,
-                computed_at=datetime.now(UTC),
-                is_mock=assessment.is_mock,
-                experimental=assessment.experimental,
-                detail=assessment.detail,
-            )
+        storm_risk = StormRisk(
+            tenant_id=location.tenant_id,
+            location_id=location.id,
+            storm_cell_id=cell.id,
+            severity=assessment.severity,
+            rain_risk=assessment.rain_risk,
+            wind_risk=assessment.wind_risk,
+            hail_risk=assessment.hail_risk,
+            lightning_risk=assessment.lightning_risk,
+            storm_distance_km=assessment.storm_distance_km,
+            storm_speed_kmh=assessment.storm_speed_kmh,
+            eta_minutes=assessment.eta_minutes,
+            computed_at=datetime.now(UTC),
+            is_mock=assessment.is_mock,
+            experimental=assessment.experimental,
+            detail=assessment.detail,
         )
+        session.add(storm_risk)
         risks += 1
+
+        # AI summary (FASE 9, ADR-0060): only *queued* here — skipped
+        # entirely (no wasted flush/id) when unconfigured or the risk is
+        # GREEN (nothing worth explaining). Actually dispatched by the
+        # caller after this whole cycle's transaction commits (see
+        # CycleSummary.risk_ids_for_ai_summary's docstring for why).
+        if settings.anthropic_api_key is not None and assessment.severity != RiskLevel.GREEN:
+            session.flush()  # assigns storm_risk.id
+            risk_ids_for_ai_summary.append(str(storm_risk.id))
 
         decision = alert_engine.decide(
             assessment,
@@ -293,4 +312,10 @@ def run_ingestion_cycle(
                 )
                 alerts += 1
 
-    return CycleSummary(frames=len(frames), cells=len(persisted), risks=risks, alerts=alerts)
+    return CycleSummary(
+        frames=len(frames),
+        cells=len(persisted),
+        risks=risks,
+        alerts=alerts,
+        risk_ids_for_ai_summary=risk_ids_for_ai_summary,
+    )

@@ -47,3 +47,8 @@ class StormRiskOut(BaseModel):
     computed_at: datetime
     is_mock: bool
     experimental: bool
+    # FASE 9 (ADR-0060) — None when ANTHROPIC_API_KEY isn't configured,
+    # generation is still pending, or severity was GREEN (not worth
+    # explaining). Never a second source of risk, only a rephrasing of
+    # this same object's other fields.
+    ai_summary: str | None = None
