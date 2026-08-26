@@ -21,9 +21,12 @@ from app.admin.schemas import (
     AdminUserListOut,
     AdminUserOut,
     AdminUserUpdateIn,
+    AlertVerificationIn,
+    AlertVerificationOut,
     PipelineHealthOut,
     PipelineTriggerIn,
     PipelineTriggerOut,
+    ValidationMetricsOut,
 )
 from app.api.deps import get_db, get_request_settings, require_platform_admin
 from app.core.config import Settings
@@ -163,3 +166,37 @@ async def trigger_pipeline_now(
     # (the satellite one alone takes ~15s), same as beat's own dispatch.
     trigger_pipeline(data.name, settings)
     return PipelineTriggerOut(queued=True, name=data.name)
+
+
+@router.put(
+    "/alerts/{alert_id}/verification",
+    response_model=AlertVerificationOut,
+    summary="Registrar o resultado real de um alerta já emitido (ADR-0036/0058)",
+)
+async def upsert_alert_verification(
+    alert_id: uuid.UUID,
+    data: AlertVerificationIn,
+    session: AsyncSession = Depends(get_db),
+    actor: User = Depends(require_platform_admin),
+) -> AlertVerificationOut:
+    try:
+        return await service.upsert_alert_verification(
+            session, actor=actor, alert_id=alert_id, data=data
+        )
+    except service.AlertNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Alerta não encontrado",
+        ) from exc
+
+
+@router.get(
+    "/validation/metrics",
+    response_model=ValidationMetricsOut,
+    summary="Métricas reais de acerto dos alertas, via verificações registradas (ADR-0036/0058)",
+)
+async def get_validation_metrics(
+    session: AsyncSession = Depends(get_db),
+    _: User = Depends(require_platform_admin),
+) -> ValidationMetricsOut:
+    return await service.get_validation_metrics(session)

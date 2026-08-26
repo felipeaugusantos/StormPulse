@@ -22,17 +22,24 @@ from app.admin.schemas import (
     AdminTenantOut,
     AdminUserOut,
     AdminUserUpdateIn,
+    AlertVerificationIn,
+    AlertVerificationOut,
+    EventTypeMetricsOut,
     PipelineHealthOut,
+    ValidationMetricsOut,
 )
 from app.alerts.models import Alert
+from app.alerts.verification_models import AlertVerification
 from app.core.enums import UserRole
 from app.core.rls import bypass_rls
 from app.lightning.models import LightningStrike
 from app.locations.models import Location
 from app.satellite.models import SatelliteImage
-from app.storms.models import StormCell
+from app.storms.models import StormCell, StormRisk
 from app.tenants.models import Tenant
 from app.users.models import User
+from engine.validation import EtaSample, PredictionOutcome, mean_absolute_eta_error_minutes
+from engine.validation import precision_recall as _precision_recall
 
 MAX_PAGE_SIZE = 200
 
@@ -348,3 +355,114 @@ async def get_pipeline_health(session: AsyncSession) -> list[PipelineHealthOut]:
             )
         )
     return results
+
+
+class AlertNotFound(Exception):
+    """The target `alert_id` doesn't exist."""
+
+
+# ADR-0036 flagged a minimum-sample-size gate as needed but left the
+# threshold undefined; set here rather than left unenforced.
+MIN_VALIDATION_SAMPLE_SIZE = 30
+
+
+async def upsert_alert_verification(
+    session: AsyncSession, *, actor: User, alert_id: uuid.UUID, data: AlertVerificationIn
+) -> AlertVerificationOut:
+    """Records (or updates) the ground-truth outcome of an already-issued
+    `Alert` (ADR-0036/0058) — the only way `AlertVerification` rows get
+    populated today; see that model's docstring for why there's no public
+    "confirm this alert" endpoint yet."""
+    alert = await session.get(Alert, alert_id)
+    if alert is None:
+        raise AlertNotFound(alert_id)
+
+    existing = (
+        await session.execute(
+            select(AlertVerification).where(AlertVerification.alert_id == alert_id)
+        )
+    ).scalar_one_or_none()
+
+    now = datetime.now(UTC)
+    if existing is None:
+        existing = AlertVerification(alert_id=alert_id, tenant_id=alert.tenant_id)
+        session.add(existing)
+
+    existing.confirmed = data.confirmed
+    existing.actual_arrival_at = data.actual_arrival_at
+    existing.notes = data.notes
+    existing.confidence = data.confidence
+    existing.verified_by = actor.id
+    existing.verified_at = now
+
+    await session.commit()
+    # commit() ends the transaction require_platform_admin's bypass was
+    # scoped to (RLS, migration 0b7b9a5dbd11) — re-apply before the
+    # post-commit refresh, same reasoning as update_user() above.
+    await bypass_rls(session)
+    await session.refresh(existing)
+    return AlertVerificationOut.model_validate(existing)
+
+
+async def get_validation_metrics(session: AsyncSession) -> ValidationMetricsOut:
+    """Real backtesting metrics computed from `AlertVerification` rows an
+    operator actually recorded — never simulated data (ADR-0036/0058). See
+    `ValidationMetricsOut`'s docstring for why only a confirmation rate
+    (not recall) is reported.
+    """
+    rows = (
+        await session.execute(
+            select(Alert.event_type, AlertVerification, StormRisk)
+            .join(AlertVerification, AlertVerification.alert_id == Alert.id)
+            .outerjoin(StormRisk, StormRisk.id == Alert.storm_risk_id)
+            .where(AlertVerification.confirmed.is_not(None))
+        )
+    ).all()
+
+    outcomes_by_type: dict[str, list[PredictionOutcome]] = {}
+    eta_samples: list[EtaSample] = []
+    for event_type, verification, storm_risk in rows:
+        event_type_value = event_type.value if hasattr(event_type, "value") else str(event_type)
+        outcomes_by_type.setdefault(event_type_value, []).append(
+            PredictionOutcome(
+                event_type=event_type_value,
+                predicted=True,
+                observed=bool(verification.confirmed),
+            )
+        )
+        if (
+            verification.confirmed
+            and verification.actual_arrival_at is not None
+            and storm_risk is not None
+            and storm_risk.eta_minutes is not None
+        ):
+            predicted_arrival = storm_risk.computed_at + timedelta(minutes=storm_risk.eta_minutes)
+            eta_samples.append(
+                EtaSample(
+                    predicted_arrival=predicted_arrival,
+                    actual_arrival=verification.actual_arrival_at,
+                )
+            )
+
+    all_outcomes = [o for outcomes in outcomes_by_type.values() for o in outcomes]
+    overall = _precision_recall(all_outcomes)
+    by_event_type = {
+        event_type: EventTypeMetricsOut(
+            sample_size=len(outcomes),
+            confirmed_count=sum(1 for o in outcomes if o.observed),
+            confirmation_rate=_precision_recall(outcomes).precision,
+        )
+        for event_type, outcomes in outcomes_by_type.items()
+    }
+
+    sample_size = len(all_outcomes)
+    return ValidationMetricsOut(
+        sample_size=sample_size,
+        confirmed_count=overall.true_positives,
+        confirmation_rate=overall.precision,
+        by_event_type=by_event_type,
+        eta_sample_size=len(eta_samples),
+        mean_absolute_eta_error_minutes=mean_absolute_eta_error_minutes(eta_samples),
+        min_sample_size=MIN_VALIDATION_SAMPLE_SIZE,
+        reliable=sample_size >= MIN_VALIDATION_SAMPLE_SIZE,
+    )

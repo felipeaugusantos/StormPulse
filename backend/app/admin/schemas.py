@@ -124,3 +124,71 @@ class PipelineTriggerIn(BaseModel):
 class PipelineTriggerOut(BaseModel):
     queued: bool
     name: str
+
+
+class AlertVerificationIn(BaseModel):
+    """Ground-truth outcome for one already-emitted `Alert` (ADR-0036/0058).
+
+    `confirmed=None` explicitly re-opens/keeps a verification unresolved —
+    distinct from `False` (checked, did not happen). `actual_arrival_at`
+    only makes sense when `confirmed=True` and the alert had a predicted
+    ETA; left `None` otherwise.
+    """
+
+    confirmed: bool | None = None
+    actual_arrival_at: datetime | None = None
+    notes: str | None = Field(default=None, max_length=2000)
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class AlertVerificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    alert_id: uuid.UUID
+    confirmed: bool | None
+    actual_arrival_at: datetime | None
+    verified_by: uuid.UUID | None
+    verified_at: datetime | None
+    notes: str | None
+    confidence: float | None
+
+
+class EventTypeMetricsOut(BaseModel):
+    """Confirmation-rate metrics for one `AlertEventType`, computed only from
+    alerts that already have a resolved (`confirmed` is not None)
+    verification — see `ValidationMetricsOut` for why `recall` isn't here."""
+
+    sample_size: int
+    confirmed_count: int
+    # `None` when `sample_size == 0` — no verified alert of this type yet,
+    # not "0% confirmed".
+    confirmation_rate: float | None
+
+
+class ValidationMetricsOut(BaseModel):
+    """Real backtesting metrics (ADR-0036/0058) — computed from
+    `AlertVerification` rows an operator actually recorded, never
+    simulated/fabricated data.
+
+    Only a *confirmation rate* (of alerts StormPulse issued, how many were
+    later confirmed true — `engine.validation.precision_recall`'s
+    `precision`) is reported, not recall: every row here comes from an
+    `Alert` that was already issued, so there is no way yet to observe a
+    real event that StormPulse *failed* to alert on (a false negative) —
+    reporting a `recall` computed only from issued alerts would silently
+    read as 1.0 regardless of how many storms were actually missed, which
+    would be a fabricated-looking number, not a measured one.
+    """
+
+    sample_size: int
+    confirmed_count: int
+    confirmation_rate: float | None
+    by_event_type: dict[str, EventTypeMetricsOut]
+    eta_sample_size: int
+    mean_absolute_eta_error_minutes: float | None
+    # Below this many resolved verifications, `confirmation_rate` is
+    # statistically too noisy to act on (ADR-0036 flagged this gate as
+    # needed but left the threshold undefined — set here at 30).
+    min_sample_size: int
+    reliable: bool
