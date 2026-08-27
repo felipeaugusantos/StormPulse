@@ -32,7 +32,9 @@ SES_FROM_EMAIL="${SES_FROM_EMAIL:-}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 STATE_FILE="${DISK_ALERT_STATE_FILE:-/var/lib/stormpulse/disk-alert.state}"
 
-usage_percent="$(df -P "$DISK_CHECK_PATH" | awk 'NR==2 { gsub("%", "", $5); print $5 }')"
+# LC_ALL=C: df's column formatting/decimal separators can vary under an
+# exotic locale — force the plain, POSIX-guaranteed layout `-P` promises.
+usage_percent="$(LC_ALL=C df -P "$DISK_CHECK_PATH" | awk 'NR==2 { gsub("%", "", $5); print $5 }')"
 if [ -z "$usage_percent" ]; then
   echo "ERROR: could not read disk usage for $DISK_CHECK_PATH" >&2
   exit 1
@@ -53,9 +55,12 @@ send_email() {
   fi
   # A JSON file, not the CLI's inline shorthand syntax — the shorthand
   # parser breaks on the commas/braces this script's own messages contain.
+  # Cleaned up inline (no RETURN trap) — a plain, unconditional `rm -f`
+  # right after the call is simpler to reason about than a trap's
+  # function-scope/set-e interaction, and just as reliable here since
+  # there's exactly one exit point.
   local json_file
   json_file="$(mktemp)"
-  trap 'rm -f "$json_file"' RETURN
   cat >"$json_file" <<EOF
 {
   "Source": "$SES_FROM_EMAIL",
@@ -68,6 +73,7 @@ send_email() {
 EOF
   aws ses send-email --region "$AWS_REGION" --cli-input-json "file://$json_file" >/dev/null ||
     echo "WARNING: SES send-email failed — see logs." >&2
+  rm -f "$json_file"
 }
 
 mkdir -p "$(dirname "$STATE_FILE")"
