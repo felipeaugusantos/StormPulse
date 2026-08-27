@@ -64,6 +64,11 @@ if [ -f "$S2/aws.log" ] && grep -q "send-email" "$S2/aws.log" && [ -f "$S2/state
   pass "above threshold (first time): sends an alert and opens a state file"
 else
   fail "above threshold (first time): did not alert or did not open a state file"
+  echo "--- DEBUG: $S2/out.log ---"
+  cat "$S2/out.log" 2>&1 || echo "(no out.log)"
+  echo "--- DEBUG: ls $S2 ---"
+  ls -la "$S2" 2>&1
+  echo "--- END DEBUG ---"
 fi
 
 # --- Scenario 3: still above threshold, alert already open — no duplicate ---
