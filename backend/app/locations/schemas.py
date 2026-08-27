@@ -15,6 +15,19 @@ from app.ndvi.schemas import NdviOut
 
 _MIN_POLYGON_RING_POINTS = 4
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+# The three main ZARC soil-texture classes (Cod_Solo 1/2/3 in the MAPA
+# dictionary) — the more specialized AD1-AD6 water-holding-capacity
+# classes some crops also use aren't offered here, to keep the picker
+# simple (item ZARC, ADR-0069).
+_SOIL_TYPES = {"arenoso", "textura_media", "argiloso"}
+
+
+def _validate_soil_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if value not in _SOIL_TYPES:
+        raise ValueError(f"soil_type precisa ser um de: {', '.join(sorted(_SOIL_TYPES))}")
+    return value
 
 
 def _validate_color(value: str | None) -> str | None:
@@ -78,6 +91,9 @@ class LocationBase(BaseModel):
     # isn't itself a plot) since that needs a DB lookup.
     parent_location_id: uuid.UUID | None = None
     crop: str | None = Field(default=None, max_length=60)
+    # Soil texture class (item ZARC, ADR-0069) — needed to match the
+    # talhão's crop+município against the right ZARC planting window.
+    soil_type: str | None = Field(default=None)
     # Visual-only polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon
     # serialized as a JSON string, e.g. {"type":"Polygon","coordinates":
     # [[[lng,lat],...]]}. Never used for weather/agro lookups — those keep
@@ -90,6 +106,7 @@ class LocationBase(BaseModel):
 
     _check_boundary_geojson = field_validator("boundary_geojson")(_validate_boundary_geojson)
     _check_color = field_validator("color")(_validate_color)
+    _check_soil_type = field_validator("soil_type")(_validate_soil_type)
 
 
 class LocationCreate(LocationBase):
@@ -106,11 +123,13 @@ class LocationUpdate(BaseModel):
     is_active: bool | None = None
     alert_preferences: list[AlertPreferenceIn] | None = None
     crop: str | None = Field(default=None, max_length=60)
+    soil_type: str | None = Field(default=None)
     boundary_geojson: str | None = Field(default=None)
     color: str | None = Field(default=None)
 
     _check_boundary_geojson = field_validator("boundary_geojson")(_validate_boundary_geojson)
     _check_color = field_validator("color")(_validate_color)
+    _check_soil_type = field_validator("soil_type")(_validate_soil_type)
 
 
 class LocationOut(LocationBase):
@@ -165,3 +184,33 @@ class WeeklyReportOut(BaseModel):
     alerts: list[AlertOut]
     ndvi_readings: list[NdviOut]
     generated_at: datetime
+
+
+class ZarcMatchOut(BaseModel):
+    """One MAPA-published ZARC row matching the talhão's crop/solo/
+    município — a talhão can match more than one (different cultivar
+    cycle groups have different windows for the same crop), never merged
+    into a single guessed number here."""
+
+    cultura: str
+    cod_ciclo: int
+    ciclo_label: str
+    safra_ini: int
+    safra_fin: int
+    portaria: str | None
+    # 36 ten-day periods of the year, in order — 0 means "not a
+    # recommended window", a non-zero value is the official risk
+    # percentage tier (20/30/40 — lower is safer).
+    decendios: list[int]
+
+
+class ZarcWindowOut(BaseModel):
+    """Planting-window info for a single talhão (item ZARC, ADR-0069) —
+    purely informational, never generates an alert on its own (no
+    planting-date field exists yet to compare against)."""
+
+    location_id: uuid.UUID
+    geocodigo: str
+    municipio: str
+    uf: str
+    matches: list[ZarcMatchOut]

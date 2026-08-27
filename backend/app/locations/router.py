@@ -23,7 +23,9 @@ from app.locations.schemas import (
     LocationUpdate,
     SprayWindowOut,
     WeeklyReportOut,
+    ZarcWindowOut,
 )
+from app.locations.zarc_service import ZarcLookupUnavailableError, get_zarc_window
 from app.ndvi.models import NdviReading
 from app.ndvi.schemas import NdviOut
 from app.storms import service as storm_service
@@ -433,3 +435,30 @@ async def get_location_weekly_report_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get(
+    "/{location_id}/agro/zarc-window",
+    response_model=ZarcWindowOut,
+    summary="Janela de plantio oficial (ZARC/MAPA) do talhão (ADR-0069)",
+)
+async def get_location_zarc_window(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_request_settings),
+) -> ZarcWindowOut:
+    """Informational-only planting-window lookup against MAPA's own
+    published Tábua de Risco (item ZARC) — talhão-only (same scoping as
+    NDVI/weekly-report): a farm-level point has no crop/soil of its own to
+    look up. Never generates an alert on its own."""
+    location = await _get_owned_or_404(session, user, location_id)
+    if location.parent_location_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Janela ZARC só está disponível para talhões",
+        )
+    try:
+        return await get_zarc_window(session, location, settings)
+    except ZarcLookupUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

@@ -37,6 +37,12 @@ class Location(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     # plot, but not enforced at the DB level (a farm without plots may
     # still want to record what it grows).
     crop: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # Soil texture class (item ZARC — janela de plantio) — one of the three
+    # main classes the ZARC portarias key by (arenoso/textura_media/
+    # argiloso); the more specialized AD1-AD6 water-holding-capacity
+    # classes some crops also use aren't offered here, to keep the picker
+    # simple. Only meaningful for a plot, same non-enforcement as `crop`.
+    soil_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Visual-only polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon
     # geometry serialized as JSON text, e.g. drawn on the dashboard map for
     # a talhão. Purely cosmetic: latitude/longitude above (not this) is what

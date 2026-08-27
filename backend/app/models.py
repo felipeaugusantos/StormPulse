@@ -19,6 +19,7 @@ from app.storms.models import StormCell, StormObservation, StormRisk, StormTrack
 from app.tenants.models import Tenant
 from app.users.models import User
 from app.weather.models import RadarFrame, WeatherSource
+from app.zarc.models import ZarcRiskWindow
 
 __all__ = [
     "Alert",
@@ -41,4 +42,5 @@ __all__ = [
     "User",
     "UserReport",
     "WeatherSource",
+    "ZarcRiskWindow",
 ]

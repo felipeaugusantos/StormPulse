@@ -76,5 +76,13 @@ celery_app.conf.update(
             # honest and kinder to the API" reasoning as agro above.
             "schedule": 3_600.0,  # seconds
         },
+        "zarc-check-weekly": {
+            "task": "workers.tasks.run_zarc_ingestion_task",
+            # MAPA's own Tábua de Risco CSV is a static government file,
+            # not a live feed — checking more often than its own
+            # publication cadence would just re-download the same
+            # multi-megabyte file for no new data (item ZARC, ADR-0069).
+            "schedule": 604_800.0,  # seconds (7 days)
+        },
     },
 )

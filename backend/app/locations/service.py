@@ -60,6 +60,7 @@ async def create_location(session: AsyncSession, user: User, data: LocationCreat
         geom=point_wkt(data.latitude, data.longitude),
         parent_location_id=data.parent_location_id,
         crop=data.crop,
+        soil_type=data.soil_type,
         boundary_geojson=data.boundary_geojson,
         color=data.color,
     )

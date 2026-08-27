@@ -299,6 +299,20 @@ class Settings(BaseSettings):
     # a cada 5 minutos.
     raw_frame_retention_days: int = Field(default=30, gt=0)
 
+    # --- Janela de plantio ZARC (item ZARC, ADR-0069) ---
+    # MAPA publica um CSV por safra (dados.agricultura.gov.br), sem
+    # datastore/consulta via API — só download do arquivo inteiro. A URL
+    # muda de nome a cada safra (o ano está no próprio nome do arquivo),
+    # então precisa de atualização manual uma vez por ano — nunca
+    # adivinhada automaticamente a partir da data de hoje.
+    zarc_enabled: bool = True
+    zarc_csv_url: str = (
+        "https://dados.agricultura.gov.br/dataset/6d3d141c-885e-41a4-ab7f-dc8ff323b96f/"
+        "resource/139e5a60-1f43-4cc8-aeab-a35dbbf816c0/download/"
+        "dados-abertos-tabua-de-risco-safra-2026-2027.csv"
+    )
+    zarc_http_timeout_seconds: float = Field(default=120.0, gt=0)
+
     # --- Boletins oficiais (item 3, ADR-0064) ---
     # Reusa WeatherProvider.get_warnings (INMET `/avisos/ativos`) já
     # existente — a única fonte nacional, pública, sem cadastro, de alertas

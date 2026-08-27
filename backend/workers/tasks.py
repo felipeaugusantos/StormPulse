@@ -25,6 +25,7 @@ from workers.notification_pipeline import run_notification_delivery_cycle
 from workers.official_warnings_pipeline import run_official_warnings_cycle
 from workers.pipeline_service import run_ingestion_cycle
 from workers.satellite_pipeline import run_satellite_detection_cycle
+from workers.zarc_pipeline import run_zarc_ingestion_cycle
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,18 @@ def run_official_warnings_task() -> dict[str, Any]:
         "alerts_created": summary.alerts_created,
     }
     logger.info("official warnings cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_zarc_ingestion_task")
+def run_zarc_ingestion_task() -> dict[str, Any]:
+    """Refresh the ZARC planting-window reference table (item ZARC,
+    ADR-0069). No-op (returns immediately) when ZARC_ENABLED=false.
+    """
+    with track_pipeline_cycle("zarc"), session_scope() as session:
+        summary = run_zarc_ingestion_cycle(session)
+    result = {"enabled": summary.enabled, "rows_ingested": summary.rows_ingested}
+    logger.info("ZARC ingestion task complete", extra=result)
     return result
 
 
