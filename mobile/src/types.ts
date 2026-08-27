@@ -77,6 +77,14 @@ export interface LightningStrike {
   is_mock: boolean
 }
 
+export interface SatelliteImageMeta {
+  captured_at: string
+  bbox: [number, number, number, number]
+  band: string
+  width: number
+  height: number
+}
+
 export interface ConvectiveWatch {
   id: string
   first_detected_at: string

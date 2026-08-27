@@ -10,6 +10,7 @@ import type {
   LocationItem,
   Me,
   RainfallHistory,
+  SatelliteImageMeta,
   SprayWindow,
   StormCell,
   StormRisk,
@@ -159,6 +160,16 @@ export const api = {
   storms: () => request<StormCell[]>('/storms?limit=200'),
   lightning: () => request<LightningStrike[]>('/lightning'),
   satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),
+  // No cycle has run yet (or SATELLITE_ENABLED=false) is a normal, common
+  // state — treated as "no image", not an error (mirrors web/src/api.ts).
+  satelliteImage: async (): Promise<SatelliteImageMeta | null> => {
+    try {
+      return await request<SatelliteImageMeta>('/public/satellite/image')
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null
+      throw err
+    }
+  },
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
   // Always Open-Meteo, bypassing INMET/CPTEC (ADR-0020) — the only source
   // with a real numeric rain forecast, needed for trafficability/water
@@ -181,4 +192,12 @@ export const api = {
       method: 'DELETE',
       body: JSON.stringify({ expo_push_token }),
     }),
+}
+
+// react-native-maps' Overlay fetches this URL directly (no Authorization
+// header attached) — the endpoint must be, and is, public. `capturedAt`
+// in the query string busts the cache when a new frame is available.
+// Mirrors web/src/api.ts's satelliteImagePngUrl.
+export function satelliteImagePngUrl(capturedAt: string): string {
+  return `${V1}/public/satellite/image.png?t=${encodeURIComponent(capturedAt)}`
 }

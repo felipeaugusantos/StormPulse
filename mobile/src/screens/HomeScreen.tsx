@@ -17,6 +17,7 @@ import type {
   LocationItem,
   Me,
   RiskLevel,
+  SatelliteImageMeta,
   StormCell,
   StormRisk,
 } from '../types'
@@ -49,6 +50,8 @@ export function HomeScreen({ onLogout }: Props) {
   const [storms, setStorms] = useState<StormCell[]>([])
   const [lightning, setLightning] = useState<LightningStrike[]>([])
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
+  const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
+  const [showSatelliteImage, setShowSatelliteImage] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -56,7 +59,7 @@ export function HomeScreen({ onLogout }: Props) {
     setRefreshing(true)
     setError(null)
     try {
-      const [locations, alertList, meResult, stormList, lightningList, watchList] =
+      const [locations, alertList, meResult, stormList, lightningList, watchList, imageMeta] =
         await Promise.all([
           api.locations(),
           api.alerts(),
@@ -64,6 +67,7 @@ export function HomeScreen({ onLogout }: Props) {
           api.storms(),
           api.lightning(),
           api.satelliteWatches(),
+          api.satelliteImage(),
         ])
       const withRisk = await Promise.all(
         locations.map(async (location) => {
@@ -80,6 +84,7 @@ export function HomeScreen({ onLogout }: Props) {
       setStorms(stormList)
       setLightning(lightningList)
       setSatelliteWatches(watchList)
+      setSatelliteImage(imageMeta)
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         await logout()
@@ -180,12 +185,23 @@ export function HomeScreen({ onLogout }: Props) {
       {error && <Text style={styles.error}>⚠️ {error}</Text>}
 
       {items.length > 0 && (
-        <StormMapView
-          locations={items.map((i) => i.location)}
-          storms={storms}
-          lightning={lightning}
-          satelliteWatches={satelliteWatches}
-        />
+        <>
+          <StormMapView
+            locations={items.map((i) => i.location)}
+            storms={storms}
+            lightning={lightning}
+            satelliteWatches={satelliteWatches}
+            satelliteImage={satelliteImage}
+            showSatelliteImage={showSatelliteImage}
+          />
+          {satelliteImage && (
+            <TouchableOpacity onPress={() => setShowSatelliteImage((v) => !v)}>
+              <Text style={styles.link}>
+                {showSatelliteImage ? '🛰️ ocultar imagem de satélite' : '🛰️ mostrar imagem de satélite'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </>
       )}
 
       <Text style={styles.section}>Alertas</Text>

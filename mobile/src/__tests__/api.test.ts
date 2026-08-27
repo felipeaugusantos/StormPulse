@@ -7,7 +7,7 @@
 jest.mock('expo-secure-store')
 
 import * as authStorage from '../authStorage'
-import { ApiError, api, login, logout, register } from '../api'
+import { ApiError, api, login, logout, register, satelliteImagePngUrl } from '../api'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const secureStoreMock = require('expo-secure-store') as { __reset: () => void }
@@ -260,5 +260,32 @@ describe('paridade mobile (item 5)', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/storms')
     expect(String(fetchMock.mock.calls[1][0])).toContain('/lightning')
     expect(String(fetchMock.mock.calls[2][0])).toContain('/satellite')
+  })
+
+  test('satelliteImage() returns null on a 404 (no cycle run yet)', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(jsonResponse(404, { detail: 'not found' }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await api.satelliteImage()
+
+    expect(result).toBeNull()
+  })
+
+  test('satelliteImage() returns the metadata when a frame exists', async () => {
+    const meta = { captured_at: '2026-01-01T00:00:00Z', bbox: [-74, -34, -34, 6], band: 'B13' }
+    const fetchMock = jest.fn().mockResolvedValueOnce(jsonResponse(200, meta))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await api.satelliteImage()
+
+    expect(result).toEqual(meta)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/public/satellite/image')
+  })
+
+  test('satelliteImagePngUrl() builds a public URL with a cache-busting timestamp', () => {
+    const url = satelliteImagePngUrl('2026-01-01T00:00:00Z')
+
+    expect(url).toContain('/public/satellite/image.png')
+    expect(url).toContain(encodeURIComponent('2026-01-01T00:00:00Z'))
   })
 })

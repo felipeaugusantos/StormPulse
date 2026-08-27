@@ -1,6 +1,13 @@
 import { StyleSheet, Text, View } from 'react-native'
-import MapView, { Callout, Circle, Marker } from 'react-native-maps'
-import type { ConvectiveWatch, LightningStrike, LocationItem, StormCell } from '../types'
+import MapView, { Callout, Circle, Marker, Overlay } from 'react-native-maps'
+import { satelliteImagePngUrl } from '../api'
+import type {
+  ConvectiveWatch,
+  LightningStrike,
+  LocationItem,
+  SatelliteImageMeta,
+  StormCell,
+} from '../types'
 import { colors } from '../theme'
 
 // Same palette as web/src/components/StormMap.tsx's SEVERITY_COLOR — kept
@@ -17,6 +24,8 @@ interface Props {
   storms: StormCell[]
   lightning: LightningStrike[]
   satelliteWatches: ConvectiveWatch[]
+  satelliteImage?: SatelliteImageMeta | null
+  showSatelliteImage?: boolean
   height?: number
 }
 
@@ -30,6 +39,8 @@ export function StormMapView({
   storms,
   lightning,
   satelliteWatches,
+  satelliteImage = null,
+  showSatelliteImage = true,
   height = 260,
 }: Props) {
   const center = locations[0] ?? { latitude: -23.5, longitude: -46.6 }
@@ -45,6 +56,22 @@ export function StormMapView({
           longitudeDelta: 4,
         }}
       >
+        {showSatelliteImage && satelliteImage && (
+          // Rendered first (bottom-most) — a raster frame behind every
+          // point/circle layer below, same z-order as web's MapLibre
+          // 'satellite-image' source (StormMap.tsx). react-native-maps'
+          // Overlay fetches the PNG straight from its `uri`, same as web's
+          // MapLibre `image` source — no local download needed.
+          <Overlay
+            bounds={[
+              [satelliteImage.bbox[3], satelliteImage.bbox[2]],
+              [satelliteImage.bbox[1], satelliteImage.bbox[0]],
+            ]}
+            image={{ uri: satelliteImagePngUrl(satelliteImage.captured_at) }}
+            opacity={0.55}
+          />
+        )}
+
         {locations.map((location) => (
           <View key={location.id}>
             <Marker
