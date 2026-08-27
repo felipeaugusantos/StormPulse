@@ -12,6 +12,19 @@ fail() {
   FAILED=1
 }
 
+# Guards against exactly the bug that slipped past this suite once
+# already: the script committed without its executable bit set (git mode
+# 100644 instead of 100755) made every scenario that expects a file to be
+# CREATED fail with "Permission denied" — but scenarios expecting NO file
+# to be created (below-threshold, already-alerted) passed anyway, since
+# "the script never ran at all" also satisfies "no file was created".
+# Checked explicitly here so that specific failure mode is loud, not a
+# silent false-positive on half the scenarios.
+if [ ! -x "./infra/check-disk-space.sh" ]; then
+  fail "infra/check-disk-space.sh is not executable (git mode must be 100755 — run: git update-index --chmod=+x infra/check-disk-space.sh)"
+  exit 1
+fi
+
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/bin"
@@ -64,11 +77,6 @@ if [ -f "$S2/aws.log" ] && grep -q "send-email" "$S2/aws.log" && [ -f "$S2/state
   pass "above threshold (first time): sends an alert and opens a state file"
 else
   fail "above threshold (first time): did not alert or did not open a state file"
-  echo "--- DEBUG: $S2/out.log ---"
-  cat "$S2/out.log" 2>&1 || echo "(no out.log)"
-  echo "--- DEBUG: ls $S2 ---"
-  ls -la "$S2" 2>&1
-  echo "--- END DEBUG ---"
 fi
 
 # --- Scenario 3: still above threshold, alert already open — no duplicate ---
