@@ -25,6 +25,7 @@ import type {
   StormCell,
   WarningItem,
   WeeklyReport,
+  ZarcWindow,
 } from './types'
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -269,6 +270,9 @@ export interface CreateLocationInput {
   // the parent farm.
   parent_location_id?: string
   crop?: string
+  // Soil texture class (item ZARC, ADR-0069) — `arenoso`/`textura_media`/
+  // `argiloso`.
+  soil_type?: string
   // Visual-only polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon
   // serialized as a JSON string.
   boundary_geojson?: string
@@ -284,6 +288,7 @@ export interface UpdateLocationInput {
   radius_km?: number
   is_active?: boolean
   crop?: string
+  soil_type?: string
   boundary_geojson?: string
   color?: string
 }
@@ -346,6 +351,11 @@ export const api = {
   // as a downloadable PDF.
   weeklyReportPdf: (locationId: string) =>
     requestBlob(`/locations/${locationId}/agro/weekly-report/pdf`),
+  // Item ZARC (ADR-0069) — talhão-only, 404s the same way as ndvi()/
+  // weeklyReport() when the talhão has no crop/soil set or no MAPA window
+  // matches it.
+  zarcWindow: (locationId: string) =>
+    request<ZarcWindow>(`/locations/${locationId}/agro/zarc-window`),
   // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever
   // called when `Me.is_platform_admin` is true; the backend 403s otherwise.
   adminUsers: (opts: { search?: string; limit?: number; offset?: number } = {}) => {

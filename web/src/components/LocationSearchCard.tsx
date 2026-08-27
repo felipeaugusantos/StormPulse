@@ -62,6 +62,7 @@ export function LocationSearchCard({
   const [addingPlotFor, setAddingPlotFor] = useState<string | null>(null)
   const [plotName, setPlotName] = useState('')
   const [plotCrop, setPlotCrop] = useState('')
+  const [plotSoilType, setPlotSoilType] = useState('')
   const [plotLatitude, setPlotLatitude] = useState(0)
   const [plotLongitude, setPlotLongitude] = useState(0)
   const [plotBoundaryGeojson, setPlotBoundaryGeojson] = useState<string | null>(null)
@@ -165,6 +166,7 @@ export function LocationSearchCard({
     setAddingPlotFor(farm.id)
     setPlotName('')
     setPlotCrop('')
+    setPlotSoilType('')
     setPlotLatitude(farm.latitude)
     setPlotLongitude(farm.longitude)
     setPlotBoundaryGeojson(null)
@@ -182,6 +184,7 @@ export function LocationSearchCard({
         longitude: plotLongitude,
         parent_location_id: farmId,
         crop: plotCrop.trim() || undefined,
+        soil_type: plotSoilType || undefined,
         boundary_geojson: plotBoundaryGeojson ?? undefined,
         color: plotColor,
       })
@@ -366,6 +369,16 @@ export function LocationSearchCard({
                       }}
                       placeholder="soja, milho, café…"
                     />
+                    <label>Tipo de solo (opcional — para janela ZARC)</label>
+                    <select
+                      value={plotSoilType}
+                      onChange={(e) => setPlotSoilType(e.target.value)}
+                    >
+                      <option value="">não informado</option>
+                      <option value="arenoso">Arenoso</option>
+                      <option value="textura_media">Textura média</option>
+                      <option value="argiloso">Argiloso</option>
+                    </select>
                     <label>Cor no mapa</label>
                     <input
                       type="color"

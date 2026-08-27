@@ -12,6 +12,7 @@ import type {
   SatelliteImageMeta,
   SprayWindow,
   StormCell,
+  ZarcWindow,
 } from '../types'
 import {
   classifyDiseaseRisk,
@@ -440,6 +441,11 @@ export function Dashboard({ onLogout }: Props) {
               entries={agroEntries}
               onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
             />
+            <ZarcPanel
+              activeLocations={agroActiveLocations}
+              entries={agroEntries}
+              onSelect={(lat, lon) => mapRef.current?.flyTo(lat, lon)}
+            />
           </div>
         )}
 
@@ -832,6 +838,7 @@ interface AgroEntry {
   vpdLevel: VpdLevel
   ndvi: NdviReading | null
   ndviLevel: NdviLevel
+  zarcWindow: ZarcWindow | null
   error: string | null
 }
 
@@ -892,22 +899,32 @@ function useAgroEntries(locations: LocationItem[]): {
         active.map(async (l): Promise<[string, AgroEntry]> => {
           try {
             const isTalhaoWithBoundary = l.parent_location_id != null && l.boundary_geojson != null
-            const [forecast, sprayWindow, rainfall, rainForecast, ndvi] = await Promise.all([
-              api.forecast(l.id).catch(() => null),
-              api.sprayWindow(l.id).catch(() => null),
-              api.rainfall(l.id).catch(() => null),
-              // Always Open-Meteo (bypasses INMET/CPTEC, ADR-0020) — the
-              // general forecast above often comes from CPTEC instead
-              // (whenever INMET is down), which never has a rain number at
-              // all, so trafficability would otherwise almost always come
-              // back "unknown" even when Open-Meteo has the answer.
-              api.rainForecast(l.id).catch(() => null),
-              // Only talhões (a plot with a drawn boundary) ever have NDVI
-              // data (FASE 29, ADR-0053) — skip the call entirely for a
-              // farm-level point instead of hitting an endpoint that would
-              // just 404 every refresh cycle.
-              isTalhaoWithBoundary ? api.ndvi(l.id).catch(() => null) : Promise.resolve(null),
-            ])
+            // ZARC (item ZARC, ADR-0069) only has an answer for a talhão
+            // with both crop and soil_type set — skip the call otherwise
+            // instead of hitting an endpoint that would just 404 every
+            // refresh cycle.
+            const isTalhaoWithCropAndSoil =
+              l.parent_location_id != null && l.crop != null && l.soil_type != null
+            const [forecast, sprayWindow, rainfall, rainForecast, ndvi, zarcWindow] =
+              await Promise.all([
+                api.forecast(l.id).catch(() => null),
+                api.sprayWindow(l.id).catch(() => null),
+                api.rainfall(l.id).catch(() => null),
+                // Always Open-Meteo (bypasses INMET/CPTEC, ADR-0020) — the
+                // general forecast above often comes from CPTEC instead
+                // (whenever INMET is down), which never has a rain number
+                // at all, so trafficability would otherwise almost always
+                // come back "unknown" even when Open-Meteo has the answer.
+                api.rainForecast(l.id).catch(() => null),
+                // Only talhões (a plot with a drawn boundary) ever have
+                // NDVI data (FASE 29, ADR-0053) — skip the call entirely
+                // for a farm-level point instead of hitting an endpoint
+                // that would just 404 every refresh cycle.
+                isTalhaoWithBoundary ? api.ndvi(l.id).catch(() => null) : Promise.resolve(null),
+                isTalhaoWithCropAndSoil
+                  ? api.zarcWindow(l.id).catch(() => null)
+                  : Promise.resolve(null),
+              ])
             const { severe, light } = classifyFrostDays(
               forecast?.points ?? [],
               FROST_THRESHOLD_C,
@@ -938,6 +955,7 @@ function useAgroEntries(locations: LocationItem[]): {
                 ...deriveAgroSignals(upcomingRain[0] ?? null),
                 ndvi,
                 ndviLevel: classifyNdvi(ndvi?.ndvi_mean ?? null),
+                zarcWindow,
                 error:
                   forecast == null && sprayWindow == null && rainfall == null
                     ? 'Dados agro indisponíveis no momento'
@@ -957,6 +975,7 @@ function useAgroEntries(locations: LocationItem[]): {
                 ...EMPTY_AGRO_DERIVED,
                 ndvi: null,
                 ndviLevel: 'unknown' as NdviLevel,
+                zarcWindow: null,
                 error: 'Dados agro indisponíveis no momento',
               },
             ]
@@ -1292,6 +1311,68 @@ function NdviPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
                       </div>
                     ) : (
                       <div className="agro-row sub">{NDVI_LABEL.unknown}</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+/** Only ever shows talhões with both crop and soil_type set — ZARC has no
+ * meaning for a farm-level point or a talhão missing either field (item
+ * ZARC, ADR-0069). Purely informational: no alert is derived from it,
+ * there's no planting-date field to compare the windows against yet. */
+function ZarcPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
+  const talhoes = activeLocations.filter(
+    (l) => l.parent_location_id != null && l.crop != null && l.soil_type != null,
+  )
+  return (
+    <section className="panel">
+      <h2>
+        🌱 Janela de Plantio (ZARC) <span className="count">{talhoes.length}</span>
+      </h2>
+      <p className="panel-hint">
+        Zoneamento Agrícola de Risco Climático (MAPA) — só disponível para talhões com cultura e
+        tipo de solo informados. Informativo, não gera alerta.
+      </p>
+      <div className="list">
+        {talhoes.length === 0 && (
+          <p className="empty">Nenhum talhão com cultura e tipo de solo informados ainda.</p>
+        )}
+        {talhoes.map((l) => {
+          const entry = entries[l.id]
+          return (
+            <div
+              className="row clickable"
+              key={l.id}
+              onClick={() => onSelect(l.latitude, l.longitude)}
+              role="button"
+              tabIndex={0}
+            >
+              <div className="grow">
+                <div>{l.name}</div>
+                {!entry && <div className="sub">carregando…</div>}
+                {entry && (
+                  <div className="agro-section">
+                    {entry.zarcWindow && entry.zarcWindow.matches.length > 0 ? (
+                      entry.zarcWindow.matches.map((m) => (
+                        <div
+                          className="agro-row"
+                          key={`${m.cultura}-${m.cod_ciclo}`}
+                        >
+                          {m.cultura} ({m.ciclo_label}) — safra {m.safra_ini}/{m.safra_fin}
+                          {m.portaria && ` — ${m.portaria}`}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="agro-row sub">
+                        Nenhuma janela ZARC encontrada para este talhão
+                      </div>
                     )}
                   </div>
                 )}

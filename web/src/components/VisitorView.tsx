@@ -65,6 +65,7 @@ export function VisitorView({ onBack }: Props) {
       alert_preferences: [],
       parent_location_id: null,
       crop: null,
+      soil_type: null,
       boundary_geojson: null,
       color: null,
     }),

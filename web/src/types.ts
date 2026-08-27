@@ -164,6 +164,9 @@ export interface LocationItem {
   // culture label (soja, milho, café...).
   parent_location_id: string | null
   crop: string | null
+  // Soil texture class (item ZARC, ADR-0069) — needed to match a talhão's
+  // crop+município against the right ZARC planting window.
+  soil_type: string | null
   // Visual-only polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon
   // serialized as a JSON string, or `null` when this location has no
   // drawn boundary. Never used for weather/agro lookups.
@@ -213,6 +216,26 @@ export interface WeeklyReport {
   alerts: AlertItem[]
   ndvi_readings: NdviReading[]
   generated_at: string
+}
+
+// ZARC planting-window info for a talhão (item ZARC, ADR-0069) — purely
+// informational, never generates an alert on its own.
+export interface ZarcMatch {
+  cultura: string
+  cod_ciclo: number
+  ciclo_label: string
+  safra_ini: number
+  safra_fin: number
+  portaria: string | null
+  decendios: number[]
+}
+
+export interface ZarcWindow {
+  location_id: string
+  geocodigo: string
+  municipio: string
+  uf: string
+  matches: ZarcMatch[]
 }
 
 export interface ForecastPoint {
