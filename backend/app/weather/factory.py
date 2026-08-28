@@ -31,6 +31,9 @@ def _build_open_meteo(settings: Settings) -> OpenMeteoWeatherProvider:
     return OpenMeteoWeatherProvider(
         forecast_url=settings.open_meteo_forecast_url,
         archive_url=settings.open_meteo_archive_url,
+        api_key=(
+            settings.open_meteo_api_key.get_secret_value() if settings.open_meteo_api_key else None
+        ),
         http_timeout_seconds=settings.open_meteo_http_timeout_seconds,
     )
 

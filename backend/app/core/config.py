@@ -62,6 +62,7 @@ _OPTIONAL_FIELDS_EMPTY_MEANS_UNSET = (
     "redemet_api_key",
     "ndvi_sh_client_id",
     "ndvi_sh_client_secret",
+    "open_meteo_api_key",
     "vapid_private_key",
     "vapid_public_key",
     "ses_from_email",
@@ -280,13 +281,23 @@ class Settings(BaseSettings):
     cptec_fallback_enabled: bool = True
 
     # --- Open-Meteo (redundância, FASE 20) ---
-    # Terceiro nível de fallback, atrás de INMET e CPTEC — agregador
-    # internacional sem chave (ver ADR-0015). Único dos 3 que dá previsão
-    # numérica de chuva de verdade (probabilidade + mm), não só
-    # texto/código. Gratuito até 10.000 chamadas/dia para uso não
-    # comercial — StormPulse fica bem abaixo disso.
+    # Terceiro nível de fallback, atrás de INMET e CPTEC. Único dos 3 que dá
+    # previsão numérica de chuva de verdade (probabilidade + mm), não só
+    # texto/código.
+    #
+    # Assinatura comercial "Standard" (ADR-0074, item 2026-08-28): o nível
+    # gratuito é documentado como só-pra-uso-não-comercial e compartilha
+    # limite de taxa por IP entre todo mundo anônimo — o IP de produção
+    # levou throttle sustentado especificamente no endpoint de previsão.
+    # Com `open_meteo_api_key` configurada, `OpenMeteoWeatherProvider` troca
+    # sozinho pro host dedicado `customer-api.open-meteo.com` só pra
+    # previsão — o endpoint de histórico/arquivo (`open_meteo_archive_url`)
+    # nunca recebe a chave nem troca de host, porque o plano Standard não
+    # inclui a API histórica (só o Professional inclui); tentar autenticar
+    # lá provavelmente devolveria 403 em vez de funcionar.
     open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
     open_meteo_archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
+    open_meteo_api_key: SecretStr | None = None
     open_meteo_http_timeout_seconds: float = Field(default=10.0, gt=0)
     open_meteo_fallback_enabled: bool = True
 

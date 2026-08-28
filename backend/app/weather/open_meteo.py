@@ -1,10 +1,26 @@
-"""OpenMeteoWeatherProvider — international, no-key aggregator of national
-weather models (FASE 20).
+"""OpenMeteoWeatherProvider — Open-Meteo weather models, third fallback
+tier (FASE 20).
+
+**Real production incident (2026-08-28, ADR-0074)**: the free/anonymous
+tier is documented as non-commercial-use-only and shares a per-IP rate
+limit across every anonymous caller — StormPulse's production IP got
+throttled specifically on the forecast endpoint (`get_current_data`/
+`get_forecast`, both backed by the same call) for a sustained period,
+while the archive endpoint (lower volume) kept working. Fixed by
+subscribing to Open-Meteo's paid "Standard" commercial plan: when
+`api_key` is set, forecast calls are routed to the dedicated
+`customer-api.open-meteo.com` host with the key attached, per Open-Meteo's
+own onboarding instructions — no more shared IP, no more rate limit within
+the plan's monthly budget. The archive/historical endpoint is deliberately
+**not** switched to the customer host or given the key: the Standard plan
+explicitly does not include the historical weather API (Professional
+does) — attaching a key there would very likely 403 rather than succeed,
+so `get_recent_rainfall` keeps using the free public archive host exactly
+as before.
 
 Third redundancy tier, behind INMET and INPE/CPTEC — see
-``FallbackWeatherProvider`` and ADR-0015. Free for non-commercial use under
-10,000 calls/day (Open-Meteo's terms; StormPulse is well under that), no
-API key. Unlike INMET/CPTEC, this genuinely gives **numeric** precipitation
+``FallbackWeatherProvider`` and ADR-0015. Unlike INMET/CPTEC, this
+genuinely gives **numeric** precipitation
 probability and amount in the daily forecast — neither of the other two
 sources can (see ADR-0011/0014) — so ``ForecastPoint.precipitation_*`` gets
 populated here for the first time, not left ``None``.
@@ -68,19 +84,33 @@ class WeatherProviderUnavailableError(_BaseWeatherProviderUnavailableError):
     """Raised when Open-Meteo data cannot be honestly produced for a request."""
 
 
+_CUSTOMER_FORECAST_HOST = "https://customer-api.open-meteo.com"
+_PUBLIC_FORECAST_HOST = "https://api.open-meteo.com"
+
+
 class OpenMeteoWeatherProvider(WeatherProvider):
-    """Third-tier real weather source backed by Open-Meteo's public API."""
+    """Third-tier real weather source backed by Open-Meteo's API."""
 
     def __init__(
         self,
         *,
         forecast_url: str = "https://api.open-meteo.com/v1/forecast",
         archive_url: str = "https://archive-api.open-meteo.com/v1/archive",
+        api_key: str | None = None,
         http_timeout_seconds: float = 10.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
-        self._forecast_url = forecast_url
+        # Only the forecast host has a paid/commercial tier we're actually
+        # subscribed to (see module docstring) — swap it to the dedicated
+        # customer host when a key is configured; the archive host is left
+        # untouched no matter what, since our plan doesn't cover it.
+        self._forecast_url = (
+            forecast_url.replace(_PUBLIC_FORECAST_HOST, _CUSTOMER_FORECAST_HOST, 1)
+            if api_key
+            else forecast_url
+        )
         self._archive_url = archive_url
+        self._api_key = api_key
         self._client = client or httpx.AsyncClient(timeout=http_timeout_seconds)
 
     @property
@@ -95,24 +125,23 @@ class OpenMeteoWeatherProvider(WeatherProvider):
         return Provenance(source_name=_PROVIDER_NAME, source_kind=self.kind, is_mock=False)
 
     async def _fetch_forecast_payload(self, latitude: float, longitude: float) -> dict[str, Any]:
-        response = await self._client.get(
-            self._forecast_url,
-            params={
-                "latitude": latitude,
-                "longitude": longitude,
-                "current": (
-                    "temperature_2m,wind_speed_10m,wind_gusts_10m,precipitation,"
-                    "relative_humidity_2m"
-                ),
-                "daily": (
-                    "temperature_2m_max,temperature_2m_min,temperature_2m_mean,"
-                    "precipitation_sum,precipitation_probability_max,"
-                    "relative_humidity_2m_mean,relative_humidity_2m_max,"
-                    "wind_gusts_10m_max,et0_fao_evapotranspiration,cape_max"
-                ),
-                "timezone": "UTC",
-            },
-        )
+        params: dict[str, Any] = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "current": (
+                "temperature_2m,wind_speed_10m,wind_gusts_10m,precipitation,relative_humidity_2m"
+            ),
+            "daily": (
+                "temperature_2m_max,temperature_2m_min,temperature_2m_mean,"
+                "precipitation_sum,precipitation_probability_max,"
+                "relative_humidity_2m_mean,relative_humidity_2m_max,"
+                "wind_gusts_10m_max,et0_fao_evapotranspiration,cape_max"
+            ),
+            "timezone": "UTC",
+        }
+        if self._api_key:
+            params["apikey"] = self._api_key
+        response = await self._client.get(self._forecast_url, params=params)
         response.raise_for_status()
         data = response.json()
         if not isinstance(data, dict):
