@@ -287,8 +287,12 @@ export interface UpdateLocationInput {
   longitude?: number
   radius_km?: number
   is_active?: boolean
-  crop?: string
-  soil_type?: string
+  // `null` clears the field (sent explicitly, distinct from omitting the
+  // key entirely, which leaves it untouched) — `soil_type` in particular
+  // rejects an empty string, it only accepts one of the three valid
+  // values or `null`.
+  crop?: string | null
+  soil_type?: string | null
   boundary_geojson?: string
   color?: string
 }

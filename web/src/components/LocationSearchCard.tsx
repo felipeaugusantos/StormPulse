@@ -69,6 +69,16 @@ export function LocationSearchCard({
   const [plotColor, setPlotColor] = useState(cropColor(null))
   const [creatingPlot, setCreatingPlot] = useState(false)
   const [updatingColorFor, setUpdatingColorFor] = useState<string | null>(null)
+  // Talhão editing — separate from creation above: a talhão someone
+  // already drew/named needs a way to fix a typo or update its cultura/
+  // solo/contorno without deleting and starting over (color already had
+  // its own inline swatch, kept as-is).
+  const [editingPlotId, setEditingPlotId] = useState<string | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editCrop, setEditCrop] = useState('')
+  const [editSoilType, setEditSoilType] = useState('')
+  const [editBoundaryGeojson, setEditBoundaryGeojson] = useState<string | null>(null)
+  const [savingEdit, setSavingEdit] = useState(false)
   // Weekly report (FASE 32) — which talhão's report modal is open, if any.
   const [reportFor, setReportFor] = useState<LocationItem | null>(null)
 
@@ -196,6 +206,34 @@ export function LocationSearchCard({
       setError(err instanceof ApiError ? err.message : 'Não foi possível criar o talhão')
     } finally {
       setCreatingPlot(false)
+    }
+  }
+
+  function startEditingPlot(plot: LocationItem) {
+    setEditingPlotId(plot.id)
+    setEditName(plot.name)
+    setEditCrop(plot.crop ?? '')
+    setEditSoilType(plot.soil_type ?? '')
+    setEditBoundaryGeojson(plot.boundary_geojson)
+    setError(null)
+  }
+
+  async function saveEditPlot(plotId: string) {
+    setSavingEdit(true)
+    setError(null)
+    try {
+      const updated = await api.updateLocation(plotId, {
+        name: editName.trim() || undefined,
+        crop: editCrop.trim() || null,
+        soil_type: editSoilType || null,
+        boundary_geojson: editBoundaryGeojson ?? undefined,
+      })
+      onLocationUpdated(updated)
+      setEditingPlotId(null)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Não foi possível salvar as alterações')
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -349,6 +387,16 @@ export function LocationSearchCard({
                     </button>
                     <button
                       className="btn ghost small"
+                      title="Editar talhão"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        startEditingPlot(plot)
+                      }}
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      className="btn ghost small"
                       onClick={(e) => {
                         e.stopPropagation()
                         removeLocation(plot.id)
@@ -358,6 +406,63 @@ export function LocationSearchCard({
                     </button>
                   </div>
                 ))}
+
+                {plotCreationEnabled &&
+                  plots
+                    .filter((plot) => plot.id === editingPlotId)
+                    .map((plot) => (
+                      <div
+                        className="location-create-form plot-create-form"
+                        key={`edit-${plot.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <label>Nome do talhão</label>
+                        <input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                        <label>Cultura (opcional)</label>
+                        <input
+                          value={editCrop}
+                          onChange={(e) => setEditCrop(e.target.value)}
+                          placeholder="soja, milho, café…"
+                        />
+                        <label>Tipo de solo (opcional — para janela ZARC)</label>
+                        <select
+                          value={editSoilType}
+                          onChange={(e) => setEditSoilType(e.target.value)}
+                        >
+                          <option value="">não informado</option>
+                          <option value="arenoso">Arenoso</option>
+                          <option value="textura_media">Textura média</option>
+                          <option value="argiloso">Argiloso</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="btn ghost small"
+                          onClick={() =>
+                            onStartDrawBoundary((geojson) => setEditBoundaryGeojson(geojson))
+                          }
+                        >
+                          {editBoundaryGeojson
+                            ? '✓ contorno desenhado — redesenhar'
+                            : '🖊️ Redesenhar contorno no mapa'}
+                        </button>
+                        <div className="location-create-actions">
+                          <button
+                            className="btn"
+                            disabled={savingEdit}
+                            onClick={() => saveEditPlot(plot.id)}
+                          >
+                            {savingEdit ? 'Salvando…' : 'Salvar alterações'}
+                          </button>
+                          <button
+                            className="btn ghost"
+                            onClick={() => setEditingPlotId(null)}
+                            disabled={savingEdit}
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
 
                 {plotCreationEnabled && addingPlotFor === farm.id && (
                   <div className="location-create-form plot-create-form">
