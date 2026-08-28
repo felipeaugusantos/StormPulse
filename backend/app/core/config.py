@@ -401,6 +401,18 @@ class Settings(BaseSettings):
     deforestation_lookback_years: float = Field(default=3.0, gt=0)
     deforestation_http_timeout_seconds: float = Field(default=20.0, gt=0)
 
+    # --- Umidade do solo regional (NASA POWER, item NASA) ---
+    # Desligado por padrão, mesmo sendo uma API pública sem credencial e
+    # confirmada estável em teste manual — mesmo motivo do desmatamento:
+    # ligar sob decisão explícita do operador, não por padrão, dado que é
+    # uma dependência externa nova ainda sem histórico em produção. É um
+    # dado *regional* (resolução nativa do modelo GEOS por trás do POWER é
+    # ~50km, mais grosseira até que o próprio satélite SMAP) — nunca uma
+    # medição por talhão, ao contrário do NDVI.
+    soil_moisture_enabled: bool = False
+    soil_moisture_nasa_power_url: str = "https://power.larc.nasa.gov/api/temporal/daily/point"
+    soil_moisture_http_timeout_seconds: float = Field(default=15.0, gt=0)
+
     # --- Notificação push real (Web Push / VAPID, FASE 22) ---
     # Sem serviço externo (FCM/APNs) — o navegador é o próprio serviço de
     # push, só a assinatura VAPID é local. `vapid_private_key`/

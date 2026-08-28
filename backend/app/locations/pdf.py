@@ -200,6 +200,28 @@ def render_weekly_report_pdf(
                 )
     story.append(Spacer(1, 1 * cm))
 
+    if report.soil_moisture:
+        moisture = report.soil_moisture
+        story.append(Paragraph("Umidade do solo regional (NASA POWER)", styles["Heading3"]))
+        story.append(
+            Paragraph(
+                "Estimativa por modelo (NASA), resolução regional (~50 km) — contexto além "
+                "da chuva medida, nunca uma medição do talhão em si.",
+                muted,
+            )
+        )
+        story.append(
+            Paragraph(
+                f"<b>{moisture.observed_at.strftime(_DATE_FMT)}</b> — superfície "
+                f"{moisture.surface_wetness_percent:.0f}% · raiz "
+                f"{moisture.root_zone_wetness_percent:.0f}% · perfil "
+                f"{moisture.profile_wetness_percent:.0f}%"
+                + (" (simulado)" if moisture.is_mock else ""),
+                styles["Normal"],
+            )
+        )
+        story.append(Spacer(1, 1 * cm))
+
     story.append(Paragraph(f"Gerado em {report.generated_at.strftime(_DATETIME_FMT)}", muted))
 
     doc.build(story)

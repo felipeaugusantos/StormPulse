@@ -30,10 +30,13 @@ from app.locations.schemas import (
     DeforestationCheckOut,
     LocationCreate,
     LocationUpdate,
+    SoilMoistureOut,
     WeeklyReportOut,
 )
 from app.ndvi.models import NdviReading
 from app.ndvi.schemas import NdviOut
+from app.soilmoisture.factory import get_soil_moisture_provider
+from app.soilmoisture.provider import SoilMoistureProviderUnavailableError
 from app.users.models import User
 from app.weather.factory import get_weather_provider
 from app.weather.provider import WeatherProviderUnavailableError
@@ -201,6 +204,27 @@ async def build_weekly_report(
             alerts=deforestation_alerts,
         )
 
+    soil_moisture = None
+    if settings.soil_moisture_enabled:
+        soil_moisture_provider = get_soil_moisture_provider(settings)
+        try:
+            observation = await soil_moisture_provider.get_soil_moisture(
+                location.latitude, location.longitude
+            )
+            soil_moisture = SoilMoistureOut(
+                observed_at=observation.observed_at,
+                surface_wetness_percent=observation.surface_wetness_percent,
+                root_zone_wetness_percent=observation.root_zone_wetness_percent,
+                profile_wetness_percent=observation.profile_wetness_percent,
+                is_mock=observation.provenance.is_mock,
+            )
+        except (SoilMoistureProviderUnavailableError, httpx.HTTPError):
+            # Never a second source of the rainfall numbers, only added
+            # context — a failure here must never fail the whole report.
+            pass
+        finally:
+            await soil_moisture_provider.aclose()
+
     report = WeeklyReportOut(
         location_id=location.id,
         location_name=location.name,
@@ -213,6 +237,7 @@ async def build_weekly_report(
         alerts=[AlertOut.model_validate(a) for a in alerts],
         ndvi_readings=[NdviOut.model_validate(n) for n in ndvi_readings],
         deforestation=deforestation,
+        soil_moisture=soil_moisture,
         generated_at=now,
     )
     report.ai_summary = await generate_report_summary(report, settings)
