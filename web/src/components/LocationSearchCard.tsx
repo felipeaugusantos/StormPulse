@@ -323,7 +323,10 @@ export function LocationSearchCard({
                   >
                     <div className="grow">
                       <div>🌱 {plot.name}</div>
-                      <div className="sub">{plot.crop ?? 'cultura não informada'}</div>
+                      <div className="sub">
+                        {plot.crop ?? 'cultura não informada'}
+                        {plot.area_ha != null && ` · ${plot.area_ha.toFixed(2)} ha`}
+                      </div>
                     </div>
                     <input
                       type="color"

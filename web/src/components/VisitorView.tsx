@@ -68,6 +68,7 @@ export function VisitorView({ onBack }: Props) {
       soil_type: null,
       boundary_geojson: null,
       color: null,
+      area_ha: null,
     }),
     [reference],
   )

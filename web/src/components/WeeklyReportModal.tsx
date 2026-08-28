@@ -99,7 +99,15 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
                   <span className="report-stat-label">cultura</span>
                 </div>
               )}
+              {report.area_ha != null && (
+                <div className="report-stat">
+                  <span className="report-stat-value">{report.area_ha.toFixed(2)} ha</span>
+                  <span className="report-stat-label">área</span>
+                </div>
+              )}
             </div>
+
+            {report.ai_summary && <p className="report-ai-summary">{report.ai_summary}</p>}
 
             <h3>Alertas no período</h3>
             {report.alerts.length === 0 ? (

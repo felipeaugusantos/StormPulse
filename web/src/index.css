@@ -1005,6 +1005,16 @@ button {
   line-height: 1.7;
   color: var(--ink-dim);
 }
+.report-ai-summary {
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0 0 18px;
+}
 .report-generated {
   color: var(--ink-mute);
   font-size: 0.75rem;
