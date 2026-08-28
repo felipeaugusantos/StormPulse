@@ -134,8 +134,9 @@ class PipelineHealthOut(BaseModel):
 
 
 class PipelineTriggerIn(BaseModel):
-    """Which pipeline to run right now — `name` must be one of the values
-    `PipelineHealthOut.name` reports (`app.core.tasks.PIPELINE_TASK_NAMES`)."""
+    """Which pipeline to run right now — `name` must be one of the keys in
+    `app.core.tasks.PIPELINE_TASK_NAMES` (every triggerable pipeline also
+    appears in `PipelineHealthOut`, though the reverse isn't required)."""
 
     name: str
 

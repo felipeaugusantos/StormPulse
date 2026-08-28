@@ -35,6 +35,7 @@ from app.core.enums import UserRole
 from app.core.rls import bypass_rls
 from app.lightning.models import LightningStrike
 from app.locations.models import Location
+from app.ndvi.models import NdviReading
 from app.satellite.models import SatelliteImage
 from app.storms.models import StormCell, StormRisk
 from app.tenants.models import Tenant
@@ -326,11 +327,17 @@ async def get_stats(session: AsyncSession) -> AdminStatsOut:
 # minutes on its own, independent of anything on our side. A 2x-interval
 # (20 min) threshold there would flag "atrasado" on every single healthy
 # cycle — confirmed live in production (FASE 34 follow-up) chasing exactly
-# that false alarm before finding the real explanation.
-_PIPELINE_THRESHOLDS: tuple[tuple[str, int, int], tuple[str, int, int], tuple[str, int, int]] = (
+# that false alarm before finding the real explanation. `ndvi`'s own
+# threshold is looser still (3 days, nowhere near 2x its own 8h cycle)
+# for a different reason than the cycle's own cadence: Sentinel-2 only
+# revisits a given talhão every ~5 days, and a cloudy pass yields no
+# usable pixels at all (see SentinelHubNdviProvider) — a talhão-by-talhão
+# gap that long is normal, not a stuck pipeline.
+_PIPELINE_THRESHOLDS: tuple[tuple[str, int, int], ...] = (
     ("satellite", 600, 3600),  # satellite-detect-every-10-minutes
     ("storms", 300, 600),  # ingest-every-5-minutes
     ("lightning", 300, 600),  # lightning-detect-every-5-minutes
+    ("ndvi", 28_800, 259_200),  # ndvi-check-every-8-hours
 )
 
 
@@ -344,7 +351,10 @@ async def get_pipeline_health(session: AsyncSession) -> list[PipelineHealthOut]:
     weather — worth checking manually, not a hard failure signal on its
     own. For ``satellite`` it's the GOES scene's true scan time (see
     ``_PIPELINE_THRESHOLDS`` above for why its staleness threshold is much
-    looser, not because our cycle runs less reliably).
+    looser, not because our cycle runs less reliably). For ``ndvi`` it's
+    the freshest reading across *every* tenant's talhões — genuinely
+    absent (``stale`` with ``last_updated_at=None``) when no talhão has a
+    drawn boundary yet, or when ``NDVI_ENABLED=false``, not a failure.
     """
     now = datetime.now(UTC)
     latest_by_table = {
@@ -355,6 +365,7 @@ async def get_pipeline_health(session: AsyncSession) -> list[PipelineHealthOut]:
         "lightning": (
             await session.execute(select(func.max(LightningStrike.created_at)))
         ).scalar_one(),
+        "ndvi": (await session.execute(select(func.max(NdviReading.observed_at)))).scalar_one(),
     }
 
     results = []

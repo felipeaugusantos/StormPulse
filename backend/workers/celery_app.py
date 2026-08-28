@@ -62,12 +62,17 @@ celery_app.conf.update(
             # matches the main ingestion cadence, not satellite's slower one.
             "schedule": 300.0,  # seconds
         },
-        "ndvi-check-daily": {
+        "ndvi-check-every-8-hours": {
             "task": "workers.tasks.run_ndvi_pipeline_task",
-            # Sentinel-2 revisits the same spot roughly every 5 days —
-            # checking more often than daily would just burn Copernicus
-            # quota for no new data most of the time.
-            "schedule": 86_400.0,  # seconds
+            # Sentinel-2 itself only revisits a given talhão every ~5
+            # days, so this isn't about catching a fresher image sooner —
+            # a once-daily cycle already covers that. It's about a talhão
+            # drawn *between* cycles: at once-daily, a brand new talhão
+            # could sit without any NDVI reading for up to 24h (there's
+            # also a manual "atualizar agora" trigger for that, but the
+            # automatic cycle shouldn't lag that far behind onboarding).
+            # 3x/day trades a bit of extra Copernicus quota for that.
+            "schedule": 28_800.0,  # seconds
         },
         "official-warnings-every-hour": {
             "task": "workers.tasks.run_official_warnings_task",

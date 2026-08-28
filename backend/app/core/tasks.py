@@ -23,6 +23,7 @@ PIPELINE_TASK_NAMES: dict[str, str] = {
     "satellite": "workers.tasks.run_satellite_detection_task",
     "storms": "workers.tasks.run_ingestion_cycle_task",
     "lightning": "workers.tasks.run_lightning_detection_task",
+    "ndvi": "workers.tasks.run_ndvi_pipeline_task",
 }
 
 

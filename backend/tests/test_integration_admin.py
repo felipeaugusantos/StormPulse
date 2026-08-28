@@ -24,6 +24,7 @@ from app.core.config import Settings
 from app.core.enums import StormSeverity, WeatherSourceKind
 from app.lightning.models import LightningStrike
 from app.main import create_app
+from app.ndvi.models import NdviReading
 from app.satellite.models import SatelliteImage
 from app.storms.models import StormCell
 from app.weather.models import RadarFrame, WeatherSource
@@ -472,6 +473,17 @@ async def test_pipeline_health_reflects_fresh_and_stale_data(client: AsyncClient
     # had to be done by hand over SSH (curling /public/satellite/image,
     # reading captured_at) — surfaced here instead.
     now = datetime.now(UTC)
+    token = await register_and_login(client)
+    headers_owner = {"Authorization": f"Bearer {token}"}
+    me = (await client.get("/api/v1/users/me", headers=headers_owner)).json()
+    location = (
+        await client.post(
+            "/api/v1/locations",
+            json={"name": "Fazenda", "latitude": -21.18, "longitude": -47.81},
+            headers=headers_owner,
+        )
+    ).json()
+
     with session_scope() as session:
         # Clear ALL rows first, not just this test's own leftovers from a
         # previous run — other tests in the suite (e.g. the ingestion
@@ -486,6 +498,8 @@ async def test_pipeline_health_reflects_fresh_and_stale_data(client: AsyncClient
             session.delete(stale_strike)
         for stale_cell in session.scalars(select(StormCell)).all():
             session.delete(stale_cell)
+        for stale_ndvi in session.scalars(select(NdviReading)).all():
+            session.delete(stale_ndvi)
         session.add(
             SatelliteImage(
                 captured_at=now,
@@ -516,6 +530,20 @@ async def test_pipeline_health_reflects_fresh_and_stale_data(client: AsyncClient
                 created_at=now - timedelta(hours=1),
             )
         )
+        # NDVI reading old enough to be flagged stale (> 3-day threshold)
+        # but still a perfectly normal gap for a single talhão/cloudy
+        # region — this is exactly why its threshold is looser than a
+        # flat 2x the daily interval.
+        session.add(
+            NdviReading(
+                tenant_id=me["tenant_id"],
+                location_id=location["id"],
+                observed_at=now - timedelta(days=4),
+                ndvi_mean=0.5,
+                valid_pixel_percent=90.0,
+                is_mock=False,
+            )
+        )
 
     admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
     await _register(client, admin_email)
@@ -534,6 +562,8 @@ async def test_pipeline_health_reflects_fresh_and_stale_data(client: AsyncClient
         assert by_name["satellite"]["last_updated_at"] is not None
         assert by_name["lightning"]["stale"] is False
         assert by_name["storms"]["stale"] is True
+        assert by_name["ndvi"]["stale"] is True
+        assert by_name["ndvi"]["last_updated_at"] is not None
 
     with session_scope() as session:
         for stale_image in session.scalars(select(SatelliteImage)).all():
@@ -542,6 +572,8 @@ async def test_pipeline_health_reflects_fresh_and_stale_data(client: AsyncClient
             session.delete(stale_strike)
         for stale_cell in session.scalars(select(StormCell)).all():
             session.delete(stale_cell)
+        for stale_ndvi in session.scalars(select(NdviReading)).all():
+            session.delete(stale_ndvi)
 
 
 async def test_non_admin_gets_403_on_pipeline_trigger(client: AsyncClient) -> None:
@@ -589,6 +621,29 @@ async def test_pipeline_trigger_queues_a_known_pipeline(client: AsyncClient) -> 
         )
         assert resp.status_code == 200
         assert resp.json() == {"queued": True, "name": "storms"}
+
+
+async def test_pipeline_trigger_queues_ndvi(client: AsyncClient) -> None:
+    # NDVI is triggerable (item follow-up to ADR-0053) even though it
+    # isn't one of the fast-cadence pipelines the endpoint originally
+    # covered — a demo/pilot report needs a fresh reading sooner than the
+    # next scheduled daily cycle.
+    admin_email = f"platform-admin-{uuid.uuid4().hex}@example.com"
+    await _register(client, admin_email)
+
+    async for admin_client in _promoted_client(admin_email):
+        login = await admin_client.post(
+            "/api/v1/auth/login", json={"email": admin_email, "password": _PASSWORD}
+        )
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+        resp = await admin_client.post(
+            "/api/v1/admin/pipeline-health/trigger",
+            json={"name": "ndvi"},
+            headers=headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"queued": True, "name": "ndvi"}
 
 
 async def test_non_admin_gets_403_on_raw_frames(client: AsyncClient) -> None:

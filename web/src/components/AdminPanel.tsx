@@ -14,6 +14,7 @@ const PIPELINE_LABELS: Record<string, string> = {
   satellite: 'Satélite (imagem + observações)',
   storms: 'Células de tempestade (radar)',
   lightning: 'Raios',
+  ndvi: 'NDVI (talhões)',
 }
 
 interface Props {
