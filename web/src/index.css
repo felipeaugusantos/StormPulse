@@ -80,6 +80,18 @@ label {
   color: var(--ink-dim);
   margin: 14px 0 5px;
 }
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 14px 0 5px;
+}
+.label-row label {
+  margin: 0;
+}
+.link-btn.small {
+  font-size: 0.8rem;
+}
 input {
   width: 100%;
   background: #0d1626;

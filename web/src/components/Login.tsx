@@ -284,7 +284,18 @@ export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
           <>
             {!isForgot && (
               <>
-                <label htmlFor="password">Senha</label>
+                <div className="label-row">
+                  <label htmlFor="password">Senha</label>
+                  {!isRegister && (
+                    <button
+                      type="button"
+                      className="link-btn small"
+                      onClick={() => switchMode('forgot')}
+                    >
+                      Esqueci minha senha?
+                    </button>
+                  )}
+                </div>
                 <input
                   id="password"
                   type="password"
@@ -295,14 +306,6 @@ export function Login({ onAuthenticated, onVisitor, onBack }: Props) {
                   required
                 />
               </>
-            )}
-
-            {!isRegister && !isForgot && (
-              <p className="muted center" style={{ marginTop: -8 }}>
-                <button type="button" className="link-btn" onClick={() => switchMode('forgot')}>
-                  Esqueci minha senha
-                </button>
-              </p>
             )}
 
             {isRegister && (
