@@ -362,6 +362,24 @@ async def test_current_conditions_returns_live_reading(client: AsyncClient) -> N
     assert body["provenance"]["is_mock"] is True
 
 
+async def test_current_conditions_is_cached_for_repeated_requests(client: AsyncClient) -> None:
+    """Real production incident (2026-08-28, see app.weather.cache): the
+    dashboard's ~30s auto-refresh made `/current` the single most frequent
+    call into a rate/quota-limited upstream. `MockWeatherProvider` stamps a
+    fresh `datetime.now(UTC)` on every call — two rapid requests getting
+    back the exact same `observed_at` proves the second one was served from
+    Redis, not a second live call to the provider."""
+    headers = await _auth_headers(client)
+    created = (await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)).json()
+
+    first = await client.get(f"/api/v1/locations/{created['id']}/current", headers=headers)
+    second = await client.get(f"/api/v1/locations/{created['id']}/current", headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["observed_at"] == second.json()["observed_at"]
+
+
 async def test_spray_window_returns_live_wind_check(client: AsyncClient) -> None:
     # The shared `client` fixture's Settings default to the mock provider,
     # which always answers — exercises the success path (see
