@@ -138,6 +138,12 @@ export function LocationWeatherCard({ location }: Props) {
           </span>
         </div>
       )}
+      {!loading && !current && !error && (
+        <p className="panel-hint">
+          🌡️ condições atuais indisponíveis no momento — as fontes meteorológicas falharam ao
+          mesmo tempo; tente atualizar em alguns minutos
+        </p>
+      )}
 
       {upcoming.length > 0 && (
         <div className="forecast-strip">
