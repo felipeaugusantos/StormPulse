@@ -20,6 +20,7 @@ from app.alerts.schemas import AlertOut
 from app.core.config import Settings
 from app.core.enums import AlertEventType
 from app.core.rls import set_tenant_context
+from app.locations.ai_summary import generate_report_summary
 from app.locations.models import AlertPreference, Location
 from app.locations.schemas import (
     AlertPreferenceIn,
@@ -174,10 +175,11 @@ async def build_weekly_report(
     )
     ndvi_readings = list((await session.execute(ndvi_stmt)).scalars().all())
 
-    return WeeklyReportOut(
+    report = WeeklyReportOut(
         location_id=location.id,
         location_name=location.name,
         crop=location.crop,
+        area_ha=location.area_ha,
         period_start=period_start,
         period_end=period_end,
         rainfall_total_mm=rainfall_total_mm,
@@ -186,3 +188,5 @@ async def build_weekly_report(
         ndvi_readings=[NdviOut.model_validate(n) for n in ndvi_readings],
         generated_at=now,
     )
+    report.ai_summary = await generate_report_summary(report, settings)
+    return report

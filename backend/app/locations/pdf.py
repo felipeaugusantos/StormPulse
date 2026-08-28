@@ -41,7 +41,9 @@ def render_weekly_report_pdf(report: WeeklyReportOut) -> bytes:
     story = [
         Paragraph("StormPulse — Relatório semanal", styles["Title"]),
         Paragraph(
-            f"{report.location_name}" + (f" · cultura: {report.crop}" if report.crop else ""),
+            f"{report.location_name}"
+            + (f" · cultura: {report.crop}" if report.crop else "")
+            + (f" · área: {report.area_ha:.2f} ha" if report.area_ha is not None else ""),
             styles["Heading2"],
         ),
         Paragraph(
@@ -51,6 +53,10 @@ def render_weekly_report_pdf(report: WeeklyReportOut) -> bytes:
         ),
         Spacer(1, 0.5 * cm),
     ]
+
+    if report.ai_summary:
+        story.append(Paragraph(report.ai_summary, styles["Normal"]))
+        story.append(Spacer(1, 0.5 * cm))
 
     stats_table = Table(
         [

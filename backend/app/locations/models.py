@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Any
 
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.enums import AlertType
 from app.db.base import Base
 from app.db.mixins import TenantMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from engine.geo import polygon_area_km2
 
 
 class Location(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
@@ -43,11 +45,12 @@ class Location(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     # classes some crops also use aren't offered here, to keep the picker
     # simple. Only meaningful for a plot, same non-enforcement as `crop`.
     soil_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    # Visual-only polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon
-    # geometry serialized as JSON text, e.g. drawn on the dashboard map for
-    # a talhão. Purely cosmetic: latitude/longitude above (not this) is what
-    # every weather/agro call still uses — never parsed for anything but
-    # rendering, so a plain Text column is enough (no PostGIS geometry type,
+    # Polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon geometry
+    # serialized as JSON text, e.g. drawn on the dashboard map for a
+    # talhão. latitude/longitude above (not this) is what every weather/
+    # agro call still uses for the actual API lookup — this is never
+    # parsed for that, only for rendering and for the derived `area_ha`
+    # below, so a plain Text column is enough (no PostGIS geometry type,
     # no spatial queries against it).
     boundary_geojson: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Manual color override (FASE 27, ADR-0025) — `#RRGGBB`. When unset, the
@@ -62,6 +65,23 @@ class Location(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
         back_populates="location",
         cascade="all, delete-orphan",
     )
+
+    @property
+    def area_ha(self) -> float | None:
+        """Area enclosed by `boundary_geojson`, in hectares — derived on
+        read, never stored (the polygon itself is the source of truth;
+        storing a redundant copy would just be one more thing to keep in
+        sync). `None` for a location with no drawn boundary, or one whose
+        stored GeoJSON somehow fails to parse (never raises — this is a
+        display convenience, not a value anything else depends on)."""
+        if self.boundary_geojson is None:
+            return None
+        try:
+            polygon = json.loads(self.boundary_geojson)
+            ring = [(lat, lon) for lon, lat in polygon["coordinates"][0]]
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            return None
+        return round(polygon_area_km2(ring) * 100, 2)
 
 
 class AlertPreference(UUIDPrimaryKeyMixin, TimestampMixin, Base):

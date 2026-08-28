@@ -59,3 +59,31 @@ def angle_difference(a: float, b: float) -> float:
     """Smallest absolute difference between two bearings, in [0, 180]."""
     diff = abs((a - b) % 360.0)
     return min(diff, 360.0 - diff)
+
+
+def polygon_area_km2(ring: list[tuple[float, float]]) -> float:
+    """Area enclosed by a polygon ring of (lat, lon) points, in km².
+
+    Projects to a local equirectangular plane centered on the ring's own
+    mean latitude, then applies the shoelace formula — accurate for
+    field-sized polygons (talhões are hundreds of metres to a few km
+    across). The alternative (spherical excess, exact on a sphere at any
+    scale) is actually *less* numerically stable here: it subtracts
+    near-equal large numbers for a small polygon, which is exactly the
+    scale this function is for. Same "no reprojection library needed"
+    reasoning already used for NDVI's pixel sizing
+    (``app/ndvi/sentinel_hub.py``).
+    """
+    if len(ring) < 3:
+        return 0.0
+    mean_lat = sum(lat for lat, _lon in ring) / len(ring)
+    cos_mean_lat = math.cos(math.radians(mean_lat))
+    km_per_deg_lat = math.radians(1.0) * EARTH_RADIUS_KM
+    points_km = [(lon * km_per_deg_lat * cos_mean_lat, lat * km_per_deg_lat) for lat, lon in ring]
+    n = len(points_km)
+    signed_area = 0.0
+    for i in range(n):
+        x1, y1 = points_km[i]
+        x2, y2 = points_km[(i + 1) % n]
+        signed_area += x1 * y2 - x2 * y1
+    return abs(signed_area) / 2.0
