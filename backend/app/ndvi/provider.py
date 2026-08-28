@@ -50,3 +50,13 @@ class NdviProvider(abc.ABC):
         string — the exact same format `Location.boundary_geojson` is
         stored/validated in (see `app.locations.schemas`)."""
         ...
+
+    @abc.abstractmethod
+    async def get_ndvi_image(self, boundary_geojson: str, *, lookback_days: float) -> bytes:
+        """A colored NDVI visualization (PNG bytes) over the same polygon
+        and lookback window as `get_ndvi` — item "imagem do talhão" in the
+        weekly report. A separate call from `get_ndvi`: real providers
+        typically render this via a different API (an image-rendering
+        endpoint, not the numeric-statistics one), so the two aren't
+        assumed to share a request under the hood."""
+        ...

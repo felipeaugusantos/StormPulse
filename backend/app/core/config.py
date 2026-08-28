@@ -368,6 +368,10 @@ class Settings(BaseSettings):
         "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
     )
     ndvi_sh_statistics_url: str = "https://sh.dataspace.copernicus.eu/statistics/v1"
+    # Process API (returns a rendered image directly) — separate from the
+    # Statistical API above (returns only numbers); item "imagem do
+    # talhão", used for the colored NDVI map in the weekly report.
+    ndvi_sh_process_url: str = "https://sh.dataspace.copernicus.eu/api/v1/process"
     ndvi_lookback_days: float = Field(default=15.0, gt=0)
     ndvi_http_timeout_seconds: float = Field(default=30.0, gt=0)
 

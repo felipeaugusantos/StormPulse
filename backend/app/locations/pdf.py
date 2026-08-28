@@ -3,9 +3,18 @@
 Pure-Python (reportlab) — no system libraries (Pango/Cairo/wkhtmltopdf)
 needed, unlike an HTML-to-PDF renderer, which matters here since the
 Docker image already tracks size closely (runtime-base vs
-runtime-satellite, see ADR-0056/CI). Only ever renders numbers the caller
-already computed (`WeeklyReportOut`) — this module has no database or
-network access of its own.
+runtime-satellite, see ADR-0056/CI). Only ever renders numbers (and,
+since item "imagem do talhão", already-fetched image bytes) the caller
+already has — this module has no database or network access of its own.
+
+Embedding the NDVI image (`Image`/`ImageReader` from `reportlab.platypus`)
+does need Pillow — confirmed by reading reportlab's own source
+(`ImageReader._read_image` calls `PIL.Image.open` directly, no
+pure-Python fallback exists). Unlike GDAL/numpy/TATHU (the `satellite`
+extra, deliberately kept out of the base image for size — see the
+Dockerfile), Pillow is a plain wheel with no system libs of its own, and
+this PDF endpoint is always on (not an optional satellite feature), so
+it's a base dependency (see pyproject.toml), not a satellite-only one.
 """
 
 from __future__ import annotations
@@ -16,15 +25,18 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from app.locations.schemas import WeeklyReportOut
 
 _DATE_FMT = "%d/%m/%Y"
 _DATETIME_FMT = "%d/%m/%Y %H:%M"
+_NDVI_IMAGE_MAX_SIZE_CM = 8.0
 
 
-def render_weekly_report_pdf(report: WeeklyReportOut) -> bytes:
+def render_weekly_report_pdf(
+    report: WeeklyReportOut, *, ndvi_image_png: bytes | None = None
+) -> bytes:
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -106,6 +118,23 @@ def render_weekly_report_pdf(report: WeeklyReportOut) -> bytes:
             muted,
         )
     )
+    if ndvi_image_png:
+        story.append(Spacer(1, 0.3 * cm))
+        story.append(
+            Image(
+                io.BytesIO(ndvi_image_png),
+                width=_NDVI_IMAGE_MAX_SIZE_CM * cm,
+                height=_NDVI_IMAGE_MAX_SIZE_CM * cm,
+            )
+        )
+        story.append(
+            Paragraph(
+                "Verde = vegetação mais vigorosa · vermelho/marrom = solo exposto ou "
+                "vegetação em estresse. Áreas transparentes indicam nuvem ou dado indisponível.",
+                muted,
+            )
+        )
+        story.append(Spacer(1, 0.3 * cm))
     if not report.ndvi_readings:
         story.append(Paragraph("Nenhuma leitura de NDVI no período.", muted))
     else:

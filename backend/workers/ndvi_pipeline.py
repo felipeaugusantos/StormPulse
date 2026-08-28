@@ -24,8 +24,8 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.locations.models import Location
 from app.ndvi.factory import get_ndvi_provider
-from app.ndvi.models import NdviReading
-from app.ndvi.provider import NdviProvider, NdviProviderUnavailableError
+from app.ndvi.models import NdviImage, NdviReading
+from app.ndvi.provider import NdviObservation, NdviProvider, NdviProviderUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,45 @@ class NdviCycleSummary:
     talhoes_checked: int = 0
     readings_created: int = 0
     failures: int = 0
+
+
+async def _persist_ndvi_image(
+    session: Session,
+    talhao: Location,
+    observation: NdviObservation,
+    provider: NdviProvider,
+    settings: Settings,
+) -> None:
+    """Replace the talhão's stored NDVI image — only the latest is kept
+    (see ``NdviImage``'s own docstring). Failure here (auth/network) never
+    touches the numeric reading already persisted for this cycle — a
+    picture is a bonus on top of the number, not a requirement for it."""
+    assert talhao.boundary_geojson is not None  # guaranteed by _eligible_talhoes's filter
+    try:
+        png = await provider.get_ndvi_image(
+            talhao.boundary_geojson, lookback_days=settings.ndvi_lookback_days
+        )
+    except NdviProviderUnavailableError as exc:
+        logger.warning(
+            "NDVI image unavailable for talhão",
+            extra={"location_id": str(talhao.id), "error": str(exc)},
+        )
+        return
+    existing = session.scalars(
+        select(NdviImage).where(NdviImage.location_id == talhao.id)
+    ).one_or_none()
+    if existing is not None:
+        session.delete(existing)
+        session.flush()
+    session.add(
+        NdviImage(
+            tenant_id=talhao.tenant_id,
+            location_id=talhao.id,
+            observed_at=observation.observed_at,
+            png_data=png,
+            is_mock=observation.provenance.is_mock,
+        )
+    )
 
 
 def _eligible_talhoes(session: Session) -> list[Location]:
@@ -76,6 +115,7 @@ async def _run_all_talhoes(
             )
         )
         created += 1
+        await _persist_ndvi_image(session, talhao, observation, provider, settings)
     return created, failed
 
 

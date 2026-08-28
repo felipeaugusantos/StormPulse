@@ -66,6 +66,45 @@ function evaluatePixel(samples) {
 }"""
 
 
+# Colored NDVI visualization (Process API, not the Statistical API above)
+# — item "imagem do talhão" in the weekly report. Cloud/shadow/snow pixels
+# (SCL classes 3, 8, 9, 10, 11 — cloud shadow, medium/high-probability
+# cloud, thin cirrus, snow/ice) are excluded via alpha instead of being
+# colored as if they were real vegetation data; a simple 3-stop ramp
+# (red-brown for low/negative NDVI, through yellow, to green for high)
+# communicates "healthier here, stressed there" at a glance — it isn't
+# meant to be a scientifically calibrated colormap.
+_NDVI_IMAGE_EVALSCRIPT = """//VERSION=3
+function setup() {
+  return {
+    input: [{ bands: ["B04", "B08", "SCL", "dataMask"] }],
+    output: { bands: 4 }
+  }
+}
+function evaluatePixel(samples) {
+  let scl = samples.SCL
+  let isCloudOrSnow = scl == 3 || scl == 8 || scl == 9 || scl == 10 || scl == 11
+  let denom = samples.B08 + samples.B04
+  if (samples.dataMask == 0 || isCloudOrSnow || denom == 0) {
+    return [0, 0, 0, 0]
+  }
+  let ndvi = (samples.B08 - samples.B04) / denom
+  let r, g, b
+  if (ndvi < 0.2) {
+    let t = Math.max(0, (ndvi + 0.2) / 0.4)
+    r = 0.65
+    g = 0.3 + t * 0.3
+    b = 0.1
+  } else {
+    let t = Math.min(1, (ndvi - 0.2) / 0.6)
+    r = 0.85 - t * 0.75
+    g = 0.6 + t * 0.3
+    b = 0.1
+  }
+  return [r, g, b, 1]
+}"""
+
+
 def _pixel_dimensions(polygon: dict[str, Any]) -> tuple[int, int]:
     """Bbox width/height in ~10m pixels, computed from real-world extent.
 
@@ -222,3 +261,47 @@ class SentinelHubNdviProvider(NdviProvider):
         raise NdviProviderUnavailableError(
             f"Nenhum pixel válido (sem nuvem) nos últimos {lookback_days:.0f} dias para este talhão"
         )
+
+    async def get_ndvi_image(self, boundary_geojson: str, *, lookback_days: float) -> bytes:
+        polygon = json.loads(boundary_geojson)
+        now = datetime.now(UTC)
+        start = now - timedelta(days=lookback_days)
+        token = await self._access_token()
+        width_px, height_px = _pixel_dimensions(polygon)
+
+        request_body = {
+            "input": {
+                "bounds": {
+                    "geometry": polygon,
+                    "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"},
+                },
+                "data": [
+                    {
+                        "type": "sentinel-2-l2a",
+                        "dataFilter": {
+                            "mosaickingOrder": "leastRecent",
+                            "timeRange": {"from": start.isoformat(), "to": now.isoformat()},
+                        },
+                    }
+                ],
+            },
+            "output": {
+                "width": width_px,
+                "height": height_px,
+                "responses": [{"identifier": "default", "format": {"type": "image/png"}}],
+            },
+            "evalscript": _NDVI_IMAGE_EVALSCRIPT,
+        }
+
+        try:
+            resp = await self._client.post(
+                self._settings.ndvi_sh_process_url,
+                headers={"Authorization": f"Bearer {token}"},
+                json=request_body,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise NdviProviderUnavailableError(
+                "Falha ao consultar o Sentinel Hub Process API"
+            ) from exc
+        return resp.content

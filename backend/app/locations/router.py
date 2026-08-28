@@ -26,7 +26,7 @@ from app.locations.schemas import (
     ZarcWindowOut,
 )
 from app.locations.zarc_service import ZarcLookupUnavailableError, get_zarc_window
-from app.ndvi.models import NdviReading
+from app.ndvi.models import NdviImage, NdviReading
 from app.ndvi.schemas import NdviOut
 from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
@@ -382,6 +382,32 @@ async def get_location_ndvi(
 
 
 @router.get(
+    "/{location_id}/agro/ndvi-image",
+    summary='Imagem de NDVI colorida do talhão (item "imagem do talhão")',
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+)
+async def get_location_ndvi_image(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """Same "read what the background pipeline already computed, never
+    call the provider live" rule as `/agro/ndvi` above — only the latest
+    image is ever kept (`NdviImage`), replaced each pipeline cycle."""
+    location = await _get_owned_or_404(session, user, location_id)
+    image = (
+        await session.execute(select(NdviImage).where(NdviImage.location_id == location.id))
+    ).scalar_one_or_none()
+    if image is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma imagem de NDVI disponível para este talhão ainda",
+        )
+    return Response(content=image.png_data, media_type="image/png")
+
+
+@router.get(
     "/{location_id}/agro/weekly-report",
     response_model=WeeklyReportOut,
     summary="Relatório semanal do talhão — chuva, alertas e NDVI (FASE 32)",
@@ -428,7 +454,12 @@ async def get_location_weekly_report_pdf(
             detail="Relatório semanal só está disponível para talhões",
         )
     report = await service.build_weekly_report(session, location, settings)
-    pdf_bytes = render_weekly_report_pdf(report)
+    ndvi_image = (
+        await session.execute(select(NdviImage).where(NdviImage.location_id == location.id))
+    ).scalar_one_or_none()
+    pdf_bytes = render_weekly_report_pdf(
+        report, ndvi_image_png=ndvi_image.png_data if ndvi_image else None
+    )
     filename = f"relatorio-semanal-{location.name}-{report.period_end}.pdf".replace(" ", "-")
     return Response(
         content=pdf_bytes,

@@ -11,7 +11,7 @@ from app.alerts.verification_models import AlertVerification
 from app.apikeys.models import ApiKey
 from app.lightning.models import LightningStrike
 from app.locations.models import AlertPreference, Location
-from app.ndvi.models import NdviReading
+from app.ndvi.models import NdviImage, NdviReading
 from app.notifications.models import Notification, PushSubscription
 from app.reports.models import UserReport
 from app.satellite.models import ConvectiveWatch, SatelliteImage
@@ -29,6 +29,7 @@ __all__ = [
     "ConvectiveWatch",
     "LightningStrike",
     "Location",
+    "NdviImage",
     "NdviReading",
     "Notification",
     "PushSubscription",

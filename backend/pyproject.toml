@@ -30,6 +30,15 @@ dependencies = [
     "boto3>=1.35",
     "anthropic>=1.0",
     "reportlab>=4.2",
+    # reportlab's own image embedding (`platypus.Image`/`ImageReader`)
+    # hard-requires PIL to decode raster bytes — confirmed by reading its
+    # source (`Image.open(fp)` in `reportlab.lib.utils.ImageReader
+    # ._read_image`, no pure-Python fallback exists in current reportlab).
+    # Needed for the weekly-report PDF's NDVI image (item "imagem do
+    # talhão"). A plain wheel, no system libs — unlike GDAL/numpy/TATHU
+    # (the `satellite` extra, kept out of the base image for size), this
+    # belongs in every image since the PDF endpoint is always on.
+    "pillow>=11.0",
 ]
 
 [project.optional-dependencies]
@@ -50,7 +59,7 @@ satellite = [
     "netCDF4",
     "opencv-python-headless",
     "pathos",
-    "pillow",
+    # pillow: now a base dependency (see above), not repeated here.
     "pyproj",
     "rasterstats",
     "rtree",
@@ -129,9 +138,11 @@ module = ["osgeo.*", "tathu.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# numpy/Pillow: not installed outside the Docker image (satellite extra),
-# same as osgeo/tathu above.
-module = ["numpy.*", "PIL.*"]
+# numpy: not installed outside the Docker image (satellite extra), same as
+# osgeo/tathu above. Pillow used to be listed here too, but it's a base
+# dependency now (see pyproject.toml's own dependencies list) — actually
+# installed, so mypy checks it for real instead of assuming it's missing.
+module = ["numpy.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

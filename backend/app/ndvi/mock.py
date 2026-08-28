@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import math
+import struct
+import zlib
 from datetime import UTC, datetime
 
 from app.core.enums import WeatherSourceKind
@@ -17,6 +19,33 @@ from app.ndvi.provider import NdviObservation, NdviProvider
 from app.weather.provider import Provenance
 
 _MOCK_NAME = "MOCK"
+_PLACEHOLDER_SIZE_PX = 8
+# A flat muted green — nowhere near the real evalscript's colour ramp,
+# deliberately: this must never be mistaken for a real vegetation reading.
+_PLACEHOLDER_RGB = (90, 140, 90)
+
+
+def _placeholder_png() -> bytes:
+    """A tiny solid-color PNG built from stdlib alone (`zlib`/`struct`) —
+    PIL/numpy only ship in the `-satellite` image variant (see
+    `workers/satellite_pipeline.py`'s own note on this), and the `api`
+    container serving `get_ndvi_image` doesn't have them. Real providers
+    render their image server-side and hand back finished bytes, so this
+    is the only path that would otherwise need a local image library."""
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
+
+    size = _PLACEHOLDER_SIZE_PX
+    row = bytes([0]) + bytes(_PLACEHOLDER_RGB) * size  # filter byte + RGB pixels
+    raw = row * size
+    ihdr = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(raw, 9))
+        + chunk(b"IEND", b"")
+    )
 
 
 class MockNdviProvider(NdviProvider):
@@ -52,3 +81,6 @@ class MockNdviProvider(NdviProvider):
             ndvi_mean=round(ndvi_mean, 3),
             valid_pixel_percent=95.0,
         )
+
+    async def get_ndvi_image(self, boundary_geojson: str, *, lookback_days: float) -> bytes:
+        return _placeholder_png()
