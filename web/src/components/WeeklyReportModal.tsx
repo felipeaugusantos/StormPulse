@@ -208,6 +208,23 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
               </>
             )}
 
+            {report.soil_moisture && (
+              <>
+                <h3>Umidade do solo regional (NASA POWER)</h3>
+                <p className="panel-hint">
+                  Estimativa por modelo (NASA), resolução regional (~50 km) — contexto além da
+                  chuva medida, nunca uma medição do talhão em si.
+                </p>
+                <p>
+                  <strong>{formatDate(report.soil_moisture.observed_at)}</strong> — superfície{' '}
+                  {report.soil_moisture.surface_wetness_percent.toFixed(0)}% · raiz{' '}
+                  {report.soil_moisture.root_zone_wetness_percent.toFixed(0)}% · perfil{' '}
+                  {report.soil_moisture.profile_wetness_percent.toFixed(0)}%
+                  {report.soil_moisture.is_mock && ' (simulado)'}
+                </p>
+              </>
+            )}
+
             <p className="report-generated no-print">
               Gerado em {formatDateTimeBR(report.generated_at)}
             </p>
