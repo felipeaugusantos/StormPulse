@@ -190,6 +190,18 @@ async def test_create_plot_with_boundary_polygon(client: AsyncClient) -> None:
     assert resp.status_code == 201
     body = resp.json()
     assert json.loads(body["boundary_geojson"]) == boundary
+    # Derived from the polygon just drawn, never a guessed/manual value —
+    # this triangle has ~400-450m legs (right triangle), so on the order
+    # of a few hectares, not a farm-sized area.
+    assert body["area_ha"] is not None
+    assert 5 < body["area_ha"] < 15
+
+
+async def test_location_without_boundary_has_no_area(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    resp = await client.post("/api/v1/locations", json=_PAYLOAD, headers=headers)
+    assert resp.status_code == 201
+    assert resp.json()["area_ha"] is None
 
 
 async def test_create_plot_boundary_far_outside_farm_radius_is_rejected(

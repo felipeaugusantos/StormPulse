@@ -139,6 +139,12 @@ async def test_weekly_report_includes_period_and_data_within_it(client: AsyncCli
     assert body["crop"] == "soja"
     assert body["rainfall_total_mm"] >= 0
     assert 0 <= body["dry_days_count"] <= 7
+    # Derived from the drawn boundary — never a guessed/manual value.
+    assert body["area_ha"] is not None
+    assert body["area_ha"] > 0
+    # No ANTHROPIC_API_KEY in the test settings fixture — must degrade to
+    # None, never a fabricated summary and never a failed request.
+    assert body["ai_summary"] is None
 
     alert_titles = [a["title"] for a in body["alerts"]]
     assert "Sequência sem chuva" in alert_titles
