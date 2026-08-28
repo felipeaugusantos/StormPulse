@@ -174,6 +174,40 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
               </ul>
             )}
 
+            <h3>Desmatamento (DETER/PRODES, INPE)</h3>
+            {!report.deforestation || report.deforestation.checked_sources.length === 0 ? (
+              <p className="panel-hint">
+                Checagem de desmatamento ainda não disponível para este talhão.
+              </p>
+            ) : (
+              <>
+                <p className="panel-hint">
+                  Consultado em {report.deforestation.checked_sources.join(' e ')} (registros
+                  oficiais do INPE — cobre só os biomas Amazônia e Cerrado; fora dessas regiões,
+                  nenhum alerta encontrado não significa ausência de desmatamento, apenas que
+                  essas camadas não cobrem a área)
+                  {report.deforestation.last_checked_at &&
+                    ` · última checagem: ${formatDate(report.deforestation.last_checked_at)}`}
+                  .
+                </p>
+                {report.deforestation.alerts.length === 0 ? (
+                  <p className="panel-hint">Nenhum alerta de desmatamento encontrado.</p>
+                ) : (
+                  <ul className="report-list">
+                    {report.deforestation.alerts.map((a, i) => (
+                      <li key={i}>
+                        <strong>{a.detected_at ? formatDate(a.detected_at) : 'data desconhecida'}</strong>{' '}
+                        — {a.classname}
+                        {a.area_ha != null && ` · ${a.area_ha.toFixed(2)} ha`}
+                        {a.municipio && ` (${a.municipio}/${a.uf})`}
+                        {!a.municipio && a.uf && ` (${a.uf})`} [{a.source}]
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+
             <p className="report-generated no-print">
               Gerado em {formatDateTimeBR(report.generated_at)}
             </p>
