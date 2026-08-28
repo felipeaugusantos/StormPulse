@@ -160,3 +160,57 @@ async def test_get_forecast_raises_on_http_error() -> None:
 async def test_aclose_closes_the_underlying_client() -> None:
     provider = _make_provider(httpx.MockTransport(lambda request: httpx.Response(200, json={})))
     await provider.aclose()
+
+
+async def test_with_an_api_key_forecast_calls_use_the_customer_host_and_key() -> None:
+    """Item ADR-0074: forecast/current calls route to the dedicated
+    customer host with the key attached once a commercial subscription is
+    configured — never the shared public host, which is where the real
+    production throttling happened."""
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        captured["apikey"] = request.url.params.get("apikey")
+        return httpx.Response(200, json=_FORECAST_PAYLOAD)
+
+    provider = OpenMeteoWeatherProvider(
+        forecast_url="https://api.open-meteo.com/v1/forecast",
+        archive_url="https://archive-api.open-meteo.com/v1/archive",
+        api_key="test-key-123",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    await provider.get_current_data(-21.1775, -47.8103)
+
+    assert str(captured["url"]).startswith("https://customer-api.open-meteo.com/v1/forecast")
+    assert captured["apikey"] == "test-key-123"
+
+
+async def test_without_an_api_key_forecast_calls_use_the_public_host() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params.get("apikey") is None
+        return httpx.Response(200, json=_FORECAST_PAYLOAD)
+
+    provider = _make_provider(httpx.MockTransport(handler))
+    await provider.get_current_data(-21.1775, -47.8103)
+
+
+async def test_an_api_key_never_reaches_the_archive_host() -> None:
+    """The Standard plan doesn't include the historical/archive API (see
+    the module docstring) — attaching the key there would likely 403, so
+    `get_recent_rainfall` must keep hitting the free public archive host
+    exactly as without a subscription, key or no key."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "archive-api.open-meteo.com" in str(request.url)
+        assert "customer" not in str(request.url)
+        assert request.url.params.get("apikey") is None
+        return httpx.Response(200, json=_ARCHIVE_PAYLOAD)
+
+    provider = OpenMeteoWeatherProvider(
+        forecast_url="https://api.open-meteo.com/v1/forecast",
+        archive_url="https://archive-api.open-meteo.com/v1/archive",
+        api_key="test-key-123",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    await provider.get_recent_rainfall(-21.1775, -47.8103, days=2)
