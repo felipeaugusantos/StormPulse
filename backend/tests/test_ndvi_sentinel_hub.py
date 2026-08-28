@@ -233,3 +233,44 @@ async def test_get_ndvi_raises_when_every_interval_has_a_null_mean() -> None:
     )
     with pytest.raises(NdviProviderUnavailableError):
         await provider.get_ndvi(json.dumps(_SMALL_TALHAO), lookback_days=15)
+
+
+async def test_get_ndvi_image_sends_a_process_api_request_and_returns_the_raw_bytes() -> None:
+    """Item "imagem do talhão" — a separate Sentinel Hub API (Process, not
+    Statistical) that renders and returns the image directly; the request
+    shape (single `responses` entry) means Sentinel Hub replies with raw
+    bytes, not JSON wrapping them."""
+    captured: dict[str, Any] = {}
+    fake_png = b"\x89PNG\r\n\x1a\nfake-image-bytes"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "token" in str(request.url):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 300})
+        captured["url"] = str(request.url)
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, content=fake_png, headers={"content-type": "image/png"})
+
+    provider = SentinelHubNdviProvider(
+        _settings(), client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    result = await provider.get_ndvi_image(json.dumps(_SMALL_TALHAO), lookback_days=15)
+
+    assert result == fake_png
+    assert captured["url"] == _settings().ndvi_sh_process_url
+    assert captured["body"]["output"]["responses"] == [
+        {"identifier": "default", "format": {"type": "image/png"}}
+    ]
+    assert "evalscript" in captured["body"]
+
+
+async def test_get_ndvi_image_raises_on_a_network_failure() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "token" in str(request.url):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 300})
+        raise httpx.ReadError("connection reset")
+
+    provider = SentinelHubNdviProvider(
+        _settings(), client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    with pytest.raises(NdviProviderUnavailableError):
+        await provider.get_ndvi_image(json.dumps(_SMALL_TALHAO), lookback_days=15)

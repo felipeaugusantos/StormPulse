@@ -25,7 +25,7 @@ from app.core.config import Settings
 from app.core.crypto import blind_index
 from app.core.enums import WeatherSourceKind
 from app.locations.models import Location
-from app.ndvi.models import NdviReading
+from app.ndvi.models import NdviImage, NdviReading
 from app.ndvi.provider import NdviObservation, NdviProvider, NdviProviderUnavailableError
 from app.tenants.models import Tenant
 from app.users.models import User
@@ -81,6 +81,9 @@ class _FakeNdviProvider(NdviProvider):
             ndvi_mean=self._ndvi_mean,
             valid_pixel_percent=90.0,
         )
+
+    async def get_ndvi_image(self, boundary_geojson: str, *, lookback_days: float) -> bytes:
+        return b"\x89PNG\r\n\x1a\nfake"
 
 
 def _make_farm(session: Session) -> Location:
@@ -168,6 +171,55 @@ def test_reading_created_for_eligible_talhao() -> None:
         assert reading.ndvi_mean == 0.62
         assert reading.tenant_id == talhao.tenant_id
         assert reading.is_mock is True
+        image = session.scalars(select(NdviImage).where(NdviImage.location_id == talhao.id)).one()
+        assert image.png_data == b"\x89PNG\r\n\x1a\nfake"
+        assert image.tenant_id == talhao.tenant_id
+        session.rollback()
+
+
+def test_ndvi_image_is_replaced_not_accumulated_across_cycles() -> None:
+    """Only the latest image is ever kept per talhão (`NdviImage`'s own
+    docstring) — a second successful cycle must replace, not add to, the
+    first cycle's row."""
+    with session_scope() as session:
+        farm = _make_farm(session)
+        talhao = _make_talhao(session, farm)
+
+        run_ndvi_pipeline_cycle(
+            session, settings=_enabled_settings(), provider=_FakeNdviProvider(ndvi_mean=0.5)
+        )
+        run_ndvi_pipeline_cycle(
+            session, settings=_enabled_settings(), provider=_FakeNdviProvider(ndvi_mean=0.7)
+        )
+
+        images = session.scalars(select(NdviImage).where(NdviImage.location_id == talhao.id)).all()
+        assert len(images) == 1
+        session.rollback()
+
+
+def test_ndvi_image_failure_does_not_undo_the_numeric_reading() -> None:
+    """A picture is a bonus on top of the number, not a requirement for
+    it — the image call failing must leave the numeric reading intact."""
+
+    class _NoImageProvider(_FakeNdviProvider):
+        async def get_ndvi_image(self, boundary_geojson: str, *, lookback_days: float) -> bytes:
+            raise NdviProviderUnavailableError("sem imagem (fake)")
+
+    with session_scope() as session:
+        farm = _make_farm(session)
+        talhao = _make_talhao(session, farm)
+        provider = _NoImageProvider(ndvi_mean=0.62)
+
+        run_ndvi_pipeline_cycle(session, settings=_enabled_settings(), provider=provider)
+
+        # Scoped to this test's own talhão, never the aggregate summary
+        # counts — the shared dev DB may carry other real, active talhões
+        # this same cycle also processes (see this file's own docstring).
+        assert _has_reading_for(session, talhao.id)
+        image = session.scalars(
+            select(NdviImage).where(NdviImage.location_id == talhao.id)
+        ).one_or_none()
+        assert image is None
         session.rollback()
 
 

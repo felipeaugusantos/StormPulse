@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from httpx import AsyncClient
 
-from app.ndvi.models import NdviReading
+from app.ndvi.models import NdviImage, NdviReading
 from tests.conftest import register_and_login
 from workers.db import session_scope
 
@@ -126,4 +126,44 @@ async def test_another_users_talhao_is_404_not_someone_elses_data(client: AsyncC
 
     headers_b = await _auth_headers(client)
     resp = await client.get(f"/api/v1/locations/{talhao_id}/agro/ndvi", headers=headers_b)
+    assert resp.status_code == 404
+
+
+async def test_no_image_yet_returns_404(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    _, talhao_id = await _create_farm_and_talhao(client, headers)
+
+    resp = await client.get(f"/api/v1/locations/{talhao_id}/agro/ndvi-image", headers=headers)
+    assert resp.status_code == 404
+
+
+async def test_returns_the_stored_ndvi_image(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    _, talhao_id = await _create_farm_and_talhao(client, headers)
+    me = (await client.get("/api/v1/users/me", headers=headers)).json()
+
+    fake_png = b"\x89PNG\r\n\x1a\nfake-image-bytes"
+    with session_scope() as session:
+        session.add(
+            NdviImage(
+                tenant_id=me["tenant_id"],
+                location_id=talhao_id,
+                observed_at=datetime.now(UTC),
+                png_data=fake_png,
+                is_mock=True,
+            )
+        )
+
+    resp = await client.get(f"/api/v1/locations/{talhao_id}/agro/ndvi-image", headers=headers)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    assert resp.content == fake_png
+
+
+async def test_another_users_ndvi_image_is_404(client: AsyncClient) -> None:
+    headers_a = await _auth_headers(client)
+    _, talhao_id = await _create_farm_and_talhao(client, headers_a)
+
+    headers_b = await _auth_headers(client)
+    resp = await client.get(f"/api/v1/locations/{talhao_id}/agro/ndvi-image", headers=headers_b)
     assert resp.status_code == 404
