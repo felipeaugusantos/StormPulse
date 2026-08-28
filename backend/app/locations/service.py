@@ -6,6 +6,7 @@ queries (``ST_DWithin``) work against it.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -20,10 +21,13 @@ from app.alerts.schemas import AlertOut
 from app.core.config import Settings
 from app.core.enums import AlertEventType
 from app.core.rls import set_tenant_context
+from app.deforestation.models import DeforestationCheck
+from app.deforestation.provider import DeforestationAlert
 from app.locations.ai_summary import generate_report_summary
 from app.locations.models import AlertPreference, Location
 from app.locations.schemas import (
     AlertPreferenceIn,
+    DeforestationCheckOut,
     LocationCreate,
     LocationUpdate,
     WeeklyReportOut,
@@ -175,6 +179,28 @@ async def build_weekly_report(
     )
     ndvi_readings = list((await session.execute(ndvi_stmt)).scalars().all())
 
+    deforestation_checks = list(
+        (
+            await session.execute(
+                select(DeforestationCheck).where(DeforestationCheck.location_id == location.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    deforestation = None
+    if deforestation_checks:
+        deforestation_alerts: list[DeforestationAlert] = []
+        for row in deforestation_checks:
+            deforestation_alerts.extend(
+                DeforestationAlert.model_validate(a) for a in json.loads(row.alerts_json)
+            )
+        deforestation = DeforestationCheckOut(
+            checked_sources=[row.source for row in deforestation_checks],
+            last_checked_at=max(row.checked_at for row in deforestation_checks),
+            alerts=deforestation_alerts,
+        )
+
     report = WeeklyReportOut(
         location_id=location.id,
         location_name=location.name,
@@ -186,6 +212,7 @@ async def build_weekly_report(
         dry_days_count=dry_days_count,
         alerts=[AlertOut.model_validate(a) for a in alerts],
         ndvi_readings=[NdviOut.model_validate(n) for n in ndvi_readings],
+        deforestation=deforestation,
         generated_at=now,
     )
     report.ai_summary = await generate_report_summary(report, settings)

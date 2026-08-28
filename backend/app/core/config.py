@@ -375,6 +375,32 @@ class Settings(BaseSettings):
     ndvi_lookback_days: float = Field(default=15.0, gt=0)
     ndvi_http_timeout_seconds: float = Field(default=30.0, gt=0)
 
+    # --- Checagem de desmatamento (INPE DETER/PRODES, item DETER) ---
+    # Desligado por padrão, mesmo sem exigir credencial nenhuma (ambos os
+    # serviços abaixo são WFS públicos do TerraBrasilis) — motivo diferente
+    # do NDVI/satélite: em teste manual esse WFS se mostrou instável de
+    # verdade (erro de "connection pool" do lado do INPE e timeouts de
+    # >20s em consultas simples), então isso roda como ciclo de fundo
+    # tolerante a falha (workers/deforestation_pipeline.py) em vez de
+    # chamada ao vivo no request path — nunca deve travar a geração de um
+    # relatório. Cobre só os biomas Amazônia (DETER) e Cerrado (PRODES) —
+    # fora dessas duas camadas, o filtro espacial sempre devolve "nenhum
+    # alerta", que é indistinguível de "sem cobertura" (o relatório deixa
+    # esse limite explícito, nunca afirma "sem desmatamento" fora delas).
+    deforestation_check_enabled: bool = False
+    deforestation_deter_amz_wfs_url: str = (
+        "https://terrabrasilis.dpi.inpe.br/geoserver/deter-amz/ows"
+    )
+    deforestation_prodes_cerrado_wfs_url: str = (
+        "https://terrabrasilis.dpi.inpe.br/geoserver/prodes-cerrado-nb/ows"
+    )
+    # DETER (near-real-time alerts) looks back a few years by default so a
+    # freshly-onboarded talhão still surfaces recent-but-not-brand-new
+    # clearing; PRODES (annual, Cerrado) inherently reports by calendar
+    # year already, this just bounds how many past years are considered.
+    deforestation_lookback_years: float = Field(default=3.0, gt=0)
+    deforestation_http_timeout_seconds: float = Field(default=20.0, gt=0)
+
     # --- Notificação push real (Web Push / VAPID, FASE 22) ---
     # Sem serviço externo (FCM/APNs) — o navegador é o próprio serviço de
     # push, só a assinatura VAPID é local. `vapid_private_key`/

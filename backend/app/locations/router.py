@@ -14,10 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db, get_request_settings
 from app.core.config import Settings
 from app.core.metrics import record_weather_data_age
+from app.deforestation.models import DeforestationCheck
+from app.deforestation.provider import DeforestationAlert
 from app.locations import service
 from app.locations.models import Location
 from app.locations.pdf import render_weekly_report_pdf
 from app.locations.schemas import (
+    DeforestationCheckOut,
     LocationCreate,
     LocationOut,
     LocationUpdate,
@@ -405,6 +408,52 @@ async def get_location_ndvi_image(
             detail="Nenhuma imagem de NDVI disponível para este talhão ainda",
         )
     return Response(content=image.png_data, media_type="image/png")
+
+
+@router.get(
+    "/{location_id}/agro/deforestation",
+    response_model=DeforestationCheckOut,
+    summary="Checagem de desmatamento (DETER/PRODES, INPE) do talhão (item DETER)",
+)
+async def get_location_deforestation(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> DeforestationCheckOut:
+    """Reads whatever the background pipeline last successfully persisted
+    per source (``workers/deforestation_pipeline.py``) — never calls INPE's
+    WFS live, same "read what the pipeline already computed" rule as
+    `/agro/ndvi` (that endpoint's own WFS proved unstable enough in
+    development to make a live call on the request path a bad idea).
+    Talhão-only (same scoping as NDVI/ZARC)."""
+    location = await _get_owned_or_404(session, user, location_id)
+    if location.parent_location_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Checagem de desmatamento só está disponível para talhões",
+        )
+    rows = list(
+        (
+            await session.execute(
+                select(DeforestationCheck).where(DeforestationCheck.location_id == location.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma checagem de desmatamento disponível para este talhão ainda",
+        )
+    alerts: list[DeforestationAlert] = []
+    for row in rows:
+        alerts.extend(DeforestationAlert.model_validate(a) for a in json.loads(row.alerts_json))
+    return DeforestationCheckOut(
+        checked_sources=[row.source for row in rows],
+        last_checked_at=max(row.checked_at for row in rows),
+        alerts=alerts,
+    )
 
 
 @router.get(

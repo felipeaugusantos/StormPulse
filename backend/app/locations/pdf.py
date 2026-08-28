@@ -149,6 +149,57 @@ def render_weekly_report_pdf(
             )
     story.append(Spacer(1, 1 * cm))
 
+    story.append(Paragraph("Desmatamento (DETER/PRODES, INPE)", styles["Heading3"]))
+    if report.deforestation is None or not report.deforestation.checked_sources:
+        story.append(
+            Paragraph(
+                "Checagem de desmatamento ainda não disponível para este talhão.",
+                muted,
+            )
+        )
+    else:
+        deforestation = report.deforestation
+        checked_label = " e ".join(deforestation.checked_sources)
+        story.append(
+            Paragraph(
+                f"Consultado em {checked_label} (registros oficiais do INPE — cobre só os "
+                "biomas Amazônia e Cerrado; fora dessas regiões, nenhum alerta encontrado "
+                "não significa ausência de desmatamento, apenas que essas camadas não "
+                "cobrem a área).",
+                muted,
+            )
+        )
+        if deforestation.last_checked_at is not None:
+            story.append(
+                Paragraph(
+                    f"Última checagem: {deforestation.last_checked_at.strftime(_DATE_FMT)}",
+                    muted,
+                )
+            )
+        if not deforestation.alerts:
+            story.append(Paragraph("Nenhum alerta de desmatamento encontrado.", styles["Normal"]))
+        else:
+            for dalert in deforestation.alerts:
+                when = (
+                    dalert.detected_at.strftime(_DATE_FMT)
+                    if dalert.detected_at
+                    else "data desconhecida"
+                )
+                area = f" · {dalert.area_ha:.2f} ha" if dalert.area_ha is not None else ""
+                if dalert.municipio:
+                    place = f" ({dalert.municipio}/{dalert.uf})"
+                elif dalert.uf:
+                    place = f" ({dalert.uf})"
+                else:
+                    place = ""
+                story.append(
+                    Paragraph(
+                        f"<b>{when}</b> — {dalert.classname}{area}{place} [{dalert.source}]",
+                        styles["Normal"],
+                    )
+                )
+    story.append(Spacer(1, 1 * cm))
+
     story.append(Paragraph(f"Gerado em {report.generated_at.strftime(_DATETIME_FMT)}", muted))
 
     doc.build(story)

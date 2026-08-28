@@ -9,6 +9,7 @@ from __future__ import annotations
 from app.alerts.models import Alert
 from app.alerts.verification_models import AlertVerification
 from app.apikeys.models import ApiKey
+from app.deforestation.models import DeforestationCheck
 from app.lightning.models import LightningStrike
 from app.locations.models import AlertPreference, Location
 from app.ndvi.models import NdviImage, NdviReading
@@ -27,6 +28,7 @@ __all__ = [
     "AlertVerification",
     "ApiKey",
     "ConvectiveWatch",
+    "DeforestationCheck",
     "LightningStrike",
     "Location",
     "NdviImage",

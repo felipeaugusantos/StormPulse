@@ -81,6 +81,15 @@ celery_app.conf.update(
             # honest and kinder to the API" reasoning as agro above.
             "schedule": 3_600.0,  # seconds
         },
+        "deforestation-check-weekly": {
+            "task": "workers.tasks.run_deforestation_check_task",
+            # DETER is near-real-time but publishes on the order of days,
+            # not minutes, and PRODES-Cerrado is annual — checking more
+            # often just re-hits INPE's own (occasionally flaky, see
+            # app/deforestation/inpe.py) public WFS for no new data. Same
+            # cadence and reasoning as ZARC below.
+            "schedule": 604_800.0,  # seconds (7 days)
+        },
         "zarc-check-weekly": {
             "task": "workers.tasks.run_zarc_ingestion_task",
             # MAPA's own Tábua de Risco CSV is a static government file,

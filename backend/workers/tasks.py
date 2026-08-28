@@ -18,6 +18,7 @@ from workers.agro_pipeline import run_agro_advisory_cycle
 from workers.ai_summary import generate_summary
 from workers.celery_app import celery_app
 from workers.db import session_scope
+from workers.deforestation_pipeline import run_deforestation_check_cycle
 from workers.email import EmailKind, render_email, send_email
 from workers.lightning_pipeline import run_lightning_detection_cycle
 from workers.ndvi_pipeline import run_ndvi_pipeline_cycle
@@ -90,6 +91,25 @@ def run_ndvi_pipeline_task() -> dict[str, Any]:
         "failures": summary.failures,
     }
     logger.info("NDVI pipeline cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_deforestation_check_task")
+def run_deforestation_check_task() -> dict[str, Any]:
+    """Run one DETER/PRODES deforestation-check cycle (item DETER).
+
+    No-op (returns immediately) when DEFORESTATION_CHECK_ENABLED=false —
+    the default.
+    """
+    with track_pipeline_cycle("deforestation"), session_scope() as session:
+        summary = run_deforestation_check_cycle(session)
+    result = {
+        "enabled": summary.enabled,
+        "talhoes_checked": summary.talhoes_checked,
+        "checks_updated": summary.checks_updated,
+        "source_failures": summary.source_failures,
+    }
+    logger.info("deforestation check cycle complete", extra=result)
     return result
 
 
