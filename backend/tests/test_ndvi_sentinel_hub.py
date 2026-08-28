@@ -15,8 +15,10 @@ import json
 from typing import Any
 
 import httpx
+import pytest
 
 from app.core.config import Settings
+from app.ndvi.provider import NdviProviderUnavailableError
 from app.ndvi.sentinel_hub import SentinelHubNdviProvider, _pixel_dimensions
 
 # A small real-shaped talhão (~330m x ~220m), matching the scale of the
@@ -116,3 +118,118 @@ async def test_get_ndvi_sends_width_height_not_resx_resy() -> None:
     assert aggregation["height"] > 1
     assert observation.ndvi_mean == 0.62
     assert observation.valid_pixel_percent == 90.0
+
+
+async def test_get_ndvi_skips_an_interval_with_a_nan_mean_despite_valid_pixels() -> None:
+    """Real production bug (2026-08-28): Sentinel Hub returned a non-zero
+    sampleCount alongside `mean: NaN` for the most recent interval — a
+    degenerate statistical result, not a real reading. `NaN` isn't SQL
+    NULL (the DB column really is NOT NULL and never rejected it) but
+    it's unrepresentable in JSON, so it silently became `null` in the API
+    response — the reading looked fine end-to-end until the frontend
+    tried to format it. Must fall back to the next older interval with a
+    usable mean, same as it already does for zero-sample intervals."""
+    body = (
+        '{"data": [\n'
+        '  {"interval": {"from": "2026-08-20T00:00:00Z", "to": "2026-08-21T00:00:00Z"},\n'
+        '   "outputs": {"data": {"bands": {"B0": {"stats": '
+        '{"mean": 0.55, "sampleCount": 800, "noDataCount": 200}}}}}},\n'
+        '  {"interval": {"from": "2026-08-25T00:00:00Z", "to": "2026-08-26T00:00:00Z"},\n'
+        '   "outputs": {"data": {"bands": {"B0": {"stats": '
+        '{"mean": NaN, "sampleCount": 500, "noDataCount": 500}}}}}}\n'
+        "]}"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "token" in str(request.url):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 300})
+        return httpx.Response(
+            200, content=body.encode("utf-8"), headers={"content-type": "application/json"}
+        )
+
+    provider = SentinelHubNdviProvider(
+        _settings(), client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    observation = await provider.get_ndvi(json.dumps(_SMALL_TALHAO), lookback_days=15)
+
+    # The NaN-mean interval (2026-08-25, walked first since data is
+    # chronological and the loop goes backwards) must be skipped in favor
+    # of the older, usable one (2026-08-20) — never returned as-is.
+    assert observation.ndvi_mean == 0.55
+    assert observation.observed_at.isoformat() == "2026-08-20T00:00:00+00:00"
+
+
+async def test_get_ndvi_skips_an_interval_with_a_null_mean_despite_valid_pixels() -> None:
+    """A defensive case distinct from the NaN one above: `mean` missing/
+    explicitly `null` in the payload, which `.get("mean")` would return
+    as Python `None` rather than `float('nan')` — must be skipped the
+    same way, not passed straight into `NdviObservation` where a `None`
+    would fail the schema's `ndvi_mean: float` validation outright."""
+    stats_response = {
+        "data": [
+            {
+                "interval": {"from": "2026-08-20T00:00:00Z", "to": "2026-08-21T00:00:00Z"},
+                "outputs": {
+                    "data": {
+                        "bands": {
+                            "B0": {"stats": {"mean": 0.55, "sampleCount": 800, "noDataCount": 200}}
+                        }
+                    }
+                },
+            },
+            {
+                "interval": {"from": "2026-08-25T00:00:00Z", "to": "2026-08-26T00:00:00Z"},
+                "outputs": {
+                    "data": {
+                        "bands": {
+                            "B0": {"stats": {"mean": None, "sampleCount": 500, "noDataCount": 500}}
+                        }
+                    }
+                },
+            },
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "token" in str(request.url):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 300})
+        return httpx.Response(200, json=stats_response)
+
+    provider = SentinelHubNdviProvider(
+        _settings(), client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    observation = await provider.get_ndvi(json.dumps(_SMALL_TALHAO), lookback_days=15)
+
+    # The null-mean interval (2026-08-25, walked first since data is
+    # chronological and the loop goes backwards) must be skipped in favor
+    # of the older, usable one (2026-08-20) — never returned as-is.
+    assert observation.ndvi_mean == 0.55
+    assert observation.observed_at.isoformat() == "2026-08-20T00:00:00+00:00"
+
+
+async def test_get_ndvi_raises_when_every_interval_has_a_null_mean() -> None:
+    stats_response = {
+        "data": [
+            {
+                "interval": {"from": "2026-08-20T00:00:00Z", "to": "2026-08-21T00:00:00Z"},
+                "outputs": {
+                    "data": {
+                        "bands": {
+                            "B0": {"stats": {"mean": None, "sampleCount": 500, "noDataCount": 500}}
+                        }
+                    }
+                },
+            }
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "token" in str(request.url):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 300})
+        return httpx.Response(200, json=stats_response)
+
+    provider = SentinelHubNdviProvider(
+        _settings(), client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    with pytest.raises(NdviProviderUnavailableError):
+        await provider.get_ndvi(json.dumps(_SMALL_TALHAO), lookback_days=15)

@@ -24,6 +24,7 @@ reprojection library needed.
 from __future__ import annotations
 
 import json
+import math
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -191,7 +192,21 @@ class SentinelHubNdviProvider(NdviProvider):
             sample_count = stats.get("sampleCount", 0)
             no_data_count = stats.get("noDataCount", 0)
             total = sample_count + no_data_count
-            if sample_count == 0 or total == 0:
+            mean = stats.get("mean")
+            # Sentinel Hub can report a non-zero sampleCount yet still
+            # give a degenerate `mean` for that interval — confirmed live
+            # in production 2026-08-28: a talhão with 50% valid pixels got
+            # `NaN` back (Python's `json` module parses the `NaN` token by
+            # default). `ndvi_readings.ndvi_mean` really is NOT NULL at
+            # the DB level (confirmed via `\d ndvi_readings`) — NaN isn't
+            # SQL NULL, so it was never rejected there, but it *is*
+            # unrepresentable in JSON, so Pydantic's response serializer
+            # silently turned it into `null` for the API response,
+            # producing a reading that looked fine end-to-end until the
+            # frontend tried to format it. Treated the same as "no usable
+            # pixels" here: fall back to the next older interval instead
+            # of ever persisting a mean nothing downstream can use.
+            if sample_count == 0 or total == 0 or mean is None or math.isnan(mean):
                 continue
             return NdviObservation(
                 provenance=Provenance(
@@ -200,7 +215,7 @@ class SentinelHubNdviProvider(NdviProvider):
                     is_mock=False,
                 ),
                 observed_at=datetime.fromisoformat(interval["interval"]["from"]),
-                ndvi_mean=stats["mean"],
+                ndvi_mean=mean,
                 valid_pixel_percent=round(sample_count / total * 100, 1),
             )
 
