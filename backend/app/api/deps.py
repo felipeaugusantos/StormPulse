@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -32,6 +33,14 @@ def get_request_settings(request: Request) -> Settings:
     """
     settings: Settings = request.app.state.settings
     return settings
+
+
+def get_redis(request: Request) -> Redis | None:
+    """The app's shared Redis client, or ``None`` when it isn't configured
+    for this app instance (e.g. some unit tests) — every caller of this
+    (rate limiter, weather cache) already fails open on ``None``/errors,
+    so this never raises."""
+    return getattr(request.app.state, "redis", None)
 
 
 async def get_db(request: Request) -> AsyncIterator[AsyncSession]:

@@ -8,10 +8,11 @@ from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_db, get_request_settings
+from app.api.deps import get_current_user, get_db, get_redis, get_request_settings
 from app.core.config import Settings
 from app.core.metrics import record_weather_data_age
 from app.deforestation.models import DeforestationCheck
@@ -34,11 +35,13 @@ from app.ndvi.schemas import NdviOut
 from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
+from app.weather.cache import get_cached, set_cached
 from app.weather.factory import get_numeric_rain_forecast_provider, get_weather_provider
 from app.weather.provider import (
     CurrentConditions,
     Forecast,
     RainfallHistory,
+    WeatherProvider,
     WeatherProviderUnavailableError,
 )
 from engine.geo import haversine_km
@@ -71,6 +74,40 @@ async def _validate_parent(
             detail="Um talhão não pode ser filho de outro talhão",
         )
     return parent
+
+
+async def _cached_current(
+    redis: Redis | None, provider: WeatherProvider, latitude: float, longitude: float
+) -> CurrentConditions:
+    """Shared by ``/current`` and ``/agro/spray-window`` (which needs the
+    same reading internally) — see ``app.weather.cache`` for why this
+    exists: the dashboard's ~30s auto-refresh made this the single most
+    frequent call into the (rate/quota-limited) Open-Meteo forecast
+    endpoint, and a real production incident traced back to exactly that.
+    """
+    cached = await get_cached(redis, "current", latitude, longitude, CurrentConditions)
+    if cached is not None:
+        return cached
+    current = await provider.get_current_data(latitude, longitude)
+    await set_cached(redis, "current", latitude, longitude, current)
+    return current
+
+
+async def _cached_forecast(
+    redis: Redis | None, provider: WeatherProvider, kind: str, latitude: float, longitude: float
+) -> Forecast:
+    """``kind`` keeps the general chained forecast (``"forecast"``, may be
+    answered by INMET/CPTEC/Open-Meteo depending on availability) and the
+    numeric rain forecast (``"rain-forecast"``, always Open-Meteo direct —
+    see ``get_numeric_rain_forecast_provider``) in separate cache entries,
+    since they're never interchangeable content even for the same point.
+    """
+    cached = await get_cached(redis, kind, latitude, longitude, Forecast)
+    if cached is not None:
+        return cached
+    forecast = await provider.get_forecast(latitude, longitude)
+    await set_cached(redis, kind, latitude, longitude, forecast)
+    return forecast
 
 
 def _validate_boundary_within_parent_radius(parent: Location, boundary_geojson: str) -> None:
@@ -186,11 +223,14 @@ async def get_location_forecast(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     settings: Settings = Depends(get_request_settings),
+    redis: Redis | None = Depends(get_redis),
 ) -> Forecast:
     location = await _get_owned_or_404(session, user, location_id)
     provider = get_weather_provider(settings)
     try:
-        return await provider.get_forecast(location.latitude, location.longitude)
+        return await _cached_forecast(
+            redis, provider, "forecast", location.latitude, location.longitude
+        )
     except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
         # Honest 404: no fabricated forecast when the real source can't
         # produce one (no nearby station, IBGE geocode unresolved, or the
@@ -212,11 +252,12 @@ async def get_location_current(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     settings: Settings = Depends(get_request_settings),
+    redis: Redis | None = Depends(get_redis),
 ) -> CurrentConditions:
     location = await _get_owned_or_404(session, user, location_id)
     provider = get_weather_provider(settings)
     try:
-        current = await provider.get_current_data(location.latitude, location.longitude)
+        current = await _cached_current(redis, provider, location.latitude, location.longitude)
     except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -236,11 +277,12 @@ async def get_location_spray_window(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     settings: Settings = Depends(get_request_settings),
+    redis: Redis | None = Depends(get_redis),
 ) -> SprayWindowOut:
     location = await _get_owned_or_404(session, user, location_id)
     provider = get_weather_provider(settings)
     try:
-        current = await provider.get_current_data(location.latitude, location.longitude)
+        current = await _cached_current(redis, provider, location.latitude, location.longitude)
     except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -259,7 +301,9 @@ async def get_location_spray_window(
     rain_mm: float | None = None
     try:
         rain_provider = get_numeric_rain_forecast_provider(settings)
-        forecast = await rain_provider.get_forecast(location.latitude, location.longitude)
+        forecast = await _cached_forecast(
+            redis, rain_provider, "rain-forecast", location.latitude, location.longitude
+        )
         today = datetime.now(UTC).date()
         today_point = next((p for p in forecast.points if p.time.date() == today), None)
         if today_point is not None:
@@ -309,6 +353,7 @@ async def get_location_rain_forecast(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
     settings: Settings = Depends(get_request_settings),
+    redis: Redis | None = Depends(get_redis),
 ) -> Forecast:
     """Same shape as ``/forecast``, but always asks Open-Meteo directly —
     the only source that ever gives numeric ``precipitation_mm`` (see
@@ -318,7 +363,9 @@ async def get_location_rain_forecast(
     location = await _get_owned_or_404(session, user, location_id)
     provider = get_numeric_rain_forecast_provider(settings)
     try:
-        return await provider.get_forecast(location.latitude, location.longitude)
+        return await _cached_forecast(
+            redis, provider, "rain-forecast", location.latitude, location.longitude
+        )
     except (WeatherProviderUnavailableError, httpx.HTTPError) as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
