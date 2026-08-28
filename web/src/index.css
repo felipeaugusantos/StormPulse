@@ -1020,6 +1020,17 @@ button {
   font-size: 0.75rem;
   margin-top: 16px;
 }
+.report-ndvi-image {
+  margin: 8px 0 14px;
+}
+.report-ndvi-image img {
+  display: block;
+  max-width: 220px;
+  width: 100%;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
 
 @media print {
   body * {

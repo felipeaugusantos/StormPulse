@@ -344,6 +344,10 @@ export const api = {
   // ADR-0053) — 404s for a farm-level point or a talhão the background
   // pipeline hasn't checked yet, same "no data" shape as everything else.
   ndvi: (locationId: string) => request<NdviReading>(`/locations/${locationId}/agro/ndvi`),
+  // Item "imagem do talhão" — colored NDVI map (green=vigorous,
+  // red/brown=stressed), only the latest kept, same "no data" 404 shape
+  // as ndvi() above.
+  ndviImage: (locationId: string) => requestBlob(`/locations/${locationId}/agro/ndvi-image`),
   // Talhão-only (FASE 32) — 404s for a farm-level point, same shape as ndvi().
   weeklyReport: (locationId: string) =>
     request<WeeklyReport>(`/locations/${locationId}/agro/weekly-report`),

@@ -23,6 +23,7 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [ndviImageUrl, setNdviImageUrl] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -44,6 +45,27 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
       })
     return () => {
       cancelled = true
+    }
+  }, [locationId])
+
+  useEffect(() => {
+    let cancelled = false
+    let url: string | null = null
+    // 404 is the expected shape for "no image yet" — never surfaced as an
+    // error, same as ndvi_readings being empty above.
+    api
+      .ndviImage(locationId)
+      .then((blob) => {
+        if (cancelled) return
+        url = URL.createObjectURL(blob)
+        setNdviImageUrl(url)
+      })
+      .catch(() => {
+        if (!cancelled) setNdviImageUrl(null)
+      })
+    return () => {
+      cancelled = true
+      if (url) URL.revokeObjectURL(url)
     }
   }, [locationId])
 
@@ -128,6 +150,15 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
               satélite (Sentinel-2), de -1 a 1 — quanto mais alto, mais vegetação viva e saudável;
               valores baixos indicam solo exposto, vegetação esparsa ou estresse da planta.
             </p>
+            {ndviImageUrl && (
+              <div className="report-ndvi-image">
+                <img src={ndviImageUrl} alt="Mapa de NDVI colorido do talhão" />
+                <p className="panel-hint">
+                  Verde = vegetação mais vigorosa · vermelho/marrom = solo exposto ou vegetação
+                  em estresse. Áreas transparentes indicam nuvem ou dado indisponível.
+                </p>
+              </div>
+            )}
             {report.ndvi_readings.length === 0 ? (
               <p className="panel-hint">Nenhuma leitura de NDVI no período.</p>
             ) : (
