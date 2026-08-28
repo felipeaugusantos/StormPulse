@@ -97,6 +97,15 @@ def render_weekly_report_pdf(report: WeeklyReportOut) -> bytes:
     story.append(Spacer(1, 0.6 * cm))
 
     story.append(Paragraph("NDVI no período", styles["Heading3"]))
+    story.append(
+        Paragraph(
+            "NDVI (Índice de Vegetação por Diferença Normalizada) mede o vigor da vegetação "
+            "por satélite (Sentinel-2), de -1 a 1 — quanto mais alto, mais vegetação viva e "
+            "saudável; valores baixos indicam solo exposto, vegetação esparsa ou estresse "
+            "da planta.",
+            muted,
+        )
+    )
     if not report.ndvi_readings:
         story.append(Paragraph("Nenhuma leitura de NDVI no período.", muted))
     else:

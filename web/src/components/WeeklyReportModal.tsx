@@ -123,6 +123,11 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
             )}
 
             <h3>NDVI no período</h3>
+            <p className="panel-hint">
+              NDVI (Índice de Vegetação por Diferença Normalizada) mede o vigor da vegetação por
+              satélite (Sentinel-2), de -1 a 1 — quanto mais alto, mais vegetação viva e saudável;
+              valores baixos indicam solo exposto, vegetação esparsa ou estresse da planta.
+            </p>
             {report.ndvi_readings.length === 0 ? (
               <p className="panel-hint">Nenhuma leitura de NDVI no período.</p>
             ) : (
