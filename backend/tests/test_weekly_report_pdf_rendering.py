@@ -20,7 +20,7 @@ from datetime import UTC, date, datetime
 
 from app.deforestation.provider import DETER_AMZ_SOURCE, DeforestationAlert
 from app.locations.pdf import render_weekly_report_pdf
-from app.locations.schemas import DeforestationCheckOut, WeeklyReportOut
+from app.locations.schemas import DeforestationCheckOut, SoilMoistureOut, WeeklyReportOut
 
 
 def _tiny_png() -> bytes:
@@ -95,4 +95,23 @@ def test_renders_the_deforestation_section_with_an_alert() -> None:
         )
     )
     pdf_bytes = render_weekly_report_pdf(report)
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_renders_the_soil_moisture_section_when_present() -> None:
+    report = _report(
+        soil_moisture=SoilMoistureOut(
+            observed_at=date(2026, 8, 27),
+            surface_wetness_percent=33.0,
+            root_zone_wetness_percent=46.0,
+            profile_wetness_percent=46.0,
+            is_mock=False,
+        )
+    )
+    pdf_bytes = render_weekly_report_pdf(report)
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_renders_without_crashing_when_soil_moisture_was_never_fetched() -> None:
+    pdf_bytes = render_weekly_report_pdf(_report(soil_moisture=None))
     assert pdf_bytes.startswith(b"%PDF")
