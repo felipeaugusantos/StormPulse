@@ -181,7 +181,11 @@ export interface LocationItem {
 // vegetation-index pixels over.
 export interface NdviReading {
   observed_at: string
-  ndvi_mean: number
+  // The backend column is NOT NULL, but a crash in production (2026-08-28)
+  // proved a `null` reaches the client for at least one real reading —
+  // treated as possible here rather than re-asserting a guarantee that
+  // demonstrably didn't hold.
+  ndvi_mean: number | null
   valid_pixel_percent: number
   is_mock: boolean
 }

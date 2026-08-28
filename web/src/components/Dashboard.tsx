@@ -1299,7 +1299,7 @@ function NdviPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
                 {!entry && <div className="sub">carregando…</div>}
                 {entry && (
                   <div className="agro-section">
-                    {entry.ndvi ? (
+                    {entry.ndvi && entry.ndvi.ndvi_mean != null ? (
                       <div className="agro-row">
                         NDVI {entry.ndvi.ndvi_mean.toFixed(2)} —{' '}
                         {formatDateBR(entry.ndvi.observed_at, {

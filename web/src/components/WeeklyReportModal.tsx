@@ -121,7 +121,8 @@ export function WeeklyReportModal({ locationId, locationName, onClose }: Props) 
               <ul className="report-list">
                 {report.ndvi_readings.map((n, i) => (
                   <li key={i}>
-                    <strong>{formatDate(n.observed_at)}</strong> — NDVI {n.ndvi_mean.toFixed(2)} —{' '}
+                    <strong>{formatDate(n.observed_at)}</strong> — NDVI{' '}
+                    {n.ndvi_mean != null ? n.ndvi_mean.toFixed(2) : '—'} —{' '}
                     {NDVI_LABEL[classifyNdvi(n.ndvi_mean)]}
                     {n.is_mock && ' (simulado)'}
                   </li>
