@@ -14,6 +14,7 @@ adequate for the MVP and explicitly replaceable.
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -31,13 +32,15 @@ from app.notifications.models import Notification
 from app.storms.models import StormCell, StormObservation, StormRisk, StormTrack
 from app.weather.factory import get_weather_provider
 from app.weather.models import RadarFrame, WeatherSource
-from app.weather.provider import RadarFrameData, WeatherProvider
+from app.weather.provider import RadarFrameData, WeatherProvider, WeatherProviderUnavailableError
 from engine.geo import haversine_km
 from engine.pipeline import StormEngine, TrackedStorm
 from engine.provider_types import FrameInput, RawCellInput
 from engine.risk.engine import RiskAssessment, RiskInput, StormRiskEngine
 from engine.trajectory.estimator import eta_minutes_to
 from workers.db import bypass_rls
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -230,12 +233,9 @@ def run_ingestion_cycle(
     policy = AlertPolicy()
 
     # Prune stale mock cells *before* fetching frames, and commit right
-    # away: when the real provider is down, get_radar_frames raises and
-    # session_scope() rolls back the whole transaction — if pruning ran
-    # later (or shared this transaction), that rollback would silently
-    # undo the cleanup too, and old mock rows from an earlier session
-    # would linger on the dashboard indefinitely, looking like live data
-    # instead of the stale demo leftovers they are.
+    # away — independent of whether the fetch below succeeds, so a
+    # provider outage never leaves old mock rows from an earlier session
+    # lingering on the dashboard looking like live data.
     _prune_old_mock_cells(session, older_than=timedelta(hours=2))
     session.commit()
     # commit() ends the transaction session_scope()'s RLS bypass (migration
@@ -244,7 +244,25 @@ def run_ingestion_cycle(
     # rest of the cycle quietly no-ops.
     bypass_rls(session)
 
-    frames = asyncio.run(provider.get_radar_frames(limit=6))
+    # Every tier of the fallback chain (INMET -> CPTEC -> Open-Meteo, see
+    # app.weather.factory) can fail for radar specifically: CPTEC and
+    # Open-Meteo structurally never have radar/cell-reflectivity data at
+    # all (see app.weather.fallback's own docstring) — so whenever INMET
+    # itself is unavailable, every fallback tier raises too, and the
+    # chain's final error used to propagate straight out of this
+    # function, crashing the whole 5-minute cycle (confirmed live in
+    # production: a sustained INMET outage meant this task raised
+    # unhandled on every single run, and StormCell never got a single row
+    # persisted). No radar this cycle is treated the same as any other
+    # provider outage elsewhere in the pipelines (agro/NDVI/satellite
+    # already skip gracefully per-item) — locations still get evaluated
+    # below, they just see "no storm cells nearby" this cycle, and the
+    # next cycle (5 min later) tries again on its own.
+    try:
+        frames = asyncio.run(provider.get_radar_frames(limit=6))
+    except WeatherProviderUnavailableError as exc:
+        logger.warning("no radar/cell data available this cycle from any provider: %s", exc)
+        frames = []
 
     # Raw retention (item 4, ADR-0065) — persisted *before* the engine
     # below clusters/tracks these into StormCell rows, so the exact shape

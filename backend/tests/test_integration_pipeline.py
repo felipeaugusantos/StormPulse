@@ -10,10 +10,22 @@ workers.run_once`` + curl in ``.github/workflows/ci.yml``, calling
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
 
+from app.core.enums import WeatherSourceKind
+from app.weather.provider import (
+    CurrentConditions,
+    Forecast,
+    Provenance,
+    RadarFrameData,
+    RainfallHistory,
+    Warning,
+    WeatherProvider,
+    WeatherProviderUnavailableError,
+)
 from tests.conftest import register_and_login
 from workers.db import session_scope
 from workers.pipeline_service import CycleSummary, run_ingestion_cycle
@@ -68,3 +80,63 @@ async def test_pipeline_cycle_materializes_storms_and_risk(client: AsyncClient) 
     risk = risk_resp.json()
     assert risk["is_mock"] is True
     assert risk["experimental"] is True
+
+
+class _RadarUnavailableProvider(WeatherProvider):
+    """Every fallback tier failing for ``get_radar_frames`` — the exact
+    shape a sustained INMET outage produces once CPTEC/Open-Meteo's own
+    (structural, not transient) lack of radar data is chained on top
+    (confirmed live in production 2026-08-28: this crashed every single
+    5-minute cycle, with zero StormCell rows ever persisted, until
+    ``run_ingestion_cycle`` started catching it)."""
+
+    @property
+    def name(self) -> str:
+        return "FAKE-NO-RADAR"
+
+    @property
+    def kind(self) -> WeatherSourceKind:
+        return WeatherSourceKind.RADAR
+
+    def _provenance(self) -> Provenance:
+        return Provenance(source_name=self.name, source_kind=self.kind, is_mock=False)
+
+    async def get_current_data(self, latitude: float, longitude: float) -> CurrentConditions:
+        return CurrentConditions(
+            provenance=self._provenance(),
+            observed_at=datetime.now(UTC),
+            latitude=latitude,
+            longitude=longitude,
+        )
+
+    async def get_radar_frames(self, *, limit: int = 1) -> list[RadarFrameData]:
+        raise WeatherProviderUnavailableError("no radar data from any provider in the chain")
+
+    async def get_warnings(self, latitude: float, longitude: float) -> list[Warning]:
+        return []
+
+    async def get_forecast(self, latitude: float, longitude: float) -> Forecast:
+        return Forecast(provenance=self._provenance(), latitude=latitude, longitude=longitude)
+
+    async def get_recent_rainfall(
+        self, latitude: float, longitude: float, *, days: int = 15
+    ) -> RainfallHistory:
+        return RainfallHistory(
+            provenance=self._provenance(), latitude=latitude, longitude=longitude
+        )
+
+
+async def test_pipeline_cycle_survives_a_total_radar_outage(client: AsyncClient) -> None:
+    token = await register_and_login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    await client.post("/api/v1/locations", json=_LOCATION_NEAR_MOCK_STORM, headers=headers)
+
+    def _run_one_cycle() -> CycleSummary:
+        with session_scope() as session:
+            return run_ingestion_cycle(session, provider=_RadarUnavailableProvider())
+
+    summary = await asyncio.to_thread(_run_one_cycle)
+    assert summary.frames == 0
+    assert summary.cells == 0
+    assert summary.risks == 0
+    assert summary.alerts == 0
