@@ -18,8 +18,9 @@ import struct
 import zlib
 from datetime import UTC, date, datetime
 
+from app.deforestation.provider import DETER_AMZ_SOURCE, DeforestationAlert
 from app.locations.pdf import render_weekly_report_pdf
-from app.locations.schemas import WeeklyReportOut
+from app.locations.schemas import DeforestationCheckOut, WeeklyReportOut
 
 
 def _tiny_png() -> bytes:
@@ -69,3 +70,29 @@ def test_renders_a_real_pdf_with_an_embedded_ndvi_image() -> None:
     # no-image case instead of asserting on exact byte content.
     without_image = render_weekly_report_pdf(_report())
     assert len(pdf_bytes) > len(without_image)
+
+
+def test_renders_without_crashing_when_deforestation_was_never_checked() -> None:
+    pdf_bytes = render_weekly_report_pdf(_report(deforestation=None))
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_renders_the_deforestation_section_with_an_alert() -> None:
+    report = _report(
+        deforestation=DeforestationCheckOut(
+            checked_sources=[DETER_AMZ_SOURCE],
+            last_checked_at=datetime(2026, 8, 27, 6, 0, tzinfo=UTC),
+            alerts=[
+                DeforestationAlert(
+                    source=DETER_AMZ_SOURCE,
+                    classname="DESMATAMENTO_CR",
+                    detected_at=date(2026, 7, 1),
+                    area_ha=12.5,
+                    municipio="obidos",
+                    uf="PA",
+                )
+            ],
+        )
+    )
+    pdf_bytes = render_weekly_report_pdf(report)
+    assert pdf_bytes.startswith(b"%PDF")
