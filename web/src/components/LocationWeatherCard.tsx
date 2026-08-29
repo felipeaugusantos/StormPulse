@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { classifyFrostDays, evaluateTrafficability, formatFrostDays } from '../agro'
 import { formatDateBR, riskLevelLabel } from '../format'
-import { classifyCape } from '../storm'
+import { CAPE_LABEL, classifyCape } from '../storm'
 import type {
   CurrentConditions,
   DailyRainfall,
@@ -17,6 +17,7 @@ import type {
 const FROST_THRESHOLD_C = 3
 const FROST_LIGHT_THRESHOLD_C = 6
 const DAYS_TO_SHOW = 5
+const CAPE_DAYS_TO_SHOW = 5
 const TRAFFICABILITY_DRY_DAYS = 2
 const TRAFFICABILITY_RAIN_THRESHOLD_MM = 1
 const TRAFFICABILITY_LOOKAHEAD_DAYS = 2
@@ -229,11 +230,23 @@ export function LocationWeatherCard({ location }: Props) {
             }`}
           >
             🌩️ CAPE hoje: {todayRain.cape_max_jkg.toFixed(0)} J/kg — instabilidade{' '}
-            {
-              { weak: 'fraca', moderate: 'moderada', strong: 'forte', extreme: 'extrema' }[
-                classifyCape(todayRain.cape_max_jkg)
-              ]
-            }
+            {CAPE_LABEL[classifyCape(todayRain.cape_max_jkg)]}
+          </div>
+        )}
+        {upcomingRain.some((p) => p.cape_max_jkg != null) && (
+          <div className="agro-row">
+            <div className="sub">🌩️ Instabilidade (CAPE) — próximos dias</div>
+            <div className="forecast-strip">
+              {upcomingRain.slice(0, CAPE_DAYS_TO_SHOW).map((p, i) => (
+                <div className="forecast-strip-day" key={i}>
+                  <div className="sub">{formatDateBR(p.time, { weekday: 'short' })}</div>
+                  <div>{p.cape_max_jkg != null ? p.cape_max_jkg.toFixed(0) : '—'}</div>
+                  <div className="sub">
+                    {p.cape_max_jkg != null ? CAPE_LABEL[classifyCape(p.cape_max_jkg)] : '—'}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

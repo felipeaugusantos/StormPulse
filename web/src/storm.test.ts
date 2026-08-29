@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { bearingDeg, classifyCape, estimateStormEta, haversineDistanceKm } from './storm'
+import { CAPE_LABEL, bearingDeg, classifyCape, estimateStormEta, haversineDistanceKm } from './storm'
 
 describe('classifyCape', () => {
   test('matches REDEMET 4-tier classification', () => {
@@ -13,6 +13,14 @@ describe('classifyCape', () => {
     expect(classifyCape(1000)).toBe('moderate')
     expect(classifyCape(2500)).toBe('strong')
     expect(classifyCape(4000)).toBe('extreme')
+  })
+})
+
+describe('CAPE_LABEL', () => {
+  test('has a pt-BR label for every CapeLevel classifyCape can return', () => {
+    for (const cape of [500, 1500, 3000, 5000]) {
+      expect(CAPE_LABEL[classifyCape(cape)]).toBeTruthy()
+    }
   })
 })
 

@@ -14,6 +14,13 @@ export function classifyCape(capeJkg: number): CapeLevel {
   return 'extreme'
 }
 
+export const CAPE_LABEL: Record<CapeLevel, string> = {
+  weak: 'fraca',
+  moderate: 'moderada',
+  strong: 'forte',
+  extreme: 'extrema',
+}
+
 const EARTH_RADIUS_KM = 6371
 
 function toRad(deg: number): number {
