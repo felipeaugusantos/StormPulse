@@ -214,3 +214,53 @@ async def test_an_api_key_never_reaches_the_archive_host() -> None:
         client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
     )
     await provider.get_recent_rainfall(-21.1775, -47.8103, days=2)
+
+
+async def test_with_a_model_configured_forecast_calls_request_that_model() -> None:
+    """Item ADR-0075: an explicit model (e.g. ECMWF IFS) replaces
+    Open-Meteo's own opaque "best_match" blend for forecast/current calls."""
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["models"] = request.url.params.get("models")
+        return httpx.Response(200, json=_FORECAST_PAYLOAD)
+
+    provider = OpenMeteoWeatherProvider(
+        forecast_url="https://api.open-meteo.com/v1/forecast",
+        archive_url="https://archive-api.open-meteo.com/v1/archive",
+        model="ecmwf_ifs025",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    await provider.get_forecast(-21.1775, -47.8103)
+
+    assert captured["models"] == "ecmwf_ifs025"
+
+
+async def test_without_a_model_configured_no_models_param_is_sent() -> None:
+    """`model=None` must keep the previous default behavior (Open-Meteo's
+    own best_match) — never silently send an empty `models=` param."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "models" not in request.url.params
+        return httpx.Response(200, json=_FORECAST_PAYLOAD)
+
+    provider = _make_provider(httpx.MockTransport(handler))
+    await provider.get_forecast(-21.1775, -47.8103)
+
+
+async def test_a_model_never_reaches_the_archive_host() -> None:
+    """The archive/historical endpoint is an ERA5 reanalysis product —
+    live model selection doesn't apply there, so `get_recent_rainfall`
+    must never send a `models=` param even when one is configured."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "models" not in request.url.params
+        return httpx.Response(200, json=_ARCHIVE_PAYLOAD)
+
+    provider = OpenMeteoWeatherProvider(
+        forecast_url="https://api.open-meteo.com/v1/forecast",
+        archive_url="https://archive-api.open-meteo.com/v1/archive",
+        model="ecmwf_ifs025",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    await provider.get_recent_rainfall(-21.1775, -47.8103, days=2)
