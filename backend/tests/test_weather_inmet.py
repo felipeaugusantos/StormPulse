@@ -88,10 +88,19 @@ _AVISOS = [
 ]
 
 
+_VALID_TOKEN = "valid-token-123"
+
+
 def _handler(request: httpx.Request) -> httpx.Response:
     path = request.url.path
     if path == "/estacoes/T":
         return httpx.Response(200, json=_STATIONS)
+    if path.startswith("/token/estacao/") and path.endswith(f"/A701/{_VALID_TOKEN}"):
+        return httpx.Response(200, json=_READINGS_A701)
+    if path.startswith("/token/estacao/"):
+        # INMET's real behavior for a bad/expired token: 200 OK, plain text,
+        # not JSON — never a 401/403 (confirmed live, ADR-0080).
+        return httpx.Response(200, text="CHAVE INVÁLIDA!")
     if path.startswith("/estacao/") and path.endswith("/A701"):
         return httpx.Response(200, json=_READINGS_A701)
     if path.startswith("/estacao/") and path.endswith("/A999"):
@@ -130,6 +139,40 @@ async def test_current_data_maps_nearest_station_fields(provider: InmetWeatherPr
     assert data.wind_gusts_kmh == pytest.approx(43.2)
     assert data.wind_direction_deg == pytest.approx(220.0)
     assert data.precipitation_mm == 8.0
+
+
+async def test_uses_the_token_endpoint_when_api_token_is_configured() -> None:
+    """ADR-0080: the public readings route is retired — with a token
+    configured, reads must go through /token/estacao/.../{token} instead."""
+    client = httpx.AsyncClient(transport=httpx.MockTransport(_handler), base_url="http://test")
+    provider = InmetWeatherProvider(
+        base_url="http://test",
+        avisos_url="http://test",
+        previsao_url="http://test",
+        ibge_localidades_url="http://test/ibge",
+        api_token=_VALID_TOKEN,
+        min_rain_rate_mm_h=4.0,
+        max_station_distance_km=100.0,
+        client=client,
+    )
+    data = await provider.get_current_data(-23.5, -46.6)
+    assert data.temperature_c == 24.3
+
+
+async def test_an_invalid_token_raises_a_clear_error_not_a_generic_one() -> None:
+    client = httpx.AsyncClient(transport=httpx.MockTransport(_handler), base_url="http://test")
+    provider = InmetWeatherProvider(
+        base_url="http://test",
+        avisos_url="http://test",
+        previsao_url="http://test",
+        ibge_localidades_url="http://test/ibge",
+        api_token="wrong-token",
+        min_rain_rate_mm_h=4.0,
+        max_station_distance_km=100.0,
+        client=client,
+    )
+    with pytest.raises(WeatherProviderUnavailableError, match="rejected the configured API token"):
+        await provider.get_current_data(-23.5, -46.6)
 
 
 async def test_current_data_raises_when_no_station_nearby(provider: InmetWeatherProvider) -> None:

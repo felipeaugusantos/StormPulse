@@ -1,8 +1,23 @@
 """InmetWeatherProvider — real weather source backed by INMET's public API.
 
-Uses the open (no-token) INMET endpoints for automatic weather stations:
-``GET /estacoes/T`` (station catalogue) and ``GET /estacao/{inicio}/{fim}/
-{codigo}`` (hourly readings). No paid/opaque credential is required for this.
+Uses the open (no-token) INMET endpoint for the station catalogue
+(``GET /estacoes/T``). Hourly readings per station used to also be public
+(``GET /estacao/{inicio}/{fim}/{codigo}``), but INMET retired that route —
+see ``api_token``/ADR-0080 below.
+
+**Readings endpoint retired (2026-09-01, ADR-0080)**: the public
+``/estacao/{inicio}/{fim}/{codigo}`` route now returns `204 No Content` for
+every station and every date range (confirmed live, including a year in
+the past — not a transient outage or a WAF block, an actual retirement).
+The station's own tempo.inmet.gov.br portal now fetches readings through a
+reCAPTCHA-v3-gated endpoint, which isn't something to automate. The
+legitimate replacement is the token-gated
+``/token/estacao/{inicio}/{fim}/{codigo}/{token}`` route — the token isn't
+self-service; it's requested by e-mail from INMET
+(``cadastro.act@inmet.gov.br``). When ``api_token`` is configured
+(``INMET_API_TOKEN``), every reading fetch uses that route instead; without
+one, this falls back to the old public route (harmless if INMET ever
+un-retires it).
 
 Two honest approximations are made here, both documented in
 ``docs/adr/0006-integracao-real-inmet.md``:
@@ -147,6 +162,7 @@ class InmetWeatherProvider(WeatherProvider):
         avisos_url: str,
         previsao_url: str = "https://apiprevmet3.inmet.gov.br",
         ibge_localidades_url: str = "https://servicodados.ibge.gov.br/api/v1/localidades",
+        api_token: str | None = None,
         http_timeout_seconds: float = 10.0,
         min_rain_rate_mm_h: float = 4.0,
         max_station_distance_km: float = 100.0,
@@ -156,6 +172,7 @@ class InmetWeatherProvider(WeatherProvider):
         self._avisos_url = avisos_url.rstrip("/")
         self._previsao_url = previsao_url.rstrip("/")
         self._ibge_localidades_url = ibge_localidades_url.rstrip("/")
+        self._api_token = api_token
         self._min_rain_rate_mm_h = min_rain_rate_mm_h
         self._max_station_distance_km = max_station_distance_km
         self._client = client or httpx.AsyncClient(
@@ -211,7 +228,22 @@ class InmetWeatherProvider(WeatherProvider):
 
     async def _fetch_station_readings(self, station_code: str, day: date) -> list[dict[str, Any]]:
         iso = day.isoformat()
-        response = await self._client.get(f"{self._base_url}/estacao/{iso}/{iso}/{station_code}")
+        # Real production incident (2026-09-01, ADR-0080): INMET quietly
+        # retired the public no-token `/estacao/{ini}/{fim}/{codigo}` route
+        # — confirmed live, it now returns `204 No Content` for every
+        # station and every date range (including a year ago), never an
+        # error. The live tempo.inmet.gov.br portal itself now calls a
+        # reCAPTCHA-gated endpoint we can't (and shouldn't) automate — the
+        # legitimate replacement is `/token/estacao/.../{token}`, whose
+        # token is requested by e-mail from INMET (cadastro.act@inmet.gov.br),
+        # not self-service. When configured, every reading fetch uses it;
+        # when not, this falls back to the old public route (harmless if
+        # INMET ever restores it — this doesn't hardcode "it's dead").
+        if self._api_token:
+            url = f"{self._base_url}/token/estacao/{iso}/{iso}/{station_code}/{self._api_token}"
+        else:
+            url = f"{self._base_url}/estacao/{iso}/{iso}/{station_code}"
+        response = await self._client.get(url)
         response.raise_for_status()
         # Real production bug found live (2026-09-01): a station with no
         # readings for the day can come back with an empty body instead of
@@ -226,6 +258,17 @@ class InmetWeatherProvider(WeatherProvider):
         try:
             data = response.json()
         except ValueError as exc:
+            # The token endpoint answers a bad/expired token with `200
+            # "CHAVE INVÁLIDA!"` (plain text, not JSON) rather than 401/403
+            # — confirmed live — so it lands here too. Surfaced distinctly
+            # since it's an actionable, not-transient failure (wrong/expired
+            # token), never silently treated the same as "station has no
+            # data today".
+            if self._api_token and "chave" in response.text.lower():
+                raise WeatherProviderUnavailableError(
+                    f"INMET rejected the configured API token (station {station_code!r}): "
+                    f"{response.text!r}"
+                ) from exc
             raise WeatherProviderUnavailableError(
                 f"Unexpected INMET station readings response for {station_code!r} "
                 f"on {iso} (not valid JSON)."
