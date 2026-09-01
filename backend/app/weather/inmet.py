@@ -56,6 +56,24 @@ from engine.geo import haversine_km
 
 _PROVIDER_NAME = "INMET"
 
+# Real production incident (2026-09-01): every INMET endpoint reset the
+# connection specifically for httpx's own default User-Agent
+# (``python-httpx/x.y.z``) while an ordinary browser User-Agent succeeded
+# immediately with real data, from two completely different networks —
+# confirmed live, not a guess. This wasn't INMET actually being down; it
+# was a WAF/bot-protection layer fingerprinting the generic client string,
+# and it silently broke the one feature with no fallback (storm cells have
+# no alternative source — see the module docstring) for an unknown
+# stretch of time, since the pipeline's own resilience fix (never crash on
+# a radar-fetch failure) made this look like calm weather, not an outage.
+_BROWSER_LIKE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+}
+
 # Candidate field names, defensive against minor schema variations across
 # INMET's open-data endpoints (all observed in public documentation/usage).
 _LAT_KEYS = ("VL_LATITUDE", "LATITUDE", "vl_latitude")
@@ -139,7 +157,9 @@ class InmetWeatherProvider(WeatherProvider):
         self._ibge_localidades_url = ibge_localidades_url.rstrip("/")
         self._min_rain_rate_mm_h = min_rain_rate_mm_h
         self._max_station_distance_km = max_station_distance_km
-        self._client = client or httpx.AsyncClient(timeout=http_timeout_seconds)
+        self._client = client or httpx.AsyncClient(
+            timeout=http_timeout_seconds, headers=_BROWSER_LIKE_HEADERS
+        )
 
     @property
     def name(self) -> str:
@@ -155,7 +175,15 @@ class InmetWeatherProvider(WeatherProvider):
     async def _fetch_stations(self) -> list[dict[str, Any]]:
         response = await self._client.get(f"{self._base_url}/estacoes/T")
         response.raise_for_status()
-        data = response.json()
+        try:
+            data = response.json()
+        except ValueError as exc:
+            # Same non-JSON-body failure mode as `_fetch_station_readings`,
+            # just here it means the *whole* cycle should degrade honestly
+            # instead of an uncaught `ValueError` crashing it.
+            raise WeatherProviderUnavailableError(
+                "Unexpected INMET station list response (not valid JSON)."
+            ) from exc
         if not isinstance(data, list):
             raise WeatherProviderUnavailableError("Unexpected INMET station list response shape.")
         return data
@@ -184,7 +212,23 @@ class InmetWeatherProvider(WeatherProvider):
         iso = day.isoformat()
         response = await self._client.get(f"{self._base_url}/estacao/{iso}/{iso}/{station_code}")
         response.raise_for_status()
-        data = response.json()
+        # Real production bug found live (2026-09-01): a station with no
+        # readings for the day can come back with an empty body instead of
+        # `[]` — `response.json()` then raises `json.JSONDecodeError`
+        # (a `ValueError`, not `httpx.HTTPError`), which used to propagate
+        # straight out of this method uncaught, crashing `get_radar_frames`
+        # for *every* station over one misbehaving one (the caller's own
+        # per-station try/except only ever expected the two error types
+        # already handled elsewhere in this class). Converting it to the
+        # same `WeatherProviderUnavailableError` the shape-check below
+        # already raises lets that existing per-station handling do its job.
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise WeatherProviderUnavailableError(
+                f"Unexpected INMET station readings response for {station_code!r} "
+                f"on {iso} (not valid JSON)."
+            ) from exc
         if not isinstance(data, list):
             raise WeatherProviderUnavailableError(
                 "Unexpected INMET station readings response shape."
