@@ -24,6 +24,7 @@ _FORECAST_PAYLOAD = {
         "temperature_2m": 33.1,
         "wind_speed_10m": 11.3,
         "wind_gusts_10m": 31.7,
+        "wind_direction_10m": 145.0,
         "precipitation": 0.0,
     },
     "daily": {
@@ -72,6 +73,7 @@ async def test_get_current_data_maps_fields() -> None:
     assert current.temperature_c == 33.1
     assert current.wind_kmh == 11.3
     assert current.wind_gusts_kmh == 31.7
+    assert current.wind_direction_deg == 145.0
 
 
 async def test_get_forecast_includes_real_numeric_precipitation() -> None:

@@ -908,6 +908,17 @@ button {
   align-items: center;
   gap: 6px;
 }
+.weather-current-wind {
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.weather-wind-arrow {
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
 
 .forecast-strip {
   display: flex;

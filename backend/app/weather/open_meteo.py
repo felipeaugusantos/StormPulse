@@ -149,7 +149,8 @@ class OpenMeteoWeatherProvider(WeatherProvider):
             "latitude": latitude,
             "longitude": longitude,
             "current": (
-                "temperature_2m,wind_speed_10m,wind_gusts_10m,precipitation,relative_humidity_2m"
+                "temperature_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,"
+                "precipitation,relative_humidity_2m"
             ),
             "daily": (
                 "temperature_2m_max,temperature_2m_min,temperature_2m_mean,"
@@ -192,6 +193,7 @@ class OpenMeteoWeatherProvider(WeatherProvider):
             temperature_c=current.get("temperature_2m"),
             wind_kmh=current.get("wind_speed_10m"),
             wind_gusts_kmh=current.get("wind_gusts_10m"),
+            wind_direction_deg=current.get("wind_direction_10m"),
             precipitation_mm=current.get("precipitation"),
             relative_humidity_percent=current.get("relative_humidity_2m"),
         )

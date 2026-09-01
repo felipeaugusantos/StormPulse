@@ -58,6 +58,7 @@ class MockWeatherProvider(WeatherProvider):
             temperature_c=round(15 + 15 * w, 1),
             wind_kmh=round(5 + 30 * w, 1),
             wind_gusts_kmh=round(10 + 60 * w, 1),
+            wind_direction_deg=round(360 * self._wave(latitude, longitude, 4.5), 1) % 360,
             precipitation_mm=round(20 * self._wave(latitude, longitude, 1.5), 1),
             relative_humidity_percent=round(50 + 40 * self._wave(latitude, longitude, 3.0), 1),
         )

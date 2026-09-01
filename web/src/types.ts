@@ -384,6 +384,7 @@ export interface CurrentConditions {
   temperature_c: number | null
   wind_kmh: number | null
   wind_gusts_kmh: number | null
+  wind_direction_deg: number | null
   precipitation_mm: number | null
 }
 

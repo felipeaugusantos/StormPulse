@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { classifyFrostDays, evaluateTrafficability, formatFrostDays } from '../agro'
-import { formatDateBR, riskLevelLabel } from '../format'
+import { cardinalDirection, formatDateBR, riskLevelLabel } from '../format'
 import { CAPE_LABEL, classifyCape } from '../storm'
 import type {
   CurrentConditions,
@@ -133,6 +133,22 @@ export function LocationWeatherCard({ location }: Props) {
           <span className="weather-current-temp">
             {current.temperature_c != null ? `${current.temperature_c.toFixed(0)}°C` : '—'}
           </span>
+          {current.wind_kmh != null && (
+            <span className="weather-current-wind">
+              🌬️ {current.wind_kmh.toFixed(0)} km/h
+              {current.wind_direction_deg != null && (
+                <span
+                  className="weather-wind-arrow"
+                  style={{ transform: `rotate(${current.wind_direction_deg}deg)` }}
+                  title={`vem de ${cardinalDirection(current.wind_direction_deg)}`}
+                >
+                  ↓
+                </span>
+              )}
+              {current.wind_direction_deg != null &&
+                ` (${cardinalDirection(current.wind_direction_deg)})`}
+            </span>
+          )}
           <span className="weather-current-source">
             {current.provenance.source_name}
             {current.provenance.is_mock && <span className="mock-tag">MOCK</span>}

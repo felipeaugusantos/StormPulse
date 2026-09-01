@@ -66,6 +66,7 @@ _READINGS_A701 = [
         "TEM_INS": "24.3",
         "VEN_VEL": "5.0",
         "VEN_RAJ": "12.0",
+        "VEN_DIR": "220",
         "CHUVA": "8.0",
     }
 ]
@@ -127,6 +128,7 @@ async def test_current_data_maps_nearest_station_fields(provider: InmetWeatherPr
     assert data.temperature_c == 24.3
     assert data.wind_kmh == pytest.approx(18.0)  # 5.0 m/s -> km/h
     assert data.wind_gusts_kmh == pytest.approx(43.2)
+    assert data.wind_direction_deg == pytest.approx(220.0)
     assert data.precipitation_mm == 8.0
 
 

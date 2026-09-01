@@ -31,6 +31,12 @@ class CurrentConditions(BaseModel):
     temperature_c: float | None = None
     wind_kmh: float | None = None
     wind_gusts_kmh: float | None = None
+    # Meteorological convention: degrees the wind is blowing FROM (0=N,
+    # 90=E, 180=S, 270=W) — same convention as engine/geo.py's
+    # bearing_deg/compass_label, so a source that can report this reuses
+    # the storm-cell direction display as-is. Not every source can
+    # populate it (see each provider's docstring) — never guessed.
+    wind_direction_deg: float | None = None
     precipitation_mm: float | None = None
     relative_humidity_percent: float | None = None
 

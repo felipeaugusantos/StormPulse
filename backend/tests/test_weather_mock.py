@@ -25,6 +25,16 @@ async def test_current_data_is_flagged_mock(provider: MockWeatherProvider) -> No
     assert data.provenance.source_kind is WeatherSourceKind.MOCK
 
 
+async def test_current_data_wind_direction_is_deterministic_and_in_range(
+    provider: MockWeatherProvider,
+) -> None:
+    a = await provider.get_current_data(-23.5, -46.6)
+    b = await provider.get_current_data(-23.5, -46.6)
+    assert a.wind_direction_deg == b.wind_direction_deg
+    assert a.wind_direction_deg is not None
+    assert 0.0 <= a.wind_direction_deg < 360.0
+
+
 async def test_radar_frames_are_deterministic(provider: MockWeatherProvider) -> None:
     a = await provider.get_radar_frames(limit=3)
     b = await provider.get_radar_frames(limit=3)

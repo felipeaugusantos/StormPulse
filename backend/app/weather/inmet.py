@@ -84,6 +84,7 @@ _NAME_KEYS = ("DC_NOME", "NOME", "dc_nome")
 _TEMP_KEYS = ("TEM_INS", "TEMPERATURA", "tem_ins")
 _WIND_KEYS = ("VEN_VEL", "VENTO_VELOCIDADE", "ven_vel")
 _GUST_KEYS = ("VEN_RAJ", "VENTO_RAJADA", "ven_raj")
+_WIND_DIR_KEYS = ("VEN_DIR", "VENTO_DIRECAO", "ven_dir")
 _RAIN_KEYS = ("CHUVA", "PRECIPITACAO", "chuva")
 _HUMIDITY_KEYS = ("UMD_INS", "UMIDADE", "umd_ins")
 _DATE_KEYS = ("DT_MEDICAO", "dt_medicao")
@@ -267,6 +268,7 @@ class InmetWeatherProvider(WeatherProvider):
             temperature_c=_as_float(latest, _TEMP_KEYS),
             wind_kmh=None if wind_ms is None else round(wind_ms * 3.6, 1),
             wind_gusts_kmh=None if gust_ms is None else round(gust_ms * 3.6, 1),
+            wind_direction_deg=_as_float(latest, _WIND_DIR_KEYS),
             precipitation_mm=_as_float(latest, _RAIN_KEYS),
             relative_humidity_percent=_as_float(latest, _HUMIDITY_KEYS),
         )
