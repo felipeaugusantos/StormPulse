@@ -22,6 +22,15 @@ class StormCellOut(BaseModel):
     average_reflectivity: float | None
     area_km2: float | None
     is_mock: bool
+    # Motion of the cell's active track, from its latest observation (see
+    # engine/trajectory/estimator.py) — None when the cell has no active
+    # track or fewer than 2 observations (never fabricated). The projected
+    # position is a straight-line extrapolation at the current speed/
+    # direction, not a real forecast — labeled as an estimate in the UI.
+    speed_kmh: float | None = None
+    direction_deg: float | None = None
+    projected_latitude_1h: float | None = None
+    projected_longitude_1h: float | None = None
 
 
 class NearbyStormCellOut(StormCellOut):

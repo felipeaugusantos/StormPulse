@@ -20,8 +20,9 @@ async def list_storms(
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
     limit: int = Query(default=100, ge=1, le=500),
-) -> object:
-    return await service.list_recent_cells(session, limit=limit)
+) -> list[StormCellOut]:
+    cells = await service.list_recent_cells(session, limit=limit)
+    return [service.to_storm_cell_out(cell) for cell in cells]
 
 
 @router.get(
@@ -41,7 +42,7 @@ async def storms_nearby(
     )
     return [
         NearbyStormCellOut(
-            **StormCellOut.model_validate(cell).model_dump(),
+            **service.to_storm_cell_out(cell).model_dump(),
             distance_km=round(dist, 2),
         )
         for cell, dist in pairs
@@ -53,8 +54,8 @@ async def get_storm(
     cell_id: uuid.UUID,
     session: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
-) -> object:
+) -> StormCellOut:
     cell = await service.get_cell(session, cell_id)
     if cell is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Célula não encontrada")
-    return cell
+    return service.to_storm_cell_out(cell)

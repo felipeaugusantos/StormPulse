@@ -147,6 +147,13 @@ export interface StormCell {
   average_reflectivity: number | null
   area_km2: number | null
   is_mock: boolean
+  // Motion of the cell's active track, and a 1h straight-line projection
+  // from it — null when the cell has no active track with a computed
+  // trajectory yet (never fabricated, see backend/app/storms/service.py).
+  speed_kmh: number | null
+  direction_deg: number | null
+  projected_latitude_1h: number | null
+  projected_longitude_1h: number | null
 }
 
 export interface LocationItem {

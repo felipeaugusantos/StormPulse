@@ -103,6 +103,50 @@ function cellsGeoJSON(storms: StormCell[]) {
   }
 }
 
+/** Cells with a computed 1h projection (see backend/app/storms/service.py
+ * — null when the cell has no active track with 2+ observations yet). */
+function projectedCells(storms: StormCell[]) {
+  return storms.filter(
+    (s): s is StormCell & { projected_latitude_1h: number; projected_longitude_1h: number } =>
+      s.projected_latitude_1h != null && s.projected_longitude_1h != null,
+  )
+}
+
+/** Dashed line from a cell's current position to its 1h projection — the
+ * dashing itself is the "this is an estimate, not a forecast" signal. */
+function cellProjectionLinesGeoJSON(storms: StormCell[]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: projectedCells(storms).map((s) => ({
+      type: 'Feature' as const,
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: [
+          [s.longitude, s.latitude],
+          [s.projected_longitude_1h, s.projected_latitude_1h],
+        ],
+      },
+      properties: { color: SEVERITY_COLOR[s.severity] ?? '#4cc2e6' },
+    })),
+  }
+}
+
+/** Hollow "ghost" marker at the projected 1h position — deliberately not
+ * styled like a real detected cell (see the `cells` layer). */
+function cellProjectionPointsGeoJSON(storms: StormCell[]) {
+  return {
+    type: 'FeatureCollection' as const,
+    features: projectedCells(storms).map((s) => ({
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [s.projected_longitude_1h, s.projected_latitude_1h],
+      },
+      properties: { color: SEVERITY_COLOR[s.severity] ?? '#4cc2e6' },
+    })),
+  }
+}
+
 function locationsGeoJSON(locations: LocationItem[]) {
   return {
     type: 'FeatureCollection' as const,
@@ -314,6 +358,41 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
         },
       })
 
+      // 1h projection — drawn before (visually under) the real `cells`
+      // layer, so confirmed detections always read as more certain than
+      // the dashed estimate.
+      map.addSource('cell-projection-lines', {
+        type: 'geojson',
+        data: cellProjectionLinesGeoJSON([]),
+      })
+      map.addLayer({
+        id: 'cell-projection-lines',
+        type: 'line',
+        source: 'cell-projection-lines',
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 2,
+          'line-dasharray': [2, 2],
+          'line-opacity': 0.6,
+        },
+      })
+      map.addSource('cell-projection-points', {
+        type: 'geojson',
+        data: cellProjectionPointsGeoJSON([]),
+      })
+      map.addLayer({
+        id: 'cell-projection-points',
+        type: 'circle',
+        source: 'cell-projection-points',
+        paint: {
+          'circle-radius': 7,
+          'circle-color': 'transparent',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': ['get', 'color'],
+          'circle-opacity': 0.7,
+        },
+      })
+
       map.addSource('cells', { type: 'geojson', data: cellsGeoJSON([]) })
       map.addSource('locations', { type: 'geojson', data: locationsGeoJSON([]) })
       map.addSource('satellite-watches', { type: 'geojson', data: satelliteWatchesGeoJSON([]) })
@@ -389,9 +468,14 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
       const watches = map.getSource('satellite-watches') as GeoJSONSource | undefined
       const strikes = map.getSource('lightning') as GeoJSONSource | undefined
       const plots = map.getSource('plot-boundaries') as GeoJSONSource | undefined
-      if (!cells || !locs || !watches || !strikes || !plots) return
+      const projectionLines = map.getSource('cell-projection-lines') as GeoJSONSource | undefined
+      const projectionPoints = map.getSource('cell-projection-points') as GeoJSONSource | undefined
+      if (!cells || !locs || !watches || !strikes || !plots || !projectionLines || !projectionPoints)
+        return
       cells.setData(cellsGeoJSON(storms))
       locs.setData(locationsGeoJSON(locations))
+      projectionLines.setData(cellProjectionLinesGeoJSON(storms))
+      projectionPoints.setData(cellProjectionPointsGeoJSON(storms))
       watches.setData(satelliteWatchesGeoJSON(satelliteWatches))
       strikes.setData(lightningGeoJSON(lightning))
       plots.setData(plotBoundariesGeoJSON(plotBoundaries))

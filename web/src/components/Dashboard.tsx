@@ -32,7 +32,7 @@ import {
 } from '../agro'
 import { classifyCape, estimateStormEta, type CapeLevel } from '../storm'
 import { cropColor } from '../cropColors'
-import { formatDateBR, formatTimeBR, riskLevelLabel, timeAgo } from '../format'
+import { cardinalDirection, formatDateBR, formatTimeBR, riskLevelLabel, timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { AdminPanel } from './AdminPanel'
 import { ApiKeysModal } from './ApiKeysModal'
@@ -537,6 +537,11 @@ export function Dashboard({ onLogout }: Props) {
                   {lightning.length})
                 </span>
               )}
+              {storms.some((s) => s.projected_latitude_1h != null) && (
+                <span className="legend-item cell-projection-hint">
+                  ┈┈○ posição estimada em 1h (extrapolação simples, não é uma previsão)
+                </span>
+              )}
               {satelliteImage && (
                 <label className="legend-item satellite-image-toggle">
                   <input
@@ -613,6 +618,9 @@ function StormsPanel({ storms }: { storms: StormCell[] }) {
               <div className="sub">
                 {s.max_reflectivity ? `${s.max_reflectivity.toFixed(0)} dBZ · ` : ''}
                 {formatTimeBR(s.detected_at)}
+                {s.speed_kmh != null && s.direction_deg != null
+                  ? ` · movendo para ${cardinalDirection(s.direction_deg)} a ${s.speed_kmh.toFixed(0)} km/h`
+                  : ''}
               </div>
             </div>
             {s.is_mock && <span className="mock-tag">MOCK</span>}
