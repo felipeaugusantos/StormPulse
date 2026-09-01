@@ -194,7 +194,12 @@ def test_expo_device_not_registered_deletes_subscription(monkeypatch: Any) -> No
         session.rollback()
 
 
-def test_notification_suppressed_when_user_has_no_subscription() -> None:
+def test_notification_fails_when_no_subscription_and_email_unconfigured() -> None:
+    """Item e-mail de alerta changed what "no push subscription" means: a
+    real user's own email is always attempted too, regardless of push —
+    so no-subscription-and-SES-not-configured is now an honest `FAILED`
+    (both channels tried, neither worked), not `SUPPRESSED` (which used to
+    mean "nothing to even try")."""
     with session_scope() as session:
         user, alert = _make_user_and_alert(session)
         notification = Notification(tenant_id=user.tenant_id, alert_id=alert.id, user_id=user.id)
@@ -206,7 +211,59 @@ def test_notification_suppressed_when_user_has_no_subscription() -> None:
         # aggregate count, same reasoning as test_agro_pipeline.py.
         run_notification_delivery_cycle(session, settings=_VAPID_SETTINGS)
 
-        assert notification.status == NotificationStatus.SUPPRESSED
+        assert notification.status == NotificationStatus.FAILED
+        session.rollback()
+
+
+def test_notification_sent_via_email_alone_when_there_is_no_push_subscription(
+    monkeypatch: Any,
+) -> None:
+    """The actual point of item e-mail de alerta: a user with zero push
+    subscriptions must still receive the alert, via their account email."""
+    import workers.notification_pipeline as pipeline_module
+
+    monkeypatch.setattr(pipeline_module, "send_email", lambda *args, **kwargs: True)
+
+    with session_scope() as session:
+        user, alert = _make_user_and_alert(session)
+        notification = Notification(tenant_id=user.tenant_id, alert_id=alert.id, user_id=user.id)
+        session.add(notification)
+        session.flush()
+
+        run_notification_delivery_cycle(session, settings=_VAPID_SETTINGS)
+
+        assert notification.status == NotificationStatus.SENT
+        assert notification.sent_at is not None
+        session.rollback()
+
+
+def test_notification_sent_via_push_even_when_email_fails(monkeypatch: Any) -> None:
+    """Email is an *addition* to push, never a requirement — a successful
+    push delivery must still count as SENT even if SES is unconfigured/
+    fails, same "sent to at least one channel" contract as before."""
+    import workers.notification_pipeline as pipeline_module
+
+    monkeypatch.setattr(pipeline_module, "webpush", lambda **kwargs: None)
+    monkeypatch.setattr(pipeline_module, "send_email", lambda *args, **kwargs: False)
+
+    with session_scope() as session:
+        user, alert = _make_user_and_alert(session)
+        session.add(
+            PushSubscription(
+                tenant_id=user.tenant_id,
+                user_id=user.id,
+                endpoint="https://push.example.com/xyz",
+                p256dh="fake-p256dh",
+                auth="fake-auth",
+            )
+        )
+        notification = Notification(tenant_id=user.tenant_id, alert_id=alert.id, user_id=user.id)
+        session.add(notification)
+        session.flush()
+
+        run_notification_delivery_cycle(session, settings=_VAPID_SETTINGS)
+
+        assert notification.status == NotificationStatus.SENT
         session.rollback()
 
 
