@@ -216,3 +216,68 @@ def test_marshall_palmer_dbz_is_zero_for_no_rain() -> None:
 
 def test_marshall_palmer_dbz_increases_with_rain_rate() -> None:
     assert marshall_palmer_dbz(20.0) > marshall_palmer_dbz(5.0)
+
+
+def test_default_client_sends_a_browser_like_user_agent() -> None:
+    """Real production incident (2026-09-01): every INMET endpoint reset
+    the connection specifically for httpx's own default User-Agent
+    (`python-httpx/x.y.z`) — confirmed live from two different networks —
+    while an ordinary browser User-Agent succeeded immediately. This was a
+    WAF/bot-protection fingerprinting the generic client string, not INMET
+    actually being down, and it silently broke the one feature with no
+    fallback (storm cells) for an unknown stretch of time."""
+    provider = InmetWeatherProvider(base_url="http://test", avisos_url="http://test")
+    user_agent = provider._client.headers.get("user-agent")  # noqa: SLF001
+    assert user_agent is not None
+    assert "python-httpx" not in user_agent
+    assert "Mozilla" in user_agent
+
+
+async def test_fetch_stations_raises_cleanly_on_a_non_json_body() -> None:
+    """A second real production bug found live alongside the User-Agent
+    one: INMET can answer 200 with an empty (non-JSON) body — `.json()`
+    then raises `json.JSONDecodeError` (a `ValueError`, not
+    `httpx.HTTPError`), which used to propagate uncaught out of this
+    method instead of degrading the same honest way a bad-shape response
+    already did."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"")
+
+    provider = InmetWeatherProvider(
+        base_url="http://test",
+        avisos_url="http://test",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://test"),
+    )
+    with pytest.raises(WeatherProviderUnavailableError):
+        await provider._fetch_stations()  # noqa: SLF001
+
+
+async def test_one_stations_non_json_reading_never_crashes_the_whole_radar_fetch() -> None:
+    """The exact real bug: one station (A999) returning a non-JSON body
+    for its readings used to raise `json.JSONDecodeError` straight out of
+    `_fetch_station_readings`, which `get_radar_frames`'s own per-station
+    try/except never expected (it only caught `httpx.HTTPError`/
+    `WeatherProviderUnavailableError`) — crashing the *entire* cycle over
+    one misbehaving station instead of just skipping it, same spirit as
+    `test_radar_frames_skip_cells_below_rain_threshold`."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/estacoes/T":
+            return httpx.Response(200, json=_STATIONS)
+        if path.startswith("/estacao/") and path.endswith("/A701"):
+            return httpx.Response(200, json=_READINGS_A701)
+        if path.startswith("/estacao/") and path.endswith("/A999"):
+            return httpx.Response(200, content=b"")  # the misbehaving station
+        return httpx.Response(404, json={"detail": "not found"})
+
+    provider = InmetWeatherProvider(
+        base_url="http://test",
+        avisos_url="http://test",
+        min_rain_rate_mm_h=4.0,
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://test"),
+    )
+    frames = await provider.get_radar_frames(limit=1)
+    assert len(frames) == 1
+    assert len(frames[0].cells) == 1  # A701's real reading still came through
