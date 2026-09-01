@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enzova — desenvolvimento de sistemas</title>
+  <meta name="description" content="Enzova projeta e constrói sistemas sob medida — do primeiro protótipo à produção. Conheça o StormPulse, nosso primeiro produto." />
+  <link rel="icon" type="image/svg+xml" href="/assets/icon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap hero__inner">
+      <img class="hero__logo" src="/assets/logo-horizontal-light.svg" alt="Enzova" width="180" height="27" />
+      <h1 class="hero__title">Sistemas sob medida, do primeiro protótipo à produção.</h1>
+      <p class="hero__subtitle">
+        Somos um estúdio de desenvolvimento de software. Projetamos e construímos
+        sistemas para empresas, times técnicos e o público em geral — sempre com
+        arquitetura pensada para durar, não só para funcionar na demonstração.
+      </p>
+      <a class="hero__cta" href="#produtos">Ver o que construímos</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="band" aria-labelledby="como-trabalhamos">
+      <div class="wrap band__inner">
+        <h2 id="como-trabalhamos">Como trabalhamos</h2>
+        <div class="pillars">
+          <article class="pillar">
+            <h3>Dados reais, sempre</h3>
+            <p>
+              Nenhum sistema que construímos simula dados em produção. Se uma
+              fonte externa falha, o sistema informa isso com honestidade —
+              nunca inventa um número.
+            </p>
+          </article>
+          <article class="pillar">
+            <h3>Arquitetura que aguenta escala</h3>
+            <p>
+              Bancos de dados corretos desde o início, filas e workers para
+              processamento assíncrono, testes automatizados cobrindo os
+              caminhos que importam.
+            </p>
+          </article>
+          <article class="pillar">
+            <h3>Do zero à operação</h3>
+            <p>
+              Não entregamos só código: cuidamos de infraestrutura,
+              observabilidade, segurança e do dia a dia de manter um sistema
+              rodando com gente de verdade usando ele.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="products" id="produtos" aria-labelledby="produtos-titulo">
+      <div class="wrap">
+        <h2 id="produtos-titulo">Produtos</h2>
+        <a class="product-card" href="https://stormpulse.enzova.com.br">
+          <div class="product-card__glyph" aria-hidden="true">
+            <svg viewBox="0 0 48 48" width="48" height="48">
+              <path d="M14 30a9 9 0 1 1 2.1-17.7A11 11 0 0 1 37 17.5 8 8 0 0 1 35 33H14z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+              <path d="M20 34l-3 8M28 34l-3 8M24 36l-3 8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="product-card__body">
+            <h3>StormPulse</h3>
+            <p>
+              Monitoramento meteorológico acionável — transforma radar, séries
+              temporais e avisos oficiais em alertas simples por local, para
+              quem precisa decidir rápido diante de chuva forte, granizo ou
+              raios.
+            </p>
+            <span class="product-card__link">Acessar o StormPulse →</span>
+          </div>
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer__inner">
+      <img class="footer__icon" src="/assets/icon.svg" alt="" width="28" height="28" />
+      <p>© 2026 Enzova · <a href="mailto:contato@enzova.com.br">contato@enzova.com.br</a></p>
+    </div>
+  </footer>
+</body>
+</html>

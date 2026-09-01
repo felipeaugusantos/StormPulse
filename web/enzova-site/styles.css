@@ -1,0 +1,226 @@
+/* Enzova — site institucional. Paleta e tipografia de brand/enzova/README.md
+   (Navy/Electric/Graphite/Cloud/Slate, Manrope + Inter) — não recriar. */
+
+:root {
+  --navy: #081a2b;
+  --electric: #36e39f;
+  --graphite: #111827;
+  --cloud: #f8fafc;
+  --slate: #64748b;
+  --font-display: 'Manrope', Arial, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--cloud);
+  color: var(--graphite);
+  font-family: var(--font-body);
+  line-height: 1.6;
+}
+
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+/* ---------- Hero ---------- */
+
+.hero {
+  background: var(--navy);
+  color: var(--cloud);
+  padding: 56px 0 88px;
+}
+
+.hero__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+.hero__logo {
+  height: 27px;
+  width: auto;
+}
+
+.hero__title {
+  font-size: clamp(2rem, 4vw + 1rem, 3.25rem);
+  font-weight: 800;
+  line-height: 1.12;
+  max-width: 18ch;
+  letter-spacing: -0.01em;
+}
+
+.hero__subtitle {
+  font-size: 1.125rem;
+  color: #c7d2e0;
+  max-width: 56ch;
+  margin: 0;
+}
+
+.hero__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px 22px;
+  background: var(--electric);
+  color: var(--navy);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-radius: 999px;
+  text-decoration: none;
+}
+
+.hero__cta:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------- Como trabalhamos ---------- */
+
+.band {
+  padding: 72px 0;
+}
+
+.band__inner h2,
+.products h2 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-bottom: 36px;
+}
+
+.pillars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 32px;
+}
+
+.pillar h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.pillar p {
+  color: var(--slate);
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* ---------- Produtos ---------- */
+
+.products {
+  background: #eef2f7;
+  padding: 72px 0 88px;
+}
+
+.product-card {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  background: var(--cloud);
+  border-radius: 16px;
+  padding: 32px;
+  text-decoration: none;
+  color: inherit;
+  box-shadow: 0 1px 2px rgba(8, 26, 43, 0.06);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.product-card:hover {
+  box-shadow: 0 8px 24px rgba(8, 26, 43, 0.12);
+  transform: translateY(-2px);
+}
+
+.product-card__glyph {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  background: var(--navy);
+  color: var(--electric);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.product-card__body h3 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+}
+
+.product-card__body p {
+  color: var(--slate);
+  margin: 0 0 14px;
+  max-width: 60ch;
+}
+
+.product-card__link {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--navy);
+}
+
+/* ---------- Footer ---------- */
+
+.footer {
+  background: var(--navy);
+  color: #9fb0c3;
+  padding: 28px 0;
+  font-size: 0.85rem;
+}
+
+.footer__inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.footer a {
+  color: var(--electric);
+  text-decoration: none;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+  .hero {
+    padding: 40px 0 64px;
+  }
+
+  .band,
+  .products {
+    padding: 56px 0;
+  }
+
+  .product-card {
+    flex-direction: column;
+  }
+}
