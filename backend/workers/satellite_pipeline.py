@@ -58,6 +58,26 @@ _MATCH_DISTANCE_KM = 100.0
 # worldwide, not an invented color scheme. Values outside this range clip.
 _IMAGE_TEMP_WARM_K = 320.0
 _IMAGE_TEMP_COLD_K = 190.0
+
+# "Enhanced IR" color ramp (item mapa/sensor de nuvens) — applied only to
+# the cold end that actually matters for convection, so an ordinary sky/
+# warm-cloud pixel looks exactly as it did before this was added. Anchor
+# temperatures mirror the *exact* Celsius cutoffs already used to classify
+# a ConvectiveWatch (`web/src/format.ts`'s `convectiveIntensity`:
+# -45/-55/-65°C = moderada/forte/severa), converted to Kelvin here so both
+# sides of the stack agree on what "severa" cold actually means. Warmer
+# than the first anchor (228.15 K, "fraca" — the vast majority of any real
+# frame: ordinary sky and non-convective cloud) stays plain grayscale;
+# only true convective-scale cold gets color, matching how real
+# meteorological IR products are read (a wall of green/yellow/orange/red
+# would be noise, not signal, if applied to the whole disk).
+_COLOR_RAMP_STOPS_K = (190.0, 208.15, 218.15, 228.15)
+_COLOR_RAMP_RGB = (
+    (168, 0, 132),  # <=190K — deepest cold sampled (colder than "severa")
+    (220, 20, 20),  # 208.15K (-65°C) — severa threshold
+    (255, 140, 0),  # 218.15K (-55°C) — forte threshold
+    (255, 230, 0),  # 228.15K (-45°C) — moderada threshold, hands off to gray above this
+)
 # The rendered frame is a *display* image, not the scientific grid — capped
 # so a live web overlay stays light regardless of the configured resolution.
 _IMAGE_MAX_DIMENSION = 800
@@ -99,7 +119,11 @@ class _CycleArtifacts:
 
 
 def _render_ir_image(temps_k: Any, nodata: float | None) -> tuple[bytes, int, int]:
-    """Grayscale-inverted IR PNG (RGBA) from a 2D array of Kelvin values.
+    """Enhanced-IR PNG (RGBA) from a 2D array of Kelvin values — grayscale
+    for ordinary sky/warm cloud, colored (green→yellow→orange→red/magenta)
+    only for cloud tops cold enough to matter for convection (item mapa/
+    sensor de nuvens, ADR-0076). See ``_COLOR_RAMP_STOPS_K``'s own comment
+    for why the ramp starts where it does.
 
     Pure function — no GDAL/TATHU involved, only numpy/Pillow (already real
     dependencies of the ``satellite`` extra via scikit-image) — so it's
@@ -116,9 +140,21 @@ def _render_ir_image(temps_k: Any, nodata: float | None) -> tuple[bytes, int, in
 
     span = _IMAGE_TEMP_WARM_K - _IMAGE_TEMP_COLD_K
     normalized = np.clip((_IMAGE_TEMP_WARM_K - array) / span, 0.0, 1.0)
-    gray = (normalized * 255).astype(np.uint8)
+    gray_value = (normalized * 255).astype(np.uint8)
+    gray = np.dstack([gray_value, gray_value, gray_value])
+
+    # np.interp needs its x-coordinates ascending — `_COLOR_RAMP_STOPS_K` is
+    # already listed coldest (smallest Kelvin value) first, i.e. ascending.
+    stops_k = np.asarray(_COLOR_RAMP_STOPS_K, dtype=np.float32)
+    stops_rgb = np.asarray(_COLOR_RAMP_RGB, dtype=np.float32)
+    colored = np.stack(
+        [np.interp(array, stops_k, stops_rgb[:, channel]) for channel in range(3)], axis=-1
+    ).astype(np.uint8)
+
+    in_color_band = array <= _COLOR_RAMP_STOPS_K[-1]
+    rgb = np.where(in_color_band[..., None], colored, gray)
     alpha = np.where(valid, 255, 0).astype(np.uint8)
-    rgba = np.dstack([gray, gray, gray, alpha])
+    rgba = np.dstack([rgb, alpha])
 
     image = Image.fromarray(rgba, mode="RGBA")
     longest_side = max(image.width, image.height)
