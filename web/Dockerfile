@@ -40,5 +40,10 @@ FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef
 # reprodutibilidade/vulnerabilidades).
 RUN apk update && apk upgrade --no-cache && rm -rf /var/cache/apk/*
 COPY --from=builder /app/dist /usr/share/nginx/html
+# Institutional/portfolio site for the company itself (enzova.com.br) —
+# static, no build step, served from the same container as a second
+# nginx server{} block (infra/tls/nginx-https.conf) since it needs no
+# API proxy of its own. See docs/adr/0079.
+COPY enzova-site/ /usr/share/nginx/enzova-site
 COPY nginx.conf /etc/nginx/nginx.conf
 EXPOSE 80

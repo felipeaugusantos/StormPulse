@@ -92,7 +92,7 @@ Edite `.env` e ajuste pelo menos:
 ENVIRONMENT=production
 JWT_SECRET_KEY=<gerar: openssl rand -base64 48>
 POSTGRES_PASSWORD=<senha forte, não a de dev>
-CORS_ALLOWED_ORIGINS=http://<IP_PUBLICO_DO_EC2>   # ou o domínio, quando existir
+CORS_ALLOWED_ORIGINS=https://stormpulse.enzova.com.br   # domínio real do subdomínio do sistema (ADR-0079)
 # Confiar exatamente no nginx deste compose — ver docker-compose.prod.yml
 # (IP fixo 172.28.0.10, único ponto de entrada da rede interna do Docker).
 TRUSTED_PROXY_IPS=172.28.0.10
@@ -302,13 +302,17 @@ de alta disponibilidade do beat, use `celery beat` com um lock distribuído
 (ex.: `celerybeat-redis`) — não implementado, não necessário numa instância
 única.
 
-## TLS via Let's Encrypt (sem domínio próprio — [nip.io](https://nip.io))
+## TLS via Let's Encrypt (domínio próprio, multi-host)
 
-[nip.io](https://nip.io) resolve `<ip-com-hifens>.nip.io` pro próprio IP —
-suficiente pra emitir um certificado Let's Encrypt real sem comprar
-domínio. Ver [ADR-0039](../docs/adr/0039-tls-lets-encrypt-nip-io.md) para
-os detalhes da implementação (fluxo de 2 fases: HTTP-only pro desafio
-ACME, depois HTTPS).
+A stack usa um domínio real (`enzova.com.br`, comprado na Hostinger) desde
+a [ADR-0079](../docs/adr/0079-dominio-proprio-multi-host-nginx.md) —
+[ADR-0037](../docs/adr/0037-infra-producao-aws-ec2.md) e
+[ADR-0039](../docs/adr/0039-tls-lets-encrypt-nip-io.md) (uso do
+[nip.io](https://nip.io) como domínio provisório) documentam a decisão
+histórica, agora superada. Um único container `web`/certificado cobre 3
+hostnames: `stormpulse.enzova.com.br` (SPA + proxy da API, o que antes
+vivia só em nip.io) e `enzova.com.br`/`www.enzova.com.br` (site
+institucional estático, sem proxy).
 
 **Bootstrap** (só na primeira vez, antes do primeiro `docker compose up`
 com esses arquivos — se a stack já estava rodando sem eles, rode isso e
@@ -319,16 +323,29 @@ cp infra/tls/nginx-http.conf infra/tls/nginx.conf.active
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-**Emitir o certificado** (troque pelo seu IP público com hífens no lugar
-de pontos, e um e-mail real — o Let's Encrypt manda aviso de expiração
-nele):
+**Emitir o certificado** (domínio primário = host do StormPulse, é o nome
+usado pro diretório do certificado; domínios extras = site institucional,
+todos no mesmo certificado multi-SAN; e-mail real — o Let's Encrypt manda
+aviso de expiração nele):
 
 ```bash
 chmod +x infra/setup-tls.sh
-./infra/setup-tls.sh 100-48-193-126.nip.io voce@example.com
+./infra/setup-tls.sh stormpulse.enzova.com.br voce@enzova.com.br \
+  enzova.com.br www.enzova.com.br
 ```
 
-Confirme em `https://100-48-193-126.nip.io/health`.
+Confirme em `https://stormpulse.enzova.com.br/health` e
+`https://enzova.com.br/`.
+
+Pré-requisito: os registros DNS dos 3 hosts já devem apontar pro IP do
+EC2 antes de rodar isso (o desafio ACME HTTP-01 precisa alcançar cada
+domínio) — configurados manualmente no painel da Hostinger.
+
+Para o fluxo antigo, sem domínio próprio (só nip.io, um host só), o
+script continua funcionando com um único argumento de domínio: `
+./infra/setup-tls.sh 100-48-193-126.nip.io voce@example.com` (sem
+domínios extras — o bloco institucional simplesmente fica sem nenhum
+host servindo ele).
 
 ### Renovação do certificado
 
