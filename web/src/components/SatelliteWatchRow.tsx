@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { cardinalDirection, convectiveIntensity, timeAgo } from '../format'
+import { cardinalDirection, convectiveIntensity, kelvinToCelsius, timeAgo } from '../format'
 import { reverseGeocodeCity } from '../geocode'
 import type { ConvectiveWatch } from '../types'
 
@@ -38,7 +38,8 @@ export function SatelliteWatchRow({ watch, onSelect, etaLabel }: Props) {
       <span className={`badge ${intensity.className}`}>{intensity.label}</span>
       <div className="grow">
         <div>
-          Nuvem em formação · {timeAgo(watch.detected_at)}
+          Nuvem em formação · {kelvinToCelsius(watch.min_brightness_temp_k).toFixed(0)}°C no topo
+          · {timeAgo(watch.detected_at)}
           {watch.speed_kmh != null && watch.direction_deg != null
             ? ` · movendo para ${cardinalDirection(watch.direction_deg)} a ${watch.speed_kmh.toFixed(0)} km/h`
             : ''}

@@ -564,6 +564,11 @@ button {
   gap: 5px;
   color: var(--ink-dim);
 }
+.satellite-image-hint {
+  flex-basis: 100%;
+  color: var(--ink-dim);
+  opacity: 0.85;
+}
 .swatch {
   width: 10px;
   height: 10px;

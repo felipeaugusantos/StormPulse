@@ -507,6 +507,12 @@ export function Dashboard({ onLogout }: Props) {
                 />
                 🛰️ imagem de satélite (mapa)
               </label>
+              {satelliteBasemap && (
+                <span className="legend-item satellite-image-hint">
+                  cinza = nuvem comum · amarelo→laranja→vermelho→magenta = topo cada vez mais
+                  frio (risco de tempestade)
+                </span>
+              )}
               <span className="legend-item">
                 <span className="swatch" style={{ background: '#37d39b' }} /> fraca
               </span>
