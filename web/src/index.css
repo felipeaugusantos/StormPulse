@@ -924,6 +924,11 @@ button {
   display: inline-block;
   transition: transform 0.2s ease;
 }
+.info-hint {
+  cursor: help;
+  border-bottom: 1px dotted currentColor;
+  width: fit-content;
+}
 
 .forecast-strip {
   display: flex;

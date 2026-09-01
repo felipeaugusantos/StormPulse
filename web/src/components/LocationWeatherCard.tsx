@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { classifyFrostDays, evaluateTrafficability, formatFrostDays } from '../agro'
-import { cardinalDirection, formatDateBR, riskLevelLabel } from '../format'
+import { cardinalDirection, formatDateBR, riskLevelLabel, timeAgo } from '../format'
 import { CAPE_LABEL, classifyCape } from '../storm'
 import type {
   CurrentConditions,
@@ -136,6 +136,7 @@ export function LocationWeatherCard({ location }: Props) {
           {current.wind_kmh != null && (
             <span className="weather-current-wind">
               🌬️ {current.wind_kmh.toFixed(0)} km/h
+              {current.wind_gusts_kmh != null && ` (rajada ${current.wind_gusts_kmh.toFixed(0)})`}
               {current.wind_direction_deg != null && (
                 <span
                   className="weather-wind-arrow"
@@ -152,6 +153,8 @@ export function LocationWeatherCard({ location }: Props) {
           <span className="weather-current-source">
             {current.provenance.source_name}
             {current.provenance.is_mock && <span className="mock-tag">MOCK</span>}
+            {' · '}
+            {timeAgo(current.observed_at)}
           </span>
         </div>
       )}
@@ -191,15 +194,23 @@ export function LocationWeatherCard({ location }: Props) {
         )}
         {sprayWindow && (
           <div className={`agro-row ${sprayWindow.safe === false ? 'warn' : ''}`}>
-            🌬️{' '}
-            {sprayWindow.wind_kmh != null
-              ? `vento ${sprayWindow.wind_kmh.toFixed(0)} km/h`
-              : 'vento indisponível'}
-            {sprayWindow.wind_gusts_kmh != null
-              ? ` (rajada ${sprayWindow.wind_gusts_kmh.toFixed(0)} km/h)`
-              : ''}
+            🎯{' '}
+            {
+              // Wind is already shown in the card's header above — repeat it
+              // here only if that header couldn't (current == null), so a
+              // partial outage of one endpoint doesn't hide a number the
+              // other endpoint still has.
+              current?.wind_kmh == null &&
+                (sprayWindow.wind_kmh != null
+                  ? `vento ${sprayWindow.wind_kmh.toFixed(0)} km/h` +
+                    (sprayWindow.wind_gusts_kmh != null
+                      ? ` (rajada ${sprayWindow.wind_gusts_kmh.toFixed(0)} km/h)`
+                      : '') +
+                    ' · '
+                  : 'vento indisponível · ')
+            }
             {sprayWindow.humidity_percent != null
-              ? ` · umidade ${sprayWindow.humidity_percent.toFixed(0)}%`
+              ? `umidade ${sprayWindow.humidity_percent.toFixed(0)}%`
               : ''}{' '}
             —{' '}
             {sprayWindow.safe == null
@@ -213,7 +224,7 @@ export function LocationWeatherCard({ location }: Props) {
         )}
         {trafficability && (
           <div className={`agro-row ${trafficability === 'not_trafficable' ? 'warn' : ''}`}>
-            🚜{' '}
+            {trafficability === 'not_trafficable' ? '💧' : '🚜'}{' '}
             {trafficability === 'trafficable'
               ? 'solo seco — condições favoráveis para manejo/colheita'
               : trafficability === 'not_trafficable'
@@ -236,26 +247,35 @@ export function LocationWeatherCard({ location }: Props) {
         )}
         {todayRain?.wind_gusts_max_kmh != null && (
           <div className="agro-row">
-            💨 Rajada máxima prevista hoje: {todayRain.wind_gusts_max_kmh.toFixed(0)} km/h
-          </div>
-        )}
-        {todayRain?.cape_max_jkg != null && (
-          <div
-            className={`agro-row ${
-              ['strong', 'extreme'].includes(classifyCape(todayRain.cape_max_jkg)) ? 'warn' : ''
-            }`}
-          >
-            🌩️ CAPE hoje: {todayRain.cape_max_jkg.toFixed(0)} J/kg — instabilidade{' '}
-            {CAPE_LABEL[classifyCape(todayRain.cape_max_jkg)]}
+            💨 Previsão de rajada máxima pro dia: {todayRain.wind_gusts_max_kmh.toFixed(0)} km/h
           </div>
         )}
         {upcomingRain.some((p) => p.cape_max_jkg != null) && (
-          <div className="agro-row">
-            <div className="sub">🌩️ Instabilidade (CAPE) — próximos dias</div>
+          <div
+            className={`agro-row ${
+              upcomingRain
+                .slice(0, CAPE_DAYS_TO_SHOW)
+                .some(
+                  (p) =>
+                    p.cape_max_jkg != null &&
+                    ['strong', 'extreme'].includes(classifyCape(p.cape_max_jkg)),
+                )
+                ? 'warn'
+                : ''
+            }`}
+          >
+            <div
+              className="sub info-hint"
+              title="CAPE: energia disponível na atmosfera pra uma tempestade se formar — quanto maior, mais forte a tempestade pode ficar se ela se formar (não é garantia de chuva)"
+            >
+              🌩️ Instabilidade (CAPE, J/kg) ⓘ
+            </div>
             <div className="forecast-strip">
               {upcomingRain.slice(0, CAPE_DAYS_TO_SHOW).map((p, i) => (
                 <div className="forecast-strip-day" key={i}>
-                  <div className="sub">{formatDateBR(p.time, { weekday: 'short' })}</div>
+                  <div className="sub">
+                    {i === 0 ? 'hoje' : formatDateBR(p.time, { weekday: 'short' })}
+                  </div>
                   <div>{p.cape_max_jkg != null ? p.cape_max_jkg.toFixed(0) : '—'}</div>
                   <div className="sub">
                     {p.cape_max_jkg != null ? CAPE_LABEL[classifyCape(p.cape_max_jkg)] : '—'}
