@@ -75,6 +75,14 @@ fi
 echo "==> Ativando config HTTPS..."
 docker compose "${COMPOSE_FILES[@]}" restart web
 
+echo "==> Gravando infra/tls/.active-domains (pra infra/deploy.sh regenerar a"
+echo "    config certo em deploys futuros, sem precisar re-interpretar nginx)..."
+cat > infra/tls/.active-domains <<EOF
+STORMPULSE_DOMAIN=$STORMPULSE_DOMAIN
+ENZOVA_DOMAINS=$ENZOVA_SERVER_NAMES
+CERT_DOMAIN=$STORMPULSE_DOMAIN
+EOF
+
 echo "==> Pronto. Teste: https://$STORMPULSE_DOMAIN/health"
 for d in "${ENZOVA_DOMAINS[@]:-}"; do
   [ -n "$d" ] && echo "==> Teste: https://$d/"

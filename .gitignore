@@ -32,7 +32,11 @@ htmlcov/
 .env.*
 !.env.example
 
-# --- TLS (infra ADR-0039): server-local, switched between
+# --- TLS (infra ADR-0039/0079): server-local, switched between
 # infra/tls/nginx-http.conf and nginx-https.conf by infra/setup-tls.sh —
-# never itself a source file to commit. ---
+# never itself a source file to commit. .active-domains records which
+# domains that active config was generated for, so infra/deploy.sh can
+# regenerate it correctly on every deploy without re-parsing nginx
+# directives (see the ADR-0079-incident postmortem in infra/deploy.sh). ---
 infra/tls/nginx.conf.active
+infra/tls/.active-domains

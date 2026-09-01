@@ -216,22 +216,53 @@ fi
 echo "==> Running migrations in a one-shot container — never inside the currently-serving API"
 timeout 120 "${COMPOSE[@]}" run --rm api alembic upgrade head
 
-echo "==> Refreshing infra/tls/nginx.conf.active from the tracked config (Fase 5, ADR-0046)"
+echo "==> Refreshing infra/tls/nginx.conf.active from the tracked config (Fase 5, ADR-0046; ADR-0079)"
 # nginx.conf.active is generated once by infra/setup-tls.sh and is
 # git-ignored (it bakes in the server's real domain) — without this step,
 # any change to infra/tls/nginx-http.conf/nginx-https.conf in the repo
 # would be built into new images but never actually reach the file Nginx
 # has bind-mounted on this server, silently going stale deploy after
 # deploy. Detects which mode is currently active from the file itself
-# (HTTPS iff it has a "listen 443 ssl" server block) and re-derives the
-# domain from its own server_name — never asks for it again.
-if [ -f infra/tls/nginx.conf.active ] && grep -q "listen 443 ssl" infra/tls/nginx.conf.active; then
-  DOMAIN="$(grep -m1 -oP '(?<=server_name )[^;]+' infra/tls/nginx.conf.active || true)"
+# (HTTPS iff it has a "listen 443 ssl" server block).
+#
+# INCIDENT (2026-09-01, ADR-0079 rollout): this used to re-derive the
+# domain by regexing it out of nginx.conf.active's own server_name — that
+# broke the instant the template grew a second host, because
+# "STORMPULSE_DOMAIN_PLACEHOLDER" and "CERT_DOMAIN_PLACEHOLDER" both
+# contain the substring "DOMAIN_PLACEHOLDER", so the old single-domain
+# `sed s/DOMAIN_PLACEHOLDER/.../g` partially rewrote them into a bogus
+# ssl_certificate path — nginx failed to start, production went down for
+# both hosts. Fix: infra/setup-tls.sh now persists exactly what it
+# activated to the git-ignored infra/tls/.active-domains, and this script
+# reads that back instead of reverse-engineering it from nginx directives.
+if [ -f infra/tls/.active-domains ]; then
+  # shellcheck source=/dev/null
+  source infra/tls/.active-domains
+  sed \
+    -e "s/STORMPULSE_DOMAIN_PLACEHOLDER/$STORMPULSE_DOMAIN/g" \
+    -e "s/ENZOVA_DOMAINS_PLACEHOLDER/$ENZOVA_DOMAINS/g" \
+    -e "s/CERT_DOMAIN_PLACEHOLDER/$CERT_DOMAIN/g" \
+    infra/tls/nginx-https.conf >infra/tls/nginx.conf.active
+  echo "Refreshed nginx.conf.active (HTTPS mode, stormpulse=$STORMPULSE_DOMAIN enzova=$ENZOVA_DOMAINS)"
+elif [ -f infra/tls/nginx.conf.active ] && grep -q "listen 443 ssl" infra/tls/nginx.conf.active; then
+  # One-time recovery path: HTTPS is active but infra/setup-tls.sh hasn't
+  # been re-run since ADR-0079 yet, so .active-domains doesn't exist. The
+  # StormPulse domain is recovered from CORS_ALLOWED_ORIGINS in .env
+  # (independently correct — it's never touched by the nginx corruption
+  # above) instead of parsing the possibly-already-corrupted
+  # nginx.conf.active. No institutional site is configured yet in this
+  # case, matching reality (setup-tls.sh hasn't been run with the extra
+  # domains).
+  DOMAIN="$(grep -m1 -oP '(?<=^CORS_ALLOWED_ORIGINS=)[^,]+' .env | sed -E 's#^https?://##' || true)"
   if [ -n "$DOMAIN" ]; then
-    sed "s/DOMAIN_PLACEHOLDER/$DOMAIN/g" infra/tls/nginx-https.conf >infra/tls/nginx.conf.active
-    echo "Refreshed nginx.conf.active (HTTPS mode, domain=$DOMAIN)"
+    sed \
+      -e "s/STORMPULSE_DOMAIN_PLACEHOLDER/$DOMAIN/g" \
+      -e "s/ENZOVA_DOMAINS_PLACEHOLDER/enzova-site.invalid/g" \
+      -e "s/CERT_DOMAIN_PLACEHOLDER/$DOMAIN/g" \
+      infra/tls/nginx-https.conf >infra/tls/nginx.conf.active
+    echo "Refreshed nginx.conf.active (HTTPS mode, recovered domain=$DOMAIN from CORS_ALLOWED_ORIGINS — run infra/setup-tls.sh to add the institutional site's domains)"
   else
-    echo "WARNING: HTTPS mode detected but couldn't parse the domain out of the existing nginx.conf.active — leaving it untouched this deploy"
+    echo "WARNING: HTTPS mode detected but couldn't recover the domain from CORS_ALLOWED_ORIGINS in .env — leaving nginx.conf.active untouched this deploy"
   fi
 elif [ -f infra/tls/nginx.conf.active ]; then
   cp infra/tls/nginx-http.conf infra/tls/nginx.conf.active

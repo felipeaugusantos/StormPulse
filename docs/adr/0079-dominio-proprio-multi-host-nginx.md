@@ -70,6 +70,37 @@ Graphite/Cloud/Slate, tipografia Manrope+Inter, logos em SVG) de um
 trabalho anterior — o site institucional usa esses assets diretamente
 (`web/enzova-site/assets/`), sem redesenhar nada.
 
+## Incidente na entrada em produção (2026-09-01)
+
+O primeiro deploy desta mudança **derrubou a produção** (`/health`
+inacessível nos dois protocolos). Causa: `infra/deploy.sh` já tinha uma
+etapa que regenera `nginx.conf.active` a cada deploy (pra config nova no
+repo não ficar obsoleta no servidor) — ela reconstruía o domínio ativo
+com `grep`/regex em cima do `server_name` do próprio arquivo, e então
+rodava `sed s/DOMAIN_PLACEHOLDER/.../g` no template. Essa etapa não foi
+atualizada junto com a troca de placeholder única (`DOMAIN_PLACEHOLDER`)
+pelas três novas (`STORMPULSE_DOMAIN_PLACEHOLDER`,
+`ENZOVA_DOMAINS_PLACEHOLDER`, `CERT_DOMAIN_PLACEHOLDER`) — e as duas
+primeiras contêm a substring antiga `DOMAIN_PLACEHOLDER`. O `sed` antigo
+reescreveu parcialmente esses tokens (ex.:
+`CERT_DOMAIN_PLACEHOLDER` → `CERT_52-206-89-133.nip.io`), apontando
+`ssl_certificate` pra um caminho que não existe — nginx recusou subir e
+os dois hosts caíram juntos.
+
+**Correção**: `infra/setup-tls.sh` agora grava exatamente os domínios que
+ativou em `infra/tls/.active-domains` (git-ignorado); `infra/deploy.sh`
+lê esse arquivo em vez de tentar re-inferir os domínios a partir do
+próprio nginx — elimina a classe inteira de bug (parsing de config viva
+pra decidir o que gerar de novo). Para o servidor que já estava rodando
+sem esse arquivo (exatamente o estado no momento do incidente),
+`deploy.sh` recupera o domínio do StormPulse a partir de
+`CORS_ALLOWED_ORIGINS` do `.env` — valor independente, nunca tocado pela
+corrupção do nginx — e assume que o site institucional ainda não foi
+configurado (reflete a realidade: `setup-tls.sh` novo ainda não tinha
+rodado). Lição: qualquer script que re-deriva estado a partir de um
+arquivo gerado por outro script é frágil por natureza — persistir o
+estado explicitamente custa poucas linhas e elimina a fragilidade.
+
 ## Consequências
 
 - **Ainda depende de 3 ações manuales do usuário, fora do meu alcance**:
