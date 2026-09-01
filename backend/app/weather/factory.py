@@ -34,6 +34,7 @@ def _build_open_meteo(settings: Settings) -> OpenMeteoWeatherProvider:
         api_key=(
             settings.open_meteo_api_key.get_secret_value() if settings.open_meteo_api_key else None
         ),
+        model=settings.open_meteo_model,
         http_timeout_seconds=settings.open_meteo_http_timeout_seconds,
     )
 

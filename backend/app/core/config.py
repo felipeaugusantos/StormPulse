@@ -63,6 +63,7 @@ _OPTIONAL_FIELDS_EMPTY_MEANS_UNSET = (
     "ndvi_sh_client_id",
     "ndvi_sh_client_secret",
     "open_meteo_api_key",
+    "open_meteo_model",
     "vapid_private_key",
     "vapid_public_key",
     "ses_from_email",
@@ -298,6 +299,13 @@ class Settings(BaseSettings):
     open_meteo_forecast_url: str = "https://api.open-meteo.com/v1/forecast"
     open_meteo_archive_url: str = "https://archive-api.open-meteo.com/v1/archive"
     open_meteo_api_key: SecretStr | None = None
+    # Modelo explícito em vez do "best_match" opaco da Open-Meteo (ADR-0075):
+    # o ECMWF IFS ficou de uso livre (inclusive comercial) via CC-BY-4.0 em
+    # 2025, e todo campo que este provider usa (CAPE, ET0, umidade, rajada)
+    # foi confirmado disponível nesse modelo ao vivo (2026-08-29). `None`
+    # volta pro "best_match" de antes; nunca se aplica ao endpoint de
+    # histórico/arquivo (reanálise ERA5, sem seleção de modelo ao vivo).
+    open_meteo_model: str | None = "ecmwf_ifs025"
     open_meteo_http_timeout_seconds: float = Field(default=10.0, gt=0)
     open_meteo_fallback_enabled: bool = True
 

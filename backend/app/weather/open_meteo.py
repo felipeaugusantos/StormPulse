@@ -18,6 +18,20 @@ does) — attaching a key there would very likely 403 rather than succeed,
 so `get_recent_rainfall` keeps using the free public archive host exactly
 as before.
 
+**Explicit model instead of opaque auto-selection (ADR-0075)**: Open-Meteo
+blends several national weather models (GFS/NOAA, ICON/DWD, ECMWF IFS,
+among others) behind a `best_match` heuristic that isn't documented for
+South America specifically (it's a global catch-all: "ECMWF IFS, GFS, or
+ICON Global"). ECMWF's IFS became free for any use — including commercial
+— under CC-BY-4.0 in 2025, and Open-Meteo exposes it directly via
+`models=ecmwf_ifs025`. Confirmed live (2026-08-29) that every field this
+provider requests (current conditions, CAPE, ET0, humidity, gust maxima)
+is available under that model, at values in the same range as
+`best_match`'s. `model` (default `"ecmwf_ifs025"`) picks a known, citable,
+consistently-sourced model instead of an opaque blend — never applied to
+the archive/historical endpoint (an ERA5 reanalysis product, unrelated to
+live model selection).
+
 Third redundancy tier, behind INMET and INPE/CPTEC — see
 ``FallbackWeatherProvider`` and ADR-0015. Unlike INMET/CPTEC, this
 genuinely gives **numeric** precipitation
@@ -97,6 +111,7 @@ class OpenMeteoWeatherProvider(WeatherProvider):
         forecast_url: str = "https://api.open-meteo.com/v1/forecast",
         archive_url: str = "https://archive-api.open-meteo.com/v1/archive",
         api_key: str | None = None,
+        model: str | None = None,
         http_timeout_seconds: float = 10.0,
         client: httpx.AsyncClient | None = None,
     ) -> None:
@@ -111,6 +126,11 @@ class OpenMeteoWeatherProvider(WeatherProvider):
         )
         self._archive_url = archive_url
         self._api_key = api_key
+        # `None` keeps Open-Meteo's own opaque "best_match" auto-selection
+        # (see module docstring for why an explicit model is preferred —
+        # ADR-0075). Never applied to the archive/historical endpoint: that's
+        # an ERA5 reanalysis product, unrelated to live model selection.
+        self._model = model
         self._client = client or httpx.AsyncClient(timeout=http_timeout_seconds)
 
     @property
@@ -139,6 +159,8 @@ class OpenMeteoWeatherProvider(WeatherProvider):
             ),
             "timezone": "UTC",
         }
+        if self._model:
+            params["models"] = self._model
         if self._api_key:
             params["apikey"] = self._api_key
         response = await self._client.get(self._forecast_url, params=params)
