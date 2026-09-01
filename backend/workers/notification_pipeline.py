@@ -1,4 +1,5 @@
-"""Push notification delivery pipeline (FASE 22; Expo/mobile since FASE 26).
+"""Notification delivery pipeline — push (FASE 22; Expo/mobile since FASE
+26) and email (item e-mail de alerta).
 
 Fans out ``Notification`` rows left ``PENDING`` by the other pipelines
 (``agro_pipeline.py``, ``satellite_pipeline.py``, ``pipeline_service.py`` —
@@ -6,16 +7,24 @@ each already creates one Notification per Alert it emits, see their
 ``_emit_alert``/equivalent helpers) to every push registration the target
 user has (``PushSubscription``, see ``app/notifications/models.py``) — a
 browser's Web Push subscription or the mobile app's Expo push token,
-branching delivery on ``PushSubscription.platform``.
+branching delivery on ``PushSubscription.platform`` — **and** to the
+user's own account email via AWS SES (``workers/email.py``), regardless of
+how many push registrations they have. A single ``Notification`` row is
+still one delivery *attempt* covering every channel that applies, not one
+row per channel — ``NotificationChannel.EMAIL`` exists on the model for
+future per-channel opt-out, but nothing reads it here yet (found live,
+2026-09-01: the column existed, nothing ever populated or delivered it —
+every alert only ever reached a user through push).
 
-No FCM/APNs account needed for either path — Web Push is a browser-native
-standard (the only "infra" is a VAPID keypair, ``vapid_private_key``/
-``vapid_public_key`` in ``Settings``); Expo's push API accepts a bare push
-token with no server credential at all. A cycle is never skipped just
-because VAPID is missing (mobile-only deployments must still deliver) —
-``configured`` on the summary reports whether Web Push specifically is set
-up; a ``platform="web"`` subscription without it fails honestly instead of
-silently pretending to deliver. See ADR-0016 and ADR-0023.
+No FCM/APNs account needed for either push path — Web Push is a
+browser-native standard (the only "infra" is a VAPID keypair,
+``vapid_private_key``/``vapid_public_key`` in ``Settings``); Expo's push
+API accepts a bare push token with no server credential at all. A cycle is
+never skipped just because VAPID is missing (mobile-only deployments must
+still deliver) — ``configured`` on the summary reports whether Web Push
+specifically is set up; a ``platform="web"`` subscription without it fails
+honestly instead of silently pretending to deliver. See ADR-0016 and
+ADR-0023.
 """
 
 from __future__ import annotations
@@ -34,6 +43,8 @@ from app.alerts.models import Alert
 from app.core.config import Settings, get_settings
 from app.core.enums import NotificationStatus
 from app.notifications.models import Notification, PushSubscription
+from app.users.models import User
+from workers.email import render_alert_email, send_email
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +129,18 @@ def _deliver_expo(
     return False, ticket.get("message") or "Expo push recusado"
 
 
+def _deliver_email(user: User, alert: Alert, settings: Settings) -> tuple[bool, str | None]:
+    """AWS SES delivery to the account's own email — always attempted
+    alongside push, not instead of it (item e-mail de alerta). ``send_email``
+    already degrades honestly (logs, returns ``False``, never raises) when
+    ``SES_FROM_EMAIL`` isn't configured or SES itself rejects the send, same
+    "missing config is not a crash" contract ``_deliver_web`` has for VAPID.
+    """
+    content = render_alert_email(title=alert.title, message=alert.message, level=alert.level.value)
+    sent = send_email(user.email, content, settings)
+    return sent, None if sent else "envio por e-mail falhou (ver logs do SES)"
+
+
 def _deliver_to_subscriptions(
     session: Session,
     subscriptions: list[PushSubscription],
@@ -178,14 +201,24 @@ def run_notification_delivery_cycle(
                     select(PushSubscription).where(PushSubscription.user_id == notification.user_id)
                 )
             )
-            if not subscriptions:
-                notification.status = NotificationStatus.SUPPRESSED
-                summary.suppressed += 1
-                continue
+            user = session.get(User, notification.user_id)
+            # `Notification.user_id` is a NOT NULL FK with ON DELETE CASCADE
+            # (see app/notifications/models.py) — a Notification row can
+            # never outlive its user, so this can never actually be None.
+            assert user is not None
 
-            sent_to_any, last_error = _deliver_to_subscriptions(
-                session, subscriptions, alert, settings, client
-            )
+            sent_to_any = False
+            last_error: str | None = None
+            if subscriptions:
+                push_sent, push_error = _deliver_to_subscriptions(
+                    session, subscriptions, alert, settings, client
+                )
+                sent_to_any = sent_to_any or push_sent
+                last_error = push_error or last_error
+            email_sent, email_error = _deliver_email(user, alert, settings)
+            sent_to_any = sent_to_any or email_sent
+            last_error = email_error or last_error
+
             if sent_to_any:
                 notification.status = NotificationStatus.SENT
                 notification.sent_at = datetime.now(UTC)

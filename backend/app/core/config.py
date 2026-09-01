@@ -437,9 +437,10 @@ class Settings(BaseSettings):
     # push, só a assinatura VAPID é local. `vapid_private_key`/
     # `vapid_public_key` são um par de chave EC P-256 crua, codificada em
     # base64url (gerar com `py_vapid`) — ver ADR-0016 e `.env.example` para
-    # o passo a passo. Sem chave configurada, a task de entrega marca cada
-    # notificação como `SUPPRESSED` em vez de tentar enviar (honesto, sem
-    # fingir sucesso — mesmo espírito de `WeatherProviderUnavailableError`).
+    # o passo a passo. Sem chave configurada, uma assinatura web falha
+    # honestamente (`FAILED`, não finge sucesso) — mas a notificação ainda
+    # pode ser entregue por outro canal (push Expo, ou e-mail via SES,
+    # item e-mail de alerta) antes de virar `FAILED` de vez.
     vapid_private_key: SecretStr | None = None
     vapid_public_key: str | None = None
     vapid_subject: str = "mailto:contato@stormpulse.example"

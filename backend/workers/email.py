@@ -68,6 +68,34 @@ def render_email(kind: EmailKind, *, link: str) -> EmailContent:
     )
 
 
+def render_alert_email(*, title: str, message: str, level: str) -> EmailContent:
+    """Item e-mail de alerta — a real gap found live (2026-09-01): the
+    `NotificationChannel.EMAIL` enum value already existed on the
+    `Notification` model, but nothing ever rendered or sent one — every
+    alert only ever reached a user through Web Push/Expo. Separate from
+    ``render_email`` above (that one is always link-based — email
+    verification, password reset; an alert has no link, just the same
+    title/message/level already shown on the dashboard)."""
+    level_label = {"green": "baixo", "yellow": "moderado", "orange": "alto", "red": "severo"}.get(
+        level, level
+    )
+    disclaimer = (
+        "Este é um aviso automático do StormPulse e não substitui alertas "
+        "oficiais (INMET, Defesa Civil, CEMADEN). Em qualquer situação de "
+        "risco real, siga os canais oficiais."
+    )
+    return EmailContent(
+        subject=f"⚠️ {title} — StormPulse",
+        text_body=f"{message}\n\nNível: {level_label}\n\n{disclaimer}",
+        html_body=(
+            f"<p><strong>{title}</strong></p>"
+            f"<p>{message}</p>"
+            f"<p>Nível: {level_label}</p>"
+            f"<p style='color:#6b7280;font-size:0.85em'>{disclaimer}</p>"
+        ),
+    )
+
+
 def send_email(to_email: str, content: EmailContent, settings: Settings) -> bool:
     """Sends via SES. Returns whether it was actually sent — `False` for
     "not configured" (logged, not raised) or a real SES failure (logged
