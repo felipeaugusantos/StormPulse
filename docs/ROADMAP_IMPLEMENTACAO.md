@@ -58,12 +58,25 @@ cada uma)
 
 ---
 
-## Fase 1 — Fechar dívida técnica P0 (fundação antes de crescer escopo)
+## Fase 1 — Segurança e Qualidade ✅ concluída (2026-09-05)
 
-**Por quê primeiro:** expandir o modelo de dados e adicionar um módulo
-novo (ação/execução, Fase 6) sobre uma base onde RLS não é testada e
-backup não sai da instância é multiplicar o raio de um incidente futuro,
-não só adicionar risco novo.
+Escopo definido diretamente pelo dono do produto (substitui o rascunho
+original desta seção, renumerado abaixo como **Fase 1-A**): dependências
+vulneráveis, CORS/cookies/tokens/uploads/logs/rate limit, testes dos
+fluxos críticos (cadastro, login, verificação de e-mail, recuperação de
+senha, renovação de sessão, cadastro de fazenda, cadastro/desenho de
+talhão, geração de relatório), E2E web (Playwright), teste de contrato
+front↔API, gate de vulnerabilidade no CI. Decisões e achados detalhados
+em [ADR-0081](adr/0081-fase1-seguranca-e-qualidade.md). Commits:
+`7eb6836`, `6131914`, `9c6163a`, `6322105` (mais `12e06e1`, incidente de
+deploy resolvido antes de iniciar a fase).
+
+## Fase 1-A — Fechar dívida técnica P0 (fundação antes de crescer escopo)
+
+**Por quê:** expandir o modelo de dados e adicionar um módulo novo
+(ação/execução, Fase 6) sobre uma base onde RLS não é testada e backup
+não sai da instância é multiplicar o raio de um incidente futuro, não só
+adicionar risco novo. Ainda não iniciada — aguardando autorização.
 
 - Corrigir `app/core/rls.py::_TENANT_SCOPED_TABLES` (incluir
   `ndvi_images`, `deforestation_checks`, conferir se há outras) e mudar
@@ -192,7 +205,7 @@ modelo.**
 ## Ordem recomendada e dependências
 
 ```
-Fase 1 (P0) ──► Fase 2 (P1) ──► Fase 3 (visão consolidada)
+Fase 1 ✅ ──► Fase 1-A (P0) ──► Fase 2 (P1) ──► Fase 3 (visão consolidada)
                                         │
                                         ▼
                               Fase 4 (janela unificada)
@@ -206,7 +219,7 @@ Fase 1 (P0) ──► Fase 2 (P1) ──► Fase 3 (visão consolidada)
                                  momento depois da Fase 1)
 ```
 
-Fases 1 e 2 não são estritamente bloqueantes uma da outra internamente,
+Fases 1-A e 2 não são estritamente bloqueantes uma da outra internamente,
 mas ambas devem vir antes da Fase 3 em diante — não faz sentido construir
 uma visão consolidada de risco sobre uma base cujo isolamento multitenant
 não é testado.
