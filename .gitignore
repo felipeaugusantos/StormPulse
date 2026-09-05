@@ -13,6 +13,12 @@ yarn-error.log*
 # TypeScript build info
 *.tsbuildinfo
 
+# Playwright (web/e2e)
+/web/test-results/
+/web/playwright-report/
+/web/blob-report/
+/web/playwright/.cache/
+
 # --- Python (backend) ---
 __pycache__/
 *.py[cod]
