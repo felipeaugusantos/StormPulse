@@ -201,3 +201,26 @@ export interface UpdateLocationInput {
   boundary_geojson?: string
   color?: string
 }
+
+export interface PrecipitationError {
+  bias_mm: number
+  mae_mm: number
+  sample_count: number
+}
+
+export interface ModelMetrics {
+  model: string
+  sample_count: number
+  has_enough_samples: boolean
+  temperature_mae_c: number | null
+  precipitation: PrecipitationError | null
+  wind_mae_kmh: number | null
+  rain_hit_rate: number | null
+  brier_score: number | null
+}
+
+export interface ForecastComparison {
+  location_id: string
+  min_sample_size: number
+  models: ModelMetrics[]
+}

@@ -262,6 +262,18 @@ describe('paridade mobile (item 5)', () => {
     expect(String(fetchMock.mock.calls[2][0])).toContain('/satellite')
   })
 
+  test('forecastComparison() hits the location-scoped endpoint (Fase 2, ADR-0082)', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      jsonResponse(200, { location_id: 'loc-1', min_sample_size: 20, models: [] }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await api.forecastComparison('loc-1')
+
+    expect(result.models).toEqual([])
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/locations/loc-1/forecast-comparison')
+  })
+
   test('satelliteImage() returns null on a 404 (no cycle run yet)', async () => {
     const fetchMock = jest.fn().mockResolvedValueOnce(jsonResponse(404, { detail: 'not found' }))
     globalThis.fetch = fetchMock as unknown as typeof fetch

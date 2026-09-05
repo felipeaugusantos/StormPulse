@@ -6,6 +6,7 @@ import type {
   CreateLocationInput,
   CurrentConditions,
   Forecast,
+  ForecastComparison,
   LightningStrike,
   LocationItem,
   Me,
@@ -182,6 +183,10 @@ export const api = {
     request<SprayWindow>(`/locations/${locationId}/agro/spray-window`),
   rainfall: (locationId: string) =>
     request<RainfallHistory>(`/locations/${locationId}/agro/rainfall`),
+  // Fase 2 (ADR-0082) — accuracy record accumulated by the daily backend
+  // jobs, not a live computation. Mirrors web/src/api.ts's forecastComparison.
+  forecastComparison: (locationId: string) =>
+    request<ForecastComparison>(`/locations/${locationId}/forecast-comparison`),
   registerExpoPushToken: (expo_push_token: string) =>
     request<void>('/users/me/push-subscription/expo', {
       method: 'POST',

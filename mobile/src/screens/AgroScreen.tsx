@@ -15,7 +15,7 @@ import {
   type VpdLevel,
 } from '../agro'
 import { classifyCape, type CapeLevel } from '../storm'
-import type { ForecastPoint, LocationItem, SprayWindow } from '../types'
+import type { ForecastComparison, ForecastPoint, LocationItem, SprayWindow } from '../types'
 import { colors } from '../theme'
 
 interface Props {
@@ -47,6 +47,7 @@ interface AgroEntry {
   diseaseRisk: DiseaseRisk
   vpdKpa: number | null
   vpdLevel: VpdLevel
+  forecastComparison: ForecastComparison | null
   error: string | null
 }
 
@@ -114,13 +115,15 @@ export function AgroScreen({ onLogout }: Props) {
 
 async function loadEntry(location: LocationItem): Promise<AgroEntry> {
   try {
-    const [forecast, sprayWindow, rainfall, rainForecast] = await Promise.all([
+    const [forecast, sprayWindow, rainfall, rainForecast, forecastComparison] = await Promise.all([
       api.forecast(location.id).catch(() => null),
       api.sprayWindow(location.id).catch(() => null),
       api.rainfall(location.id).catch(() => null),
       // Always Open-Meteo (ADR-0020) — the general forecast above often
       // comes from CPTEC instead, which never has a numeric rain figure.
       api.rainForecast(location.id).catch(() => null),
+      // Fase 2 (ADR-0082) — accumulated accuracy record, not live data.
+      api.forecastComparison(location.id).catch(() => null),
     ])
     const today = new Date()
     today.setHours(0, 0, 0, 0)
@@ -165,6 +168,7 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       diseaseRisk: classifyDiseaseRisk(humidityMeanPercent, tempMeanC, DISEASE_RISK_THRESHOLDS),
       vpdKpa,
       vpdLevel: vpdKpa != null ? classifyVpd(vpdKpa) : 'unknown',
+      forecastComparison,
       error:
         forecast == null && sprayWindow == null && rainfall == null
           ? 'Dados agro indisponíveis no momento'
@@ -187,6 +191,7 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       diseaseRisk: 'unknown',
       vpdKpa: null,
       vpdLevel: 'unknown',
+      forecastComparison: null,
       error: 'Dados agro indisponíveis no momento',
     }
   }
@@ -282,10 +287,31 @@ function AgroCard({ entry }: { entry: AgroEntry }) {
           {entry.windGustMaxKmh != null && (
             <Row text={`💨 Rajada máxima prevista hoje: ${entry.windGustMaxKmh.toFixed(0)} km/h`} />
           )}
+
+          <Row text={forecastComparisonSummary(entry.forecastComparison)} />
         </>
       )}
     </View>
   )
+}
+
+// Fase 2 (ADR-0082) — compact single-line summary for the mobile card;
+// web/src/components/ForecastComparisonModal.tsx has the full per-model
+// breakdown. Never names a "winner" below the minimum sample size.
+function forecastComparisonSummary(comparison: ForecastComparison | null): string {
+  if (!comparison || comparison.models.length === 0) {
+    return '📊 Comparação de modelos: ainda sem dados suficientes.'
+  }
+  const reliable = comparison.models.filter((m) => m.has_enough_samples)
+  if (reliable.length === 0) {
+    return `📊 Comparação de modelos: acumulando amostras (mínimo ${comparison.min_sample_size}).`
+  }
+  const withMae = reliable.filter((m) => m.temperature_mae_c != null)
+  if (withMae.length === 0) {
+    return '📊 Comparação de modelos: amostra suficiente, mas sem erro de temperatura calculável.'
+  }
+  const best = withMae.reduce((a, b) => (b.temperature_mae_c! < a.temperature_mae_c! ? b : a))
+  return `📊 Modelo mais preciso aqui: ${best.model} (erro médio de temperatura ${best.temperature_mae_c!.toFixed(1)}°C)`
 }
 
 function Row({ text, warn }: { text: string; warn?: boolean }) {
