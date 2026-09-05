@@ -62,7 +62,12 @@ test('cadastra fazenda, cadastra talhão e abre o relatório semanal gerado', as
   // Geração de relatório — abre o modal e espera o relatório (não o
   // estado de carregando/erro) renderizar de fato.
   await page.getByTitle('Relatório semanal').click()
-  await expect(page.getByText(`📄 Relatório semanal — ${plotName}`)).toBeVisible()
-  await expect(page.getByText('chuva acumulada')).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByText('dias secos')).toBeVisible()
+  const modal = page.locator('.modal-card', { hasText: `Relatório semanal — ${plotName}` })
+  await expect(modal).toBeVisible()
+  // Escopado ao modal: o dashboard por trás já tem seu próprio painel de
+  // chuva acumulada da fazenda, com o mesmo texto de rótulo.
+  await expect(modal.getByText('chuva acumulada', { exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(modal.getByText('dias secos', { exact: true })).toBeVisible()
 })
