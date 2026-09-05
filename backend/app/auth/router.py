@@ -274,7 +274,12 @@ async def login_google(
     return _apply_token_response(_issue_tokens(user, settings), request, response, settings)
 
 
-@router.post("/refresh", response_model=TokenPair, summary="Renovar tokens")
+@router.post(
+    "/refresh",
+    response_model=TokenPair,
+    summary="Renovar tokens",
+    dependencies=[Depends(_auth_rate_limit)],
+)
 async def refresh(
     data: RefreshIn,
     request: Request,
@@ -321,6 +326,7 @@ async def refresh(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Encerrar sessão (limpa o cookie de refresh, se configurado)",
+    dependencies=[Depends(_auth_rate_limit)],
 )
 async def logout(
     response: Response,
@@ -338,6 +344,7 @@ async def logout(
     "/verify-email",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Confirmar e-mail a partir do token enviado por e-mail",
+    dependencies=[Depends(_auth_rate_limit)],
 )
 async def verify_email(
     data: VerifyEmailIn,

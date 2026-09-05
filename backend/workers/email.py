@@ -14,6 +14,7 @@ instead of crashing the cycle that triggered it.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from typing import Literal
@@ -24,6 +25,14 @@ from botocore.exceptions import BotoCoreError, ClientError
 from app.core.config import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def _correlation_hash(email: str) -> str:
+    """Truncated SHA-256 of a recipient address for log correlation without
+    writing the address itself to logs (LGPD — same non-reversible-fingerprint
+    pattern already used for password reset tokens, ``core/security.py``)."""
+    return hashlib.sha256(email.encode("utf-8")).hexdigest()[:12]
+
 
 EmailKind = Literal["email_verification", "password_reset"]
 
@@ -104,7 +113,7 @@ def send_email(to_email: str, content: EmailContent, settings: Settings) -> bool
     if not settings.ses_from_email:
         logger.warning(
             "SES_FROM_EMAIL not configured — skipping email send",
-            extra={"to": to_email, "subject": content.subject},
+            extra={"to_hash": _correlation_hash(to_email), "subject": content.subject},
         )
         return False
 
@@ -122,6 +131,9 @@ def send_email(to_email: str, content: EmailContent, settings: Settings) -> bool
             },
         )
     except (BotoCoreError, ClientError):
-        logger.exception("Failed to send transactional email via SES", extra={"to": to_email})
+        logger.exception(
+            "Failed to send transactional email via SES",
+            extra={"to_hash": _correlation_hash(to_email)},
+        )
         return False
     return True

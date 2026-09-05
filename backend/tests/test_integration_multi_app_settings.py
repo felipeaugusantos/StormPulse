@@ -173,3 +173,37 @@ async def test_auth_rate_limit_does_not_leak_between_app_instances() -> None:
                 },
             )
             assert resp.status_code == 201, f"request {i} unexpectedly rate-limited"
+
+
+async def test_refresh_logout_verify_email_are_rate_limited() -> None:
+    """Fase 1 (Segurança e Qualidade): /refresh, /logout e /verify-email
+    ficavam só sob o limite genérico de 120/60s do `v1_router`, sem o
+    limite dedicado de auth (10/60s) — um atacante podia tentar tokens de
+    refresh/verificação roubados ou adivinhados sem o teto mais estrito
+    que já protege /login e /register. Usa `auth_rate_limit_max=1` pra
+    provar que o mesmo `Depends(_auth_rate_limit)` agora se aplica aos
+    três endpoints."""
+    app = create_app(_settings(auth_rate_limit_max=1, jwt_secret_key="rl-endpoints-secret!!!!"))
+
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client,
+    ):
+        app.state.redis = _FakeRedis()
+
+        first = await client.post("/api/v1/auth/refresh", json={"refresh_token": "bogus"})
+        assert first.status_code == 401  # invalid token, but not yet rate-limited
+        second = await client.post("/api/v1/auth/refresh", json={"refresh_token": "bogus"})
+        assert second.status_code == 429
+
+        app.state.redis = _FakeRedis()
+        first = await client.post("/api/v1/auth/logout")
+        assert first.status_code == 204
+        second = await client.post("/api/v1/auth/logout")
+        assert second.status_code == 429
+
+        app.state.redis = _FakeRedis()
+        first = await client.post("/api/v1/auth/verify-email", json={"token": "bogus"})
+        assert first.status_code == 400  # invalid token, but not yet rate-limited
+        second = await client.post("/api/v1/auth/verify-email", json={"token": "bogus"})
+        assert second.status_code == 429
