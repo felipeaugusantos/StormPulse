@@ -469,8 +469,9 @@ export interface paths {
         /**
          * Imagem de NDVI colorida do talhão (item "imagem do talhão")
          * @description Same "read what the background pipeline already computed, never
-         *     call the provider live" rule as `/agro/ndvi` above — only the latest
-         *     image is ever kept (`NdviImage`), replaced each pipeline cycle.
+         *     call the provider live" rule as `/agro/ndvi` above. This compatibility
+         *     endpoint returns the latest NDVI map; dated maps remain available from
+         *     the multi-index historical endpoint.
          */
         get: operations["get_location_ndvi_image_api_v1_locations__location_id__agro_ndvi_image_get"];
         put?: never;
