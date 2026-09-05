@@ -77,10 +77,18 @@ docker compose "${COMPOSE_FILES[@]}" restart web
 
 echo "==> Gravando infra/tls/.active-domains (pra infra/deploy.sh regenerar a"
 echo "    config certo em deploys futuros, sem precisar re-interpretar nginx)..."
+# INCIDENT (2026-09-05, deploy do commit 8b60dee): ENZOVA_DOMAINS aqui é uma
+# lista separada por espaço ("enzova.com.br www.enzova.com.br"). Sem aspas,
+# o heredoc grava "ENZOVA_DOMAINS=enzova.com.br www.enzova.com.br" sem aspas
+# no arquivo — e o `source` que infra/deploy.sh faz nesse arquivo interpreta
+# isso como a atribuição seguida do COMANDO "www.enzova.com.br", que não
+# existe. Com `set -e`, isso abortou o deploy inteiro (rollback automático
+# funcionou e confirmou produção saudável na versão anterior). Fix: sempre
+# aspas nos valores gravados no heredoc.
 cat > infra/tls/.active-domains <<EOF
-STORMPULSE_DOMAIN=$STORMPULSE_DOMAIN
-ENZOVA_DOMAINS=$ENZOVA_SERVER_NAMES
-CERT_DOMAIN=$STORMPULSE_DOMAIN
+STORMPULSE_DOMAIN="$STORMPULSE_DOMAIN"
+ENZOVA_DOMAINS="$ENZOVA_SERVER_NAMES"
+CERT_DOMAIN="$STORMPULSE_DOMAIN"
 EOF
 
 echo "==> Pronto. Teste: https://$STORMPULSE_DOMAIN/health"
