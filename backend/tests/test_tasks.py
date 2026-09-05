@@ -166,6 +166,7 @@ def test_run_notification_delivery_task_returns_summary_dict(monkeypatch: Any) -
         "sent": 2,
         "failed": 1,
         "suppressed": 1,
+        "retrying": 0,
     }
 
 

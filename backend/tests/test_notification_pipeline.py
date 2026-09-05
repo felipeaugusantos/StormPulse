@@ -86,10 +86,12 @@ def test_cycle_reports_web_push_not_configured_without_vapid_key() -> None:
         session.rollback()
 
 
-def test_web_subscription_fails_without_vapid_configured() -> None:
+def test_web_subscription_without_vapid_configured_retries_not_fails_outright() -> None:
     """Expo needs no server credential, but Web Push does — a web
     subscription without VAPID configured must fail loudly, not silently
-    no-op the whole cycle (FASE 26 changed this from an early return)."""
+    no-op the whole cycle (FASE 26 changed this from an early return).
+    A single failure retries (item "notificação falhada é terminal") —
+    it isn't permanently FAILED until attempts are exhausted."""
     with session_scope() as session:
         user, alert = _make_user_and_alert(session)
         session.add(
@@ -108,7 +110,9 @@ def test_web_subscription_fails_without_vapid_configured() -> None:
 
         run_notification_delivery_cycle(session, settings=Settings(environment="test"))
 
-        assert notification.status == NotificationStatus.FAILED
+        assert notification.status == NotificationStatus.PENDING
+        assert notification.attempts == 1
+        assert notification.next_retry_at is not None
         session.rollback()
 
 
@@ -150,7 +154,7 @@ def test_expo_subscription_delivers_without_vapid_configured(monkeypatch: Any) -
         session.rollback()
 
 
-def test_expo_device_not_registered_deletes_subscription(monkeypatch: Any) -> None:
+def test_expo_device_not_registered_deletes_subscription_and_retries(monkeypatch: Any) -> None:
     class _FakeResponse:
         def raise_for_status(self) -> None:
             return None
@@ -186,7 +190,11 @@ def test_expo_device_not_registered_deletes_subscription(monkeypatch: Any) -> No
             expo_client=_FakeClient(),  # type: ignore[arg-type]
         )
 
-        assert notification.status == NotificationStatus.FAILED
+        # The subscription is unrecoverable and correctly removed right
+        # away; the *notification* still gets its retry budget (a later
+        # cycle might reach the user by email instead).
+        assert notification.status == NotificationStatus.PENDING
+        assert notification.attempts == 1
         remaining = session.scalars(
             select(PushSubscription).where(PushSubscription.expo_push_token == token)
         ).first()
@@ -194,12 +202,13 @@ def test_expo_device_not_registered_deletes_subscription(monkeypatch: Any) -> No
         session.rollback()
 
 
-def test_notification_fails_when_no_subscription_and_email_unconfigured() -> None:
+def test_notification_retries_when_no_subscription_and_email_unconfigured() -> None:
     """Item e-mail de alerta changed what "no push subscription" means: a
     real user's own email is always attempted too, regardless of push —
-    so no-subscription-and-SES-not-configured is now an honest `FAILED`
+    so no-subscription-and-SES-not-configured is a real delivery failure
     (both channels tried, neither worked), not `SUPPRESSED` (which used to
-    mean "nothing to even try")."""
+    mean "nothing to even try"). It retries rather than failing outright —
+    item "notificação falhada é terminal"."""
     with session_scope() as session:
         user, alert = _make_user_and_alert(session)
         notification = Notification(tenant_id=user.tenant_id, alert_id=alert.id, user_id=user.id)
@@ -210,6 +219,35 @@ def test_notification_fails_when_no_subscription_and_email_unconfigured() -> Non
         # earlier test runs — assert on this test's own row, never the
         # aggregate count, same reasoning as test_agro_pipeline.py.
         run_notification_delivery_cycle(session, settings=_VAPID_SETTINGS)
+
+        assert notification.status == NotificationStatus.PENDING
+        assert notification.attempts == 1
+        assert notification.next_retry_at is not None
+        session.rollback()
+
+
+def test_notification_fails_for_good_once_retries_are_exhausted() -> None:
+    """Item "notificação falhada é terminal, sem retry" — confirms the
+    other end of the fix: it *does* eventually become FAILED, not retried
+    forever. Runs the cycle `_MAX_DELIVERY_ATTEMPTS` times, forcing
+    `next_retry_at` into the past between runs instead of sleeping for
+    real."""
+    from workers.notification_pipeline import _MAX_DELIVERY_ATTEMPTS
+
+    with session_scope() as session:
+        user, alert = _make_user_and_alert(session)
+        notification = Notification(tenant_id=user.tenant_id, alert_id=alert.id, user_id=user.id)
+        session.add(notification)
+        session.flush()
+
+        for attempt in range(1, _MAX_DELIVERY_ATTEMPTS + 1):
+            run_notification_delivery_cycle(session, settings=_VAPID_SETTINGS)
+            assert notification.attempts == attempt
+            if attempt < _MAX_DELIVERY_ATTEMPTS:
+                assert notification.status == NotificationStatus.PENDING
+                # Force the next cycle to pick it up immediately instead of
+                # waiting for the real backoff window.
+                notification.next_retry_at = None
 
         assert notification.status == NotificationStatus.FAILED
         session.rollback()
@@ -296,7 +334,7 @@ def test_notification_sent_when_webpush_succeeds(monkeypatch: Any) -> None:
         session.rollback()
 
 
-def test_expired_subscription_is_deleted_and_notification_failed(monkeypatch: Any) -> None:
+def test_expired_subscription_is_deleted_and_notification_retries(monkeypatch: Any) -> None:
     import workers.notification_pipeline as pipeline_module
 
     class _FakeResponse:
@@ -327,7 +365,8 @@ def test_expired_subscription_is_deleted_and_notification_failed(monkeypatch: An
         # suppressed-notification test above for why.
         run_notification_delivery_cycle(session, settings=_VAPID_SETTINGS)
 
-        assert notification.status == NotificationStatus.FAILED
+        assert notification.status == NotificationStatus.PENDING
+        assert notification.attempts == 1
 
         remaining = session.scalars(
             select(PushSubscription).where(PushSubscription.endpoint == endpoint)

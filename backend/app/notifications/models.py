@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import NotificationChannel, NotificationStatus
@@ -36,6 +36,14 @@ class Notification(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     )
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Retry support (item "notificação falhada é terminal" — found live,
+    # 2026-09-03: a transient SES/Expo/WebPush failure used to mark FAILED
+    # for good, with no second attempt; the delivery cycle only ever
+    # queried PENDING). `attempts` counts delivery tries so far;
+    # `next_retry_at` is when the next one is due — NULL means "due now",
+    # same as a fresh PENDING row. See workers/notification_pipeline.py.
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class PushSubscription(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):

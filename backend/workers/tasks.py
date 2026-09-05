@@ -51,6 +51,7 @@ def run_ingestion_cycle_task() -> dict[str, Any]:
         "cells": summary.cells,
         "risks": summary.risks,
         "alerts": summary.alerts,
+        "suppressed": summary.suppressed,
         "ai_summaries_queued": len(summary.risk_ids_for_ai_summary),
     }
     logger.info("ingestion cycle complete", extra=result)
@@ -182,6 +183,7 @@ def run_notification_delivery_task() -> dict[str, Any]:
         "sent": summary.sent,
         "failed": summary.failed,
         "suppressed": summary.suppressed,
+        "retrying": summary.retrying,
     }
     logger.info("notification delivery cycle complete", extra=result)
     return result

@@ -25,6 +25,10 @@ still deliver) — ``configured`` on the summary reports whether Web Push
 specifically is set up; a ``platform="web"`` subscription without it fails
 honestly instead of silently pretending to deliver. See ADR-0016 and
 ADR-0023.
+
+A failed delivery is retried with exponential backoff (``attempts``/
+``next_retry_at`` on the model) instead of failing permanently on the
+first attempt — see ``_MAX_DELIVERY_ATTEMPTS`` below.
 """
 
 from __future__ import annotations
@@ -32,11 +36,11 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from pywebpush import WebPushException, webpush
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.alerts.models import Alert
@@ -50,6 +54,19 @@ logger = logging.getLogger(__name__)
 
 _EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
+# Item "notificação falhada é terminal, sem retry" (found live, 2026-09-03):
+# a transient SES/Expo/WebPush blip used to mark FAILED permanently on the
+# very first attempt — the delivery cycle (every 60s, see celery_app.py)
+# only ever re-queried PENDING. A real outage lasting a few minutes then
+# lost the alert for good instead of catching it on a later cycle.
+# Exponential backoff (2, 4, 8, 16 min) gives ~30 minutes of retries
+# before an actually-broken channel is given up on.
+_MAX_DELIVERY_ATTEMPTS = 5
+
+
+def _retry_delay_seconds(attempts_so_far: int) -> int:
+    return 120 * (1 << (attempts_so_far - 1))
+
 
 @dataclass
 class NotificationDeliverySummary:
@@ -58,6 +75,10 @@ class NotificationDeliverySummary:
     sent: int = 0
     failed: int = 0
     suppressed: int = 0
+    # Failed this cycle but not yet out of retries — kept PENDING with a
+    # future `next_retry_at`, not counted in `failed` (which means "gave
+    # up for good").
+    retrying: int = 0
 
 
 def _payload_dict(alert: Alert) -> dict[str, str]:
@@ -178,9 +199,13 @@ def run_notification_delivery_cycle(
         settings.vapid_private_key is not None and settings.vapid_public_key is not None
     )
 
+    now = datetime.now(UTC)
     pending = list(
         session.scalars(
-            select(Notification).where(Notification.status == NotificationStatus.PENDING)
+            select(Notification).where(
+                Notification.status == NotificationStatus.PENDING,
+                or_(Notification.next_retry_at.is_(None), Notification.next_retry_at <= now),
+            )
         )
     )
     summary = NotificationDeliverySummary(configured=web_configured)
@@ -224,9 +249,18 @@ def run_notification_delivery_cycle(
                 notification.sent_at = datetime.now(UTC)
                 summary.sent += 1
             else:
-                notification.status = NotificationStatus.FAILED
+                notification.attempts += 1
                 notification.error = last_error or "todas as assinaturas expiraram ou falharam"
-                summary.failed += 1
+                if notification.attempts >= _MAX_DELIVERY_ATTEMPTS:
+                    notification.status = NotificationStatus.FAILED
+                    summary.failed += 1
+                else:
+                    # Stays PENDING — the next cycle (every 60s) picks it
+                    # back up once next_retry_at is due.
+                    notification.next_retry_at = datetime.now(UTC) + timedelta(
+                        seconds=_retry_delay_seconds(notification.attempts)
+                    )
+                    summary.retrying += 1
     finally:
         if expo_client is None:
             client.close()
