@@ -574,6 +574,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{location_id}/forecast-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Comparação de acurácia entre modelos meteorológicos (Fase 2, ADR-0082)
+         * @description Per-model accuracy for this location, accumulated by the daily
+         *     snapshot/observation jobs (``app.forecast_comparison.service``) — not a
+         *     live computation. Applies to any location (farm or talhão), unlike
+         *     ZARC/NDVI above: the comparison is about the geographic point's forecast
+         *     models, not a crop-specific signal. An empty ``models`` list is the
+         *     honest answer for a brand-new location — nothing has been observed for
+         *     it yet, never a fabricated placeholder.
+         */
+        get: operations["get_location_forecast_comparison_api_v1_locations__location_id__forecast_comparison_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/storms": {
         parameters: {
             query?: never;
@@ -1559,6 +1585,18 @@ export interface components {
             /** Points */
             points?: components["schemas"]["ForecastPoint"][];
         };
+        /** ForecastComparisonOut */
+        ForecastComparisonOut: {
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Min Sample Size */
+            min_sample_size: number;
+            /** Models */
+            models: components["schemas"]["ModelMetricsOut"][];
+        };
         /** ForecastPoint */
         ForecastPoint: {
             /**
@@ -1759,6 +1797,31 @@ export interface components {
             /** Captcha Token */
             captcha_token?: string | null;
         };
+        /**
+         * ModelMetricsOut
+         * @description One model's accuracy record for this location so far (Fase 2, ADR-0082)
+         *     — any field is `None` when that variable has no paired sample yet, never
+         *     a fabricated number. `has_enough_samples` is the "não recomendar sem
+         *     amostra mínima" gate — the frontend must not present a model as more
+         *     trustworthy than another when this is `False`.
+         */
+        ModelMetricsOut: {
+            /** Model */
+            model: string;
+            /** Sample Count */
+            sample_count: number;
+            /** Has Enough Samples */
+            has_enough_samples: boolean;
+            /** Temperature Mae C */
+            temperature_mae_c: number | null;
+            precipitation: components["schemas"]["PrecipitationErrorOut"] | null;
+            /** Wind Mae Kmh */
+            wind_mae_kmh: number | null;
+            /** Rain Hit Rate */
+            rain_hit_rate: number | null;
+            /** Brier Score */
+            brier_score: number | null;
+        };
         /** NdviOut */
         NdviOut: {
             /**
@@ -1920,6 +1983,15 @@ export interface components {
             queued: boolean;
             /** Name */
             name: string;
+        };
+        /** PrecipitationErrorOut */
+        PrecipitationErrorOut: {
+            /** Bias Mm */
+            bias_mm: number;
+            /** Mae Mm */
+            mae_mm: number;
+            /** Sample Count */
+            sample_count: number;
         };
         /**
          * Provenance
@@ -3487,6 +3559,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ZarcWindowOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_location_forecast_comparison_api_v1_locations__location_id__forecast_comparison_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ForecastComparisonOut"];
                 };
             };
             /** @description Validation Error */

@@ -3,6 +3,7 @@ import { ApiError, api } from '../api'
 import { cropColor } from '../cropColors'
 import { reverseGeocodeCity, searchCity } from '../geocode'
 import type { CitySearchResult, LocationItem } from '../types'
+import { ForecastComparisonModal } from './ForecastComparisonModal'
 import { WeeklyReportModal } from './WeeklyReportModal'
 
 const SEARCH_DEBOUNCE_MS = 400
@@ -81,6 +82,9 @@ export function LocationSearchCard({
   const [savingEdit, setSavingEdit] = useState(false)
   // Weekly report (FASE 32) — which talhão's report modal is open, if any.
   const [reportFor, setReportFor] = useState<LocationItem | null>(null)
+  // Comparação de modelos (Fase 2, ADR-0082) — qual talhão tem o modal
+  // aberto, se algum.
+  const [comparisonFor, setComparisonFor] = useState<LocationItem | null>(null)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -387,6 +391,16 @@ export function LocationSearchCard({
                     </button>
                     <button
                       className="btn ghost small"
+                      title="Comparação de modelos de previsão"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setComparisonFor(plot)
+                      }}
+                    >
+                      📊
+                    </button>
+                    <button
+                      className="btn ghost small"
                       title="Editar talhão"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -545,6 +559,13 @@ export function LocationSearchCard({
           locationId={reportFor.id}
           locationName={reportFor.name}
           onClose={() => setReportFor(null)}
+        />
+      )}
+      {comparisonFor && (
+        <ForecastComparisonModal
+          locationId={comparisonFor.id}
+          locationName={comparisonFor.name}
+          onClose={() => setComparisonFor(null)}
         />
       )}
     </section>

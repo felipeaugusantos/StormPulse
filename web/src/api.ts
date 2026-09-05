@@ -11,6 +11,7 @@ import type {
   ConvectiveWatch,
   CurrentConditions,
   Forecast,
+  ForecastComparison,
   LightningStrike,
   LocationItem,
   LocationRisk,
@@ -364,6 +365,11 @@ export const api = {
   // matches it.
   zarcWindow: (locationId: string) =>
     request<ZarcWindow>(`/locations/${locationId}/agro/zarc-window`),
+  // Fase 2 (ADR-0082) — accuracy record accumulated by the daily snapshot/
+  // observation jobs, not a live computation. Applies to any location
+  // (farm or talhão), unlike zarcWindow()/ndvi() above.
+  forecastComparison: (locationId: string) =>
+    request<ForecastComparison>(`/locations/${locationId}/forecast-comparison`),
   // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever
   // called when `Me.is_platform_admin` is true; the backend 403s otherwise.
   adminUsers: (opts: { search?: string; limit?: number; offset?: number } = {}) => {
