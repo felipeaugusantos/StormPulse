@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.core.enums import AlertEventType, RiskLevel
+from app.core.enums import AlertEventType, AlertType, RiskLevel
 from app.core.thresholds import AlertPolicy
 from engine.risk.engine import RiskAssessment
 
@@ -52,6 +52,49 @@ def active_hazards(assessment: RiskAssessment, policy: AlertPolicy) -> frozenset
         for name in _HAZARD_FIELDS
         if getattr(assessment, name) >= policy.hazard_active_threshold
     )
+
+
+# Maps `active_hazards()`'s hazard names to the per-location toggle a user
+# actually sees (`AlertPreference.alert_type`, item "AlertPreference é um
+# recurso morto" — found live, 2026-09-03: the API/UI let a user disable
+# an alert type, it persisted, and nothing ever read it back).
+_HAZARD_ALERT_TYPES: dict[str, AlertType] = {
+    "rain": AlertType.RAIN_INTENSE,
+    "wind": AlertType.STRONG_WIND,
+    "hail": AlertType.HAIL,
+    "lightning": AlertType.LIGHTNING,
+}
+
+# STORM_DETECTED/STORM_ENTERED_MONITORING_AREA are "a cell just appeared in
+# your radius" — distinct from the ongoing-lifecycle events a storm already
+# being tracked produces (APPROACHING/INTENSIFIED/RISK_CHANGED/PASSED).
+_FIRST_CONTACT_EVENTS = frozenset(
+    {AlertEventType.STORM_DETECTED, AlertEventType.STORM_ENTERED_MONITORING_AREA}
+)
+
+
+def is_suppressed_by_preference(decision: AlertDecision, disabled: frozenset[AlertType]) -> bool:
+    """Whether the location's per-type `AlertPreference` toggles should
+    suppress an otherwise-emitted decision.
+
+    `SEVERE_STORM` is the master switch for the whole storm-cell pipeline —
+    disabling it suppresses every event. `SEVERE_CELL` gates first-contact
+    events specifically. The four hazard toggles (rain/wind/hail/lightning)
+    only suppress when *every* hazard active in this decision has been
+    individually disabled — a decision driven by wind alone still alerts
+    if the user only turned HAIL off.
+    """
+    if AlertType.SEVERE_STORM in disabled:
+        return True
+    if decision.event_type in _FIRST_CONTACT_EVENTS and AlertType.SEVERE_CELL in disabled:
+        return True
+    if decision.active_hazards:
+        hazard_types = {
+            _HAZARD_ALERT_TYPES[h] for h in decision.active_hazards if h in _HAZARD_ALERT_TYPES
+        }
+        if hazard_types and hazard_types.issubset(disabled):
+            return True
+    return False
 
 
 def snapshot(assessment: RiskAssessment, policy: AlertPolicy) -> AlertState:

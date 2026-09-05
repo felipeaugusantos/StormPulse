@@ -10,12 +10,16 @@ workers.run_once`` + curl in ``.github/workflows/ci.yml``, calling
 from __future__ import annotations
 
 import asyncio
+import uuid
 from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
-from app.core.enums import WeatherSourceKind
+from app.alerts.models import Alert
+from app.core.enums import NotificationStatus, WeatherSourceKind
+from app.notifications.models import Notification
 from app.weather.provider import (
     CurrentConditions,
     Forecast,
@@ -80,6 +84,50 @@ async def test_pipeline_cycle_materializes_storms_and_risk(client: AsyncClient) 
     risk = risk_resp.json()
     assert risk["is_mock"] is True
     assert risk["experimental"] is True
+
+
+async def test_disabled_severe_storm_preference_suppresses_the_alert(
+    client: AsyncClient,
+) -> None:
+    """Item 'AlertPreference é um recurso morto' — the toggle used to
+    persist and come back in the API response without ever being read by
+    the pipeline that actually emits alerts."""
+    token = await register_and_login(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        **_LOCATION_NEAR_MOCK_STORM,
+        "alert_preferences": [{"alert_type": "severe_storm", "enabled": False}],
+    }
+    created = (await client.post("/api/v1/locations", json=payload, headers=headers)).json()
+    location_id = created["id"]
+
+    def _run_one_cycle() -> CycleSummary:
+        with session_scope() as session:
+            return run_ingestion_cycle(session)
+
+    summary = await asyncio.to_thread(_run_one_cycle)
+    assert summary.suppressed >= 1
+    # A suppressed alert is a real, honest non-attempt — never counted as
+    # a delivered/queued one.
+    assert summary.alerts == 0
+
+    def _load_notification_statuses() -> list[NotificationStatus]:
+        with session_scope() as session:
+            alert_ids = session.scalars(
+                select(Alert.id).where(Alert.location_id == uuid.UUID(location_id))
+            ).all()
+            return list(
+                session.scalars(
+                    select(Notification.status).where(Notification.alert_id.in_(alert_ids))
+                ).all()
+            )
+
+    statuses = await asyncio.to_thread(_load_notification_statuses)
+    # The Alert itself is still recorded (real detected event, worth
+    # keeping in history) — only delivery is suppressed.
+    assert len(statuses) >= 1
+    assert all(s == NotificationStatus.SUPPRESSED for s in statuses)
 
 
 class _RadarUnavailableProvider(WeatherProvider):

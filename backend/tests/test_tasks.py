@@ -46,6 +46,7 @@ def test_run_ingestion_cycle_task_returns_summary_dict(monkeypatch: Any) -> None
         "cells": 2,
         "risks": 3,
         "alerts": 4,
+        "suppressed": 0,
         "ai_summaries_queued": 0,
     }
 

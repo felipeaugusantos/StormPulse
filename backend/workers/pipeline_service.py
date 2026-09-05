@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -22,12 +23,12 @@ from geoalchemy2.elements import WKTElement
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.alerts.engine import AlertEngine, AlertState, active_hazards
+from app.alerts.engine import AlertEngine, AlertState, active_hazards, is_suppressed_by_preference
 from app.alerts.models import Alert
 from app.core.config import Settings, get_settings
-from app.core.enums import NotificationChannel, NotificationStatus, RiskLevel
+from app.core.enums import AlertType, NotificationChannel, NotificationStatus, RiskLevel
 from app.core.thresholds import AlertPolicy
-from app.locations.models import Location
+from app.locations.models import AlertPreference, Location
 from app.notifications.models import Notification
 from app.storms.models import StormCell, StormObservation, StormRisk, StormTrack
 from app.weather.factory import get_weather_provider
@@ -49,6 +50,13 @@ class CycleSummary:
     cells: int
     risks: int
     alerts: int
+    # Decisions that would have emitted, but every alert type the decision
+    # touches was disabled via AlertPreference for that location (item
+    # "AlertPreference é um recurso morto" — found live, 2026-09-03: the
+    # toggle persisted but nothing ever read it back). Not counted in
+    # `alerts` above — that field means "a PENDING notification was
+    # queued", which a suppressed one never gets.
+    suppressed: int = 0
     # IDs of StormRisk rows worth an AI summary (FASE 9, ADR-0060) —
     # dispatched by the caller (run_ingestion_cycle_task) only *after*
     # session_scope()'s commit, never from inside this function: this
@@ -79,6 +87,17 @@ def _to_frame_inputs(frames: list[RadarFrameData]) -> list[FrameInput]:
         )
         for f in frames
     ]
+
+
+def _disabled_alert_types(session: Session, location_id: uuid.UUID) -> frozenset[AlertType]:
+    return frozenset(
+        session.scalars(
+            select(AlertPreference.alert_type).where(
+                AlertPreference.location_id == location_id,
+                AlertPreference.enabled.is_(False),
+            )
+        ).all()
+    )
 
 
 def _point(lat: float, lon: float) -> WKTElement:
@@ -282,6 +301,7 @@ def run_ingestion_cycle(
     alert_engine = AlertEngine(policy)
     risks = 0
     alerts = 0
+    suppressed = 0
     risk_ids_for_ai_summary: list[str] = []
 
     locations = session.scalars(select(Location).where(Location.is_active.is_(True))).all()
@@ -378,21 +398,33 @@ def run_ingestion_cycle(
                 )
                 session.add(alert)
                 session.flush()
+                # The Alert row is kept either way — it's a real detected
+                # event, worth showing in the location's history even if
+                # the user muted this alert type. Only the Notification
+                # (whether a delivery attempt is actually queued) responds
+                # to AlertPreference.
+                disabled_types = _disabled_alert_types(session, location.id)
+                if is_suppressed_by_preference(decision, disabled_types):
+                    notification_status = NotificationStatus.SUPPRESSED
+                    suppressed += 1
+                else:
+                    notification_status = NotificationStatus.PENDING
+                    alerts += 1
                 session.add(
                     Notification(
                         tenant_id=location.tenant_id,
                         alert_id=alert.id,
                         user_id=location.user_id,
                         channel=NotificationChannel.PUSH,
-                        status=NotificationStatus.PENDING,
+                        status=notification_status,
                     )
                 )
-                alerts += 1
 
     return CycleSummary(
         frames=len(frames),
         cells=len(persisted),
         risks=risks,
         alerts=alerts,
+        suppressed=suppressed,
         risk_ids_for_ai_summary=risk_ids_for_ai_summary,
     )

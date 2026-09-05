@@ -37,6 +37,8 @@ def run_ingestion_cycle_task() -> dict[str, Any]:
     with track_pipeline_cycle("ingestion"), session_scope() as session:
         summary = run_ingestion_cycle(session)
     alerts_generated.add(summary.alerts, {"pipeline": "ingestion"})
+    if summary.suppressed:
+        alerts_suppressed.add(summary.suppressed, {"reason": "alert_preference"})
     # Dispatched only *after* session_scope()'s commit above — see
     # CycleSummary.risk_ids_for_ai_summary's docstring for why dispatching
     # any earlier (e.g. from inside run_ingestion_cycle, before its own
