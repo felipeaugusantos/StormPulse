@@ -902,7 +902,17 @@ function useAgroEntries(locations: LocationItem[]): {
 } {
   const [entries, setEntries] = useState<Record<string, AgroEntry>>({})
   const activeLocations = locations.filter((l) => l.is_active)
-  const activeIds = activeLocations.map((l) => l.id).join(',')
+  // Not just ids: editing a talhão's crop/soil/boundary after it was
+  // created (LocationSearchCard's edit form) doesn't change its id, so a
+  // signature keyed on id alone would leave the effect below re-using its
+  // original closure's stale `locations` forever — the ZARC/NDVI gating
+  // (isTalhaoWithCropAndSoil/isTalhaoWithBoundary) would keep evaluating
+  // the values from whenever the talhão was first added (found live,
+  // 2026-09-03: ZARC panel stayed empty after informing crop/soil on an
+  // existing talhão, until a full page reload).
+  const activeSignature = activeLocations
+    .map((l) => `${l.id}:${l.crop ?? ''}:${l.soil_type ?? ''}:${l.boundary_geojson ? '1' : '0'}`)
+    .join(',')
 
   useEffect(() => {
     let cancelled = false
@@ -1006,7 +1016,7 @@ function useAgroEntries(locations: LocationItem[]): {
       clearInterval(t)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeIds])
+  }, [activeSignature])
 
   return { entries, activeLocations }
 }
