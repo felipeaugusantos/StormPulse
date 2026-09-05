@@ -74,6 +74,23 @@ def get_numeric_rain_forecast_provider(settings: Settings) -> WeatherProvider:
     return _build_open_meteo(settings)
 
 
+def get_forecast_comparison_provider(settings: Settings) -> OpenMeteoWeatherProvider | None:
+    """Fase 2 (Comparação e Validação de Previsões) — the concrete
+    ``OpenMeteoWeatherProvider``, needed directly (not the ``WeatherProvider``
+    interface) because ``get_multi_model_forecast``/``get_daily_observations``
+    aren't part of that interface — see ``app/weather/open_meteo.py``.
+
+    Returns ``None`` in mock mode: there is no honest mock for "how did
+    ECMWF/GFS/ICON actually do", and inventing comparison numbers would
+    violate the project's no-fake-data rule — the comparison job simply
+    reports itself disabled instead (``ForecastComparisonCycleSummary.
+    enabled=False``), same convention as ``AGRO_ENABLED``/``LIGHTNING_ENABLED``.
+    """
+    if settings.weather_provider.lower() == "mock":
+        return None
+    return _build_open_meteo(settings)
+
+
 def get_weather_provider(settings: Settings) -> WeatherProvider:
     provider = settings.weather_provider.lower()
     if provider == "mock":

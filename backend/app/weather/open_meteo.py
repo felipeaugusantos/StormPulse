@@ -70,6 +70,7 @@ and ``get_warnings`` are honestly unavailable, same reasoning as CPTEC.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -100,6 +101,40 @@ class WeatherProviderUnavailableError(_BaseWeatherProviderUnavailableError):
 
 _CUSTOMER_FORECAST_HOST = "https://customer-api.open-meteo.com"
 _PUBLIC_FORECAST_HOST = "https://api.open-meteo.com"
+
+
+@dataclass(frozen=True)
+class ObservedDailyPoint:
+    """One day's *observed* (not forecast) weather, from the archive/ERA5
+    reanalysis endpoint — Fase 2's ground truth for scoring the forecast
+    models. ERA5 reanalysis assimilates real global observations after the
+    fact; it is not the same product as the live forecast models being
+    scored, but it is the most complete, honestly-available "what actually
+    happened" source today (INMET's own station-reading endpoint is retired
+    without a token, ADR-0080) — same archive host/product already trusted
+    elsewhere in this codebase for historical rainfall
+    (``RainfallHistory``/``get_recent_rainfall``)."""
+
+    day: date
+    temperature_max_c: float | None
+    precipitation_mm: float | None
+    wind_gusts_max_kmh: float | None
+
+
+@dataclass(frozen=True)
+class ModelDailyPoint:
+    """One day's forecast from one specific model — Fase 2 (Comparação e
+    Validação de Previsões). Deliberately narrower than ``ForecastPoint``:
+    only the variables the comparison engine (``engine/validation.py``)
+    actually scores (temperature, precipitation amount/probability, wind
+    gusts), not every field a single-model forecast carries."""
+
+    day: date
+    model: str
+    temperature_max_c: float | None
+    precipitation_mm: float | None
+    precipitation_probability_percent: float | None
+    wind_gusts_max_kmh: float | None
 
 
 class OpenMeteoWeatherProvider(WeatherProvider):
@@ -291,6 +326,130 @@ class OpenMeteoWeatherProvider(WeatherProvider):
         return RainfallHistory(
             provenance=self._provenance(), latitude=latitude, longitude=longitude, daily=entries
         )
+
+    async def get_multi_model_forecast(
+        self, latitude: float, longitude: float, *, models: list[str], forecast_days: int = 7
+    ) -> dict[str, list[ModelDailyPoint]]:
+        """Fase 2 (Comparação e Validação de Previsões) — one call, several
+        models side by side. Confirmed live (2026-09-05) that Open-Meteo's
+        ``models=a,b,c`` suffixes every requested daily variable with
+        ``_<model>`` in a single flat ``daily`` dict sharing one ``time``
+        array (e.g. ``temperature_2m_max_ecmwf_ifs025``,
+        ``temperature_2m_max_gfs_seamless``) — not a nested per-model
+        response, so the parsing below reads each suffixed key directly
+        rather than expecting a `models` sub-object.
+
+        Independent of ``get_forecast``'s single-model call (`self._model`)
+        — this always requests exactly the ``models`` passed in, since a
+        comparison needs a fixed known set, not whatever the instance's
+        default happens to be. Never applied to the archive/historical
+        endpoint (unrelated to live model selection, same reasoning as
+        ``_model`` throughout this file).
+        """
+        params: dict[str, Any] = {
+            "latitude": latitude,
+            "longitude": longitude,
+            "daily": (
+                "temperature_2m_max,precipitation_sum,precipitation_probability_max,"
+                "wind_gusts_10m_max"
+            ),
+            "models": ",".join(models),
+            "forecast_days": forecast_days,
+            "timezone": "UTC",
+        }
+        if self._api_key:
+            params["apikey"] = self._api_key
+        response = await self._client.get(self._forecast_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        daily = data.get("daily") if isinstance(data, dict) else None
+        if not isinstance(daily, dict):
+            raise WeatherProviderUnavailableError(
+                "Unexpected Open-Meteo multi-model forecast response shape."
+            )
+
+        days_raw = daily.get("time") or []
+        try:
+            days = [datetime.strptime(d, "%Y-%m-%d").date() for d in days_raw]
+        except (ValueError, TypeError) as exc:
+            raise WeatherProviderUnavailableError(
+                "Unexpected Open-Meteo multi-model 'time' values."
+            ) from exc
+
+        result: dict[str, list[ModelDailyPoint]] = {}
+        for model in models:
+            maxima = daily.get(f"temperature_2m_max_{model}") or []
+            precip = daily.get(f"precipitation_sum_{model}") or []
+            prob = daily.get(f"precipitation_probability_max_{model}") or []
+            gusts = daily.get(f"wind_gusts_10m_max_{model}") or []
+
+            def _at(series: list[Any], i: int) -> Any:
+                return series[i] if i < len(series) else None
+
+            result[model] = [
+                ModelDailyPoint(
+                    day=day,
+                    model=model,
+                    temperature_max_c=_at(maxima, i),
+                    precipitation_mm=_at(precip, i),
+                    precipitation_probability_percent=_at(prob, i),
+                    wind_gusts_max_kmh=_at(gusts, i),
+                )
+                for i, day in enumerate(days)
+            ]
+        return result
+
+    async def get_daily_observations(
+        self, latitude: float, longitude: float, *, start_date: date, end_date: date
+    ) -> list[ObservedDailyPoint]:
+        """Fase 2 (Comparação e Validação de Previsões) — ground truth for
+        the days in `[start_date, end_date]`, from the same archive/ERA5
+        endpoint `get_recent_rainfall` already uses, just with temperature
+        and wind added (see `ObservedDailyPoint` for why this is the ground
+        truth chosen). Never applies `self._model`/API key — same reasoning
+        as `get_recent_rainfall`."""
+        response = await self._client.get(
+            self._archive_url,
+            params={
+                "latitude": latitude,
+                "longitude": longitude,
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "daily": "temperature_2m_max,precipitation_sum,wind_gusts_10m_max",
+                "timezone": "UTC",
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        daily = data.get("daily") if isinstance(data, dict) else None
+        if not isinstance(daily, dict):
+            raise WeatherProviderUnavailableError(
+                "Unexpected Open-Meteo archive response shape (daily observations)."
+            )
+
+        days_raw = daily.get("time") or []
+        maxima = daily.get("temperature_2m_max") or []
+        precip = daily.get("precipitation_sum") or []
+        gusts = daily.get("wind_gusts_10m_max") or []
+
+        def _at(series: list[Any], i: int) -> Any:
+            return series[i] if i < len(series) else None
+
+        points: list[ObservedDailyPoint] = []
+        for i, day_str in enumerate(days_raw):
+            try:
+                day = datetime.strptime(day_str, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                continue
+            points.append(
+                ObservedDailyPoint(
+                    day=day,
+                    temperature_max_c=_at(maxima, i),
+                    precipitation_mm=_at(precip, i),
+                    wind_gusts_max_kmh=_at(gusts, i),
+                )
+            )
+        return points
 
     async def aclose(self) -> None:
         await self._client.aclose()

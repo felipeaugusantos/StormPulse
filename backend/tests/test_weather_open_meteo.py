@@ -14,7 +14,31 @@ import httpx
 import pytest
 
 from app.core.enums import WeatherSourceKind
-from app.weather.open_meteo import OpenMeteoWeatherProvider, WeatherProviderUnavailableError
+from app.weather.open_meteo import (
+    ModelDailyPoint,
+    ObservedDailyPoint,
+    OpenMeteoWeatherProvider,
+    WeatherProviderUnavailableError,
+)
+
+# Real response verified live (2026-09-05) for
+# models=ecmwf_ifs025,gfs_seamless,icon_seamless — a single flat `daily`
+# dict, each requested variable suffixed per model, one shared `time` array.
+_MULTI_MODEL_PAYLOAD = {
+    "latitude": -21.25,
+    "longitude": -47.75,
+    "daily": {
+        "time": ["2026-09-05", "2026-09-06", "2026-09-07"],
+        "temperature_2m_max_ecmwf_ifs025": [31.1, 23.9, 20.5],
+        "precipitation_sum_ecmwf_ifs025": [2.40, 17.20, 15.50],
+        "precipitation_probability_max_ecmwf_ifs025": [20, 80, 70],
+        "wind_gusts_10m_max_ecmwf_ifs025": [25.0, 30.0, 28.0],
+        "temperature_2m_max_gfs_seamless": [35.4, 23.6, 20.6],
+        "precipitation_sum_gfs_seamless": [1.70, 9.30, 0.00],
+        "precipitation_probability_max_gfs_seamless": [10, 40, 0],
+        "wind_gusts_10m_max_gfs_seamless": [22.0, 27.0, 15.0],
+    },
+}
 
 _FORECAST_PAYLOAD = {
     "latitude": -21.19508,
@@ -266,3 +290,141 @@ async def test_a_model_never_reaches_the_archive_host() -> None:
         client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
     )
     await provider.get_recent_rainfall(-21.1775, -47.8103, days=2)
+
+
+# ---------------------------------------------------------------------------
+# Fase 2 — comparação e validação de previsões (get_multi_model_forecast)
+# ---------------------------------------------------------------------------
+
+
+async def test_multi_model_forecast_requests_comma_joined_models() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["models"] == "ecmwf_ifs025,gfs_seamless"
+        return httpx.Response(200, json=_MULTI_MODEL_PAYLOAD)
+
+    provider = _make_provider(httpx.MockTransport(handler))
+    result = await provider.get_multi_model_forecast(
+        -21.1775, -47.8103, models=["ecmwf_ifs025", "gfs_seamless"]
+    )
+    assert set(result.keys()) == {"ecmwf_ifs025", "gfs_seamless"}
+
+
+async def test_multi_model_forecast_parses_suffixed_keys_per_model() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_MULTI_MODEL_PAYLOAD)
+
+    provider = _make_provider(httpx.MockTransport(handler))
+    result = await provider.get_multi_model_forecast(
+        -21.1775, -47.8103, models=["ecmwf_ifs025", "gfs_seamless"]
+    )
+
+    ecmwf_day0 = result["ecmwf_ifs025"][0]
+    assert ecmwf_day0 == ModelDailyPoint(
+        day=date(2026, 9, 5),
+        model="ecmwf_ifs025",
+        temperature_max_c=31.1,
+        precipitation_mm=2.40,
+        precipitation_probability_percent=20,
+        wind_gusts_max_kmh=25.0,
+    )
+    gfs_day1 = result["gfs_seamless"][1]
+    assert gfs_day1.temperature_max_c == 23.6
+    assert gfs_day1.precipitation_mm == 9.30
+
+
+async def test_multi_model_forecast_missing_model_degrades_to_none_fields() -> None:
+    """A model requested but absent from the response (e.g. Open-Meteo
+    dropped it, or a typo) still gets one point per day — same day range as
+    every other model, so callers can zip by index across models — but with
+    every field `None`, never a crash and never silently invented data for
+    the missing model."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_MULTI_MODEL_PAYLOAD)
+
+    provider = _make_provider(httpx.MockTransport(handler))
+    result = await provider.get_multi_model_forecast(
+        -21.1775, -47.8103, models=["ecmwf_ifs025", "icon_seamless"]
+    )
+    assert len(result["icon_seamless"]) == 3
+    assert all(p.temperature_max_c is None for p in result["icon_seamless"])
+    assert len(result["ecmwf_ifs025"]) == 3
+
+
+async def test_multi_model_forecast_raises_on_unexpected_shape() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"latitude": -21.1775})
+
+    provider = _make_provider(httpx.MockTransport(handler))
+    with pytest.raises(WeatherProviderUnavailableError):
+        await provider.get_multi_model_forecast(-21.1775, -47.8103, models=["ecmwf_ifs025"])
+
+
+# ---------------------------------------------------------------------------
+# Fase 2 — ground truth for scoring models (get_daily_observations)
+# ---------------------------------------------------------------------------
+
+_OBSERVATIONS_PAYLOAD = {
+    "latitude": -21.19508,
+    "longitude": -47.79248,
+    "daily": {
+        "time": ["2026-08-28", "2026-08-29"],
+        "temperature_2m_max": [32.6, 34.5],
+        "precipitation_sum": [0.0, 3.2],
+        "wind_gusts_10m_max": [33.8, 40.7],
+    },
+}
+
+
+async def test_daily_observations_parses_all_three_variables() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_OBSERVATIONS_PAYLOAD)
+
+    provider = _make_provider(httpx.MockTransport(handler))
+    result = await provider.get_daily_observations(
+        -21.1775, -47.8103, start_date=date(2026, 8, 28), end_date=date(2026, 8, 29)
+    )
+    assert result == [
+        ObservedDailyPoint(
+            day=date(2026, 8, 28),
+            temperature_max_c=32.6,
+            precipitation_mm=0.0,
+            wind_gusts_max_kmh=33.8,
+        ),
+        ObservedDailyPoint(
+            day=date(2026, 8, 29),
+            temperature_max_c=34.5,
+            precipitation_mm=3.2,
+            wind_gusts_max_kmh=40.7,
+        ),
+    ]
+
+
+async def test_daily_observations_never_sends_a_models_param() -> None:
+    """Ground truth is model-independent by definition — a `models=` param
+    here would be a contradiction in terms."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "models" not in request.url.params
+        return httpx.Response(200, json=_OBSERVATIONS_PAYLOAD)
+
+    provider = OpenMeteoWeatherProvider(
+        forecast_url="https://api.open-meteo.com/v1/forecast",
+        archive_url="https://archive-api.open-meteo.com/v1/archive",
+        model="ecmwf_ifs025",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+    )
+    await provider.get_daily_observations(
+        -21.1775, -47.8103, start_date=date(2026, 8, 28), end_date=date(2026, 8, 29)
+    )
+
+
+async def test_daily_observations_raises_on_unexpected_shape() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"latitude": -21.1775})
+
+    provider = _make_provider(httpx.MockTransport(handler))
+    with pytest.raises(WeatherProviderUnavailableError):
+        await provider.get_daily_observations(
+            -21.1775, -47.8103, start_date=date(2026, 8, 28), end_date=date(2026, 8, 29)
+        )
