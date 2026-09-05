@@ -264,3 +264,32 @@ class ZarcWindowOut(BaseModel):
     municipio: str
     uf: str
     matches: list[ZarcMatchOut]
+
+
+class PrecipitationErrorOut(BaseModel):
+    bias_mm: float
+    mae_mm: float
+    sample_count: int
+
+
+class ModelMetricsOut(BaseModel):
+    """One model's accuracy record for this location so far (Fase 2, ADR-0082)
+    — any field is `None` when that variable has no paired sample yet, never
+    a fabricated number. `has_enough_samples` is the "não recomendar sem
+    amostra mínima" gate — the frontend must not present a model as more
+    trustworthy than another when this is `False`."""
+
+    model: str
+    sample_count: int
+    has_enough_samples: bool
+    temperature_mae_c: float | None
+    precipitation: PrecipitationErrorOut | None
+    wind_mae_kmh: float | None
+    rain_hit_rate: float | None
+    brier_score: float | None
+
+
+class ForecastComparisonOut(BaseModel):
+    location_id: uuid.UUID
+    min_sample_size: int
+    models: list[ModelMetricsOut]

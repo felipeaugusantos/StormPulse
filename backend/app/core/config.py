@@ -270,6 +270,19 @@ class Settings(BaseSettings):
     # um histórico permanente (mesmo espírito do SatelliteImage).
     lightning_retention_minutes: float = Field(default=30.0, gt=0)
 
+    # --- Comparação e validação de previsões (Fase 2 — ADR-0082) ---
+    # Ligado por padrão: reaproveita o Open-Meteo já configurado (nenhuma
+    # credencial nova), só varia o parâmetro `models=` da mesma chamada.
+    # ECMWF/GFS/ICON são os únicos comparados hoje — INMET/CPTEC não dão
+    # número de previsão (chuva/temperatura/vento), só texto (ADR-0011/0014),
+    # então não há nada de numérico neles pra colocar nas mesmas métricas.
+    forecast_comparison_enabled: bool = True
+    forecast_comparison_models: str = "ecmwf_ifs025,gfs_seamless,icon_seamless"
+    # Uma recomendação de modelo não deve nascer de poucas amostras — ver
+    # engine/validation.py::MIN_SAMPLE_SIZE_FOR_RECOMMENDATION (mesmo valor,
+    # configurável aqui pra ajustar sem redeploy de código).
+    forecast_comparison_min_sample_size: int = Field(default=20, ge=1)
+
     # --- INPE/CPTEC forecast (redundância, FASE 17) ---
     # Serviço XML público do CPTEC — sem chave, sem geocódigo (aceita
     # lat/lon direto). Usado como fallback automático de `get_current_data`
@@ -626,6 +639,12 @@ class Settings(BaseSettings):
     def cors_allowed_origins_list(self) -> list[str]:
         """Parsed from a comma-separated env var (12-factor friendly)."""
         return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def forecast_comparison_models_list(self) -> list[str]:
+        """Parsed from a comma-separated env var (12-factor friendly)."""
+        return [m.strip() for m in self.forecast_comparison_models.split(",") if m.strip()]
 
     @computed_field  # type: ignore[prop-decorator]
     @property

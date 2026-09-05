@@ -98,5 +98,19 @@ celery_app.conf.update(
             # multi-megabyte file for no new data (item ZARC, ADR-0069).
             "schedule": 604_800.0,  # seconds (7 days)
         },
+        "forecast-snapshot-daily": {
+            "task": "workers.tasks.run_forecast_snapshot_task",
+            # Fase 2 (ADR-0082): one snapshot per day per horizon bucket is
+            # the whole point (HORIZON_BUCKETS_HOURS) — running more often
+            # would just overwrite the same day's row with a fresher
+            # "predicted X hours ago" that no longer matches any bucket.
+            "schedule": 86_400.0,  # seconds (24h)
+        },
+        "forecast-observation-fill-daily": {
+            "task": "workers.tasks.run_forecast_observation_fill_task",
+            # A day after the snapshot's own cadence — the target date
+            # needs to have actually finished before its observation exists.
+            "schedule": 86_400.0,  # seconds (24h)
+        },
     },
 )

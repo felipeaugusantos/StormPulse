@@ -20,6 +20,7 @@ from workers.celery_app import celery_app
 from workers.db import session_scope
 from workers.deforestation_pipeline import run_deforestation_check_cycle
 from workers.email import EmailKind, render_email, send_email
+from workers.forecast_comparison_pipeline import fill_observed_values, record_forecast_snapshots
 from workers.lightning_pipeline import run_lightning_detection_cycle
 from workers.ndvi_pipeline import run_ndvi_pipeline_cycle
 from workers.notification_pipeline import run_notification_delivery_cycle
@@ -132,6 +133,42 @@ def run_agro_advisory_task() -> dict[str, Any]:
         "dry_spell_alerts": summary.dry_spell_alerts,
     }
     logger.info("agro advisory cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_forecast_snapshot_task")
+def run_forecast_snapshot_task() -> dict[str, Any]:
+    """Run one forecast-snapshot cycle (Fase 2 — Comparação e Validação de
+    Previsões, ADR-0082): asks Open-Meteo for ECMWF/GFS/ICON side by side
+    and stores what each predicted for each active location.
+
+    No-op (returns immediately) when FORECAST_COMPARISON_ENABLED=false or
+    WEATHER_PROVIDER=mock — there is no honest mock for this.
+    """
+    with track_pipeline_cycle("forecast_snapshot"), session_scope() as session:
+        summary = record_forecast_snapshots(session)
+    result = {
+        "enabled": summary.enabled,
+        "locations_checked": summary.locations_checked,
+        "snapshots_recorded": summary.snapshots_recorded,
+    }
+    logger.info("forecast snapshot cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_forecast_observation_fill_task")
+def run_forecast_observation_fill_task() -> dict[str, Any]:
+    """Run one observation-fill cycle (Fase 2 — Comparação e Validação de
+    Previsões, ADR-0082): fills in what actually happened for snapshots
+    whose target date has already passed.
+    """
+    with track_pipeline_cycle("forecast_observation_fill"), session_scope() as session:
+        summary = fill_observed_values(session)
+    result = {
+        "enabled": summary.enabled,
+        "observations_filled": summary.observations_filled,
+    }
+    logger.info("forecast observation fill cycle complete", extra=result)
     return result
 
 

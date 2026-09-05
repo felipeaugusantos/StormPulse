@@ -20,6 +20,7 @@ from typing import Any
 
 import workers.tasks as tasks_module
 from workers.agro_pipeline import AgroCycleSummary
+from workers.forecast_comparison_pipeline import ForecastComparisonCycleSummary
 from workers.lightning_pipeline import LightningCycleSummary
 from workers.notification_pipeline import NotificationDeliverySummary
 from workers.pipeline_service import CycleSummary
@@ -146,6 +147,48 @@ def test_run_agro_advisory_task_reports_disabled(monkeypatch: Any) -> None:
 
     assert result["enabled"] is False
     assert result["locations_checked"] == 0
+
+
+def test_run_forecast_snapshot_task_returns_summary_dict(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "record_forecast_snapshots",
+        lambda session: ForecastComparisonCycleSummary(
+            enabled=True, locations_checked=5, snapshots_recorded=30
+        ),
+    )
+
+    result = tasks_module.run_forecast_snapshot_task()
+
+    assert result == {"enabled": True, "locations_checked": 5, "snapshots_recorded": 30}
+
+
+def test_run_forecast_snapshot_task_reports_disabled(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "record_forecast_snapshots",
+        lambda session: ForecastComparisonCycleSummary(enabled=False),
+    )
+
+    result = tasks_module.run_forecast_snapshot_task()
+
+    assert result["enabled"] is False
+    assert result["snapshots_recorded"] == 0
+
+
+def test_run_forecast_observation_fill_task_returns_summary_dict(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "fill_observed_values",
+        lambda session: ForecastComparisonCycleSummary(enabled=True, observations_filled=7),
+    )
+
+    result = tasks_module.run_forecast_observation_fill_task()
+
+    assert result == {"enabled": True, "observations_filled": 7}
 
 
 def test_run_notification_delivery_task_returns_summary_dict(monkeypatch: Any) -> None:

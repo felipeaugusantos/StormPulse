@@ -44,6 +44,7 @@ _TENANT_SCOPED_TABLES = (
     "user_reports",
     "storm_risks",
     "api_keys",
+    "forecast_snapshots",
 )
 
 

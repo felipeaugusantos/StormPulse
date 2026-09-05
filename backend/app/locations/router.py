@@ -17,14 +17,18 @@ from app.core.config import Settings
 from app.core.metrics import record_weather_data_age
 from app.deforestation.models import DeforestationCheck
 from app.deforestation.provider import DeforestationAlert
+from app.forecast_comparison.service import get_model_comparison
 from app.locations import service
 from app.locations.models import Location
 from app.locations.pdf import render_weekly_report_pdf
 from app.locations.schemas import (
     DeforestationCheckOut,
+    ForecastComparisonOut,
     LocationCreate,
     LocationOut,
     LocationUpdate,
+    ModelMetricsOut,
+    PrecipitationErrorOut,
     SprayWindowOut,
     WeeklyReportOut,
     ZarcWindowOut,
@@ -589,3 +593,50 @@ async def get_location_zarc_window(
         return await get_zarc_window(session, location, settings)
     except ZarcLookupUnavailableError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.get(
+    "/{location_id}/forecast-comparison",
+    response_model=ForecastComparisonOut,
+    summary="Comparação de acurácia entre modelos meteorológicos (Fase 2, ADR-0082)",
+)
+async def get_location_forecast_comparison(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_request_settings),
+) -> ForecastComparisonOut:
+    """Per-model accuracy for this location, accumulated by the daily
+    snapshot/observation jobs (``app.forecast_comparison.service``) — not a
+    live computation. Applies to any location (farm or talhão), unlike
+    ZARC/NDVI above: the comparison is about the geographic point's forecast
+    models, not a crop-specific signal. An empty ``models`` list is the
+    honest answer for a brand-new location — nothing has been observed for
+    it yet, never a fabricated placeholder."""
+    location = await _get_owned_or_404(session, user, location_id)
+    metrics = await get_model_comparison(session, location_id=location.id, settings=settings)
+    return ForecastComparisonOut(
+        location_id=location.id,
+        min_sample_size=settings.forecast_comparison_min_sample_size,
+        models=[
+            ModelMetricsOut(
+                model=m.model,
+                sample_count=m.sample_count,
+                has_enough_samples=m.has_enough_samples,
+                temperature_mae_c=m.temperature_mae_c,
+                precipitation=(
+                    PrecipitationErrorOut(
+                        bias_mm=m.precipitation.bias_mm,
+                        mae_mm=m.precipitation.mae_mm,
+                        sample_count=m.precipitation.sample_count,
+                    )
+                    if m.precipitation
+                    else None
+                ),
+                wind_mae_kmh=m.wind_mae_kmh,
+                rain_hit_rate=m.rain_hit_rate,
+                brier_score=m.brier_score,
+            )
+            for m in metrics
+        ],
+    )
