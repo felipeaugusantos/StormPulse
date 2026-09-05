@@ -240,6 +240,22 @@ describe('error states', () => {
   })
 })
 
+describe('vegetation intelligence', () => {
+  test('requests a typed historical series for the selected index', async () => {
+    const { api } = await freshApi()
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ location_id: 'plot-1', index_name: 'ndmi', current: null, series: [] }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await api.vegetationSeries('plot-1', 'ndmi', 180)
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      '/locations/plot-1/agro/vegetation?index=ndmi&days=180',
+    )
+  })
+})
+
 describe('logout', () => {
   test('calls the backend and clears the in-memory token', async () => {
     const { login, logout, getToken } = await freshApi()

@@ -22,7 +22,6 @@ import {
   evaluateTrafficability,
   formatFrostDays,
   growingDegreeDays,
-  NDVI_LABEL,
   vaporPressureDeficitKpa,
   waterBalanceMm,
   type DiseaseRisk,
@@ -32,7 +31,7 @@ import {
 } from '../agro'
 import { classifyCape, estimateStormEta, type CapeLevel } from '../storm'
 import { cropColor } from '../cropColors'
-import { cardinalDirection, formatDateBR, formatTimeBR, riskLevelLabel, timeAgo } from '../format'
+import { cardinalDirection, formatTimeBR, riskLevelLabel, timeAgo } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { AdminPanel } from './AdminPanel'
 import { ApiKeysModal } from './ApiKeysModal'
@@ -41,6 +40,7 @@ import { LocationWeatherCard } from './LocationWeatherCard'
 import { SafetyDisclaimer } from './SafetyDisclaimer'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
 import { StormMap, type PlotBoundary, type StormMapHandle } from './LazyStormMap'
+import { VegetationIntelligencePanel } from './VegetationIntelligencePanel'
 
 interface Props {
   onLogout: () => void
@@ -1291,60 +1291,8 @@ function DiseaseRiskPanel({ activeLocations, entries, onSelect }: AgroPanelProps
  * filtered subset of `activeLocations`, not a new prop threaded through
  * `AgroPanelProps` — every other agro panel still applies to farms and
  * plots alike. */
-function NdviPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
-  const talhoes = activeLocations.filter(
-    (l) => l.parent_location_id != null && l.boundary_geojson != null,
-  )
-  return (
-    <section className="panel">
-      <h2>
-        🌿 NDVI (talhões) <span className="count">{talhoes.length}</span>
-      </h2>
-      <p className="panel-hint">
-        Índice de vegetação por satélite (Sentinel-2) — só disponível para talhões com contorno
-        desenhado no mapa.
-      </p>
-      <div className="list">
-        {talhoes.length === 0 && (
-          <p className="empty">Nenhum talhão com contorno desenhado ainda.</p>
-        )}
-        {talhoes.map((l) => {
-          const entry = entries[l.id]
-          return (
-            <div
-              className="row clickable"
-              key={l.id}
-              onClick={() => onSelect(l.latitude, l.longitude)}
-              role="button"
-              tabIndex={0}
-            >
-              <div className="grow">
-                <div>{l.name}</div>
-                {!entry && <div className="sub">carregando…</div>}
-                {entry && (
-                  <div className="agro-section">
-                    {entry.ndvi && entry.ndvi.ndvi_mean != null ? (
-                      <div className="agro-row">
-                        NDVI {entry.ndvi.ndvi_mean.toFixed(2)} —{' '}
-                        {formatDateBR(entry.ndvi.observed_at, {
-                          day: '2-digit',
-                          month: '2-digit',
-                        })}{' '}
-                        — {NDVI_LABEL[entry.ndviLevel]}
-                        {entry.ndvi.is_mock && ' (simulado)'}
-                      </div>
-                    ) : (
-                      <div className="agro-row sub">{NDVI_LABEL.unknown}</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </section>
-  )
+function NdviPanel(props: AgroPanelProps) {
+  return <VegetationIntelligencePanel locations={props.activeLocations} />
 }
 
 /** Only ever shows talhões with both crop and soil_type set — ZARC has no

@@ -481,6 +481,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{location_id}/agro/vegetation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Série histórica e inteligência de um índice espectral do talhão */
+        get: operations["get_location_vegetation_series_api_v1_locations__location_id__agro_vegetation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{location_id}/agro/vegetation/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compara duas aquisições confiáveis do mesmo índice */
+        get: operations["compare_location_vegetation_api_v1_locations__location_id__agro_vegetation_compare_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{location_id}/agro/vegetation/image.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mapa histórico de índice espectral com metadados de qualidade */
+        get: operations["get_location_vegetation_image_api_v1_locations__location_id__agro_vegetation_image_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{location_id}/agro/vegetation/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Exporta a série histórica de um índice espectral */
+        get: operations["export_location_vegetation_series_api_v1_locations__location_id__agro_vegetation_export_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/{location_id}/agro/deforestation": {
         parameters: {
             query?: never;
@@ -1280,7 +1348,7 @@ export interface components {
          * @description Event-driven alert lifecycle (see architecture — alerts are event-based).
          * @enum {string}
          */
-        AlertEventType: "storm_detected" | "storm_approaching" | "storm_intensified" | "storm_entered_monitoring_area" | "storm_risk_changed" | "storm_passed" | "satellite_watch_detected" | "satellite_watch_dissipated" | "frost_warning" | "dry_spell_warning" | "official_warning";
+        AlertEventType: "storm_detected" | "storm_approaching" | "storm_intensified" | "storm_entered_monitoring_area" | "storm_risk_changed" | "storm_passed" | "satellite_watch_detected" | "satellite_watch_dissipated" | "frost_warning" | "dry_spell_warning" | "official_warning" | "vegetation_index_drop";
         /** AlertOut */
         AlertOut: {
             /**
@@ -1655,6 +1723,12 @@ export interface components {
             /** Version */
             version: string;
         };
+        /**
+         * ImageQuality
+         * @description Quality derived from usable pixels inside the complete plot polygon.
+         * @enum {string}
+         */
+        ImageQuality: "high" | "medium" | "low";
         /** LightningStrikeOut */
         LightningStrikeOut: {
             /**
@@ -2363,10 +2437,94 @@ export interface components {
             /** Reliable */
             reliable: boolean;
         };
+        /** VegetationAnomalyOut */
+        VegetationAnomalyOut: {
+            /** Status */
+            status: string;
+            /** Minimum History */
+            minimum_history: number;
+            /** Baseline Count */
+            baseline_count: number;
+            /** Baseline Mean */
+            baseline_mean: number | null;
+            /** Difference */
+            difference: number | null;
+            /** Percent Difference */
+            percent_difference: number | null;
+            /** Z Score */
+            z_score: number | null;
+        };
+        /** VegetationComparisonOut */
+        VegetationComparisonOut: {
+            /** Location Id */
+            location_id: string;
+            index_name: components["schemas"]["VegetationIndex"];
+            older: components["schemas"]["VegetationReadingOut"];
+            newer: components["schemas"]["VegetationReadingOut"];
+            /** Absolute Change */
+            absolute_change: number;
+            /** Percent Change */
+            percent_change: number | null;
+        };
+        /**
+         * VegetationIndex
+         * @description Sentinel-2 spectral indices supported by the plot intelligence module.
+         * @enum {string}
+         */
+        VegetationIndex: "ndvi" | "ndre" | "evi" | "ndmi" | "ndwi";
+        /** VegetationReadingOut */
+        VegetationReadingOut: {
+            /** Id */
+            id: string;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            index_name: components["schemas"]["VegetationIndex"];
+            /** Value Mean */
+            value_mean: number;
+            /** Source Name */
+            source_name: string;
+            /** Valid Pixel Percent */
+            valid_pixel_percent: number;
+            /** Cloud Cover Percent */
+            cloud_cover_percent: number;
+            quality: components["schemas"]["ImageQuality"];
+            /** Reliable */
+            reliable: boolean;
+            /** Vigor Zones */
+            vigor_zones: components["schemas"]["VigorZone"][];
+            /** Is Mock */
+            is_mock: boolean;
+        };
+        /** VegetationSeriesOut */
+        VegetationSeriesOut: {
+            /** Location Id */
+            location_id: string;
+            index_name: components["schemas"]["VegetationIndex"];
+            current: components["schemas"]["VegetationReadingOut"] | null;
+            /** Series */
+            series: components["schemas"]["VegetationReadingOut"][];
+            anomaly: components["schemas"]["VegetationAnomalyOut"];
+            /** Persistent Drop */
+            persistent_drop: boolean;
+        };
         /** VerifyEmailIn */
         VerifyEmailIn: {
             /** Token */
             token: string;
+        };
+        /** VigorZone */
+        VigorZone: {
+            /** Label */
+            label: string;
+            /** Min Value */
+            min_value: number;
+            /** Max Value */
+            max_value: number;
+            /** Pixel Percent */
+            pixel_percent: number;
         };
         /** Warning */
         Warning: {
@@ -3436,6 +3594,141 @@ export interface operations {
                 content: {
                     "image/png": unknown;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_location_vegetation_series_api_v1_locations__location_id__agro_vegetation_get: {
+        parameters: {
+            query?: {
+                index?: components["schemas"]["VegetationIndex"];
+                days?: number;
+            };
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VegetationSeriesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_location_vegetation_api_v1_locations__location_id__agro_vegetation_compare_get: {
+        parameters: {
+            query?: {
+                index?: components["schemas"]["VegetationIndex"];
+                older_date?: string | null;
+                newer_date?: string | null;
+            };
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VegetationComparisonOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_location_vegetation_image_api_v1_locations__location_id__agro_vegetation_image_png_get: {
+        parameters: {
+            query?: {
+                index?: components["schemas"]["VegetationIndex"];
+                observed_at?: string | null;
+            };
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_location_vegetation_series_api_v1_locations__location_id__agro_vegetation_export_csv_get: {
+        parameters: {
+            query?: {
+                index?: components["schemas"]["VegetationIndex"];
+                days?: number;
+            };
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

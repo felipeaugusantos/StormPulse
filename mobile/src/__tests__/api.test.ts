@@ -274,6 +274,19 @@ describe('paridade mobile (item 5)', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/locations/loc-1/forecast-comparison')
   })
 
+  test('vegetationSeries() requests the selected spectral index and history', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      jsonResponse(200, { location_id: 'plot-1', index_name: 'evi', current: null, series: [] }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await api.vegetationSeries('plot-1', 'evi', 365)
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      '/locations/plot-1/agro/vegetation?index=evi&days=365',
+    )
+  })
+
   test('satelliteImage() returns null on a 404 (no cycle run yet)', async () => {
     const fetchMock = jest.fn().mockResolvedValueOnce(jsonResponse(404, { detail: 'not found' }))
     globalThis.fetch = fetchMock as unknown as typeof fetch

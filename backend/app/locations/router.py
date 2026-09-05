@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db, get_redis, get_request_settings
 from app.core.config import Settings
+from app.core.enums import VegetationIndex
 from app.core.metrics import record_weather_data_age
 from app.deforestation.models import DeforestationCheck
 from app.deforestation.provider import DeforestationAlert
@@ -34,8 +35,13 @@ from app.locations.schemas import (
     ZarcWindowOut,
 )
 from app.locations.zarc_service import ZarcLookupUnavailableError, get_zarc_window
+from app.ndvi import service as vegetation_service
 from app.ndvi.models import NdviImage, NdviReading
-from app.ndvi.schemas import NdviOut
+from app.ndvi.schemas import (
+    NdviOut,
+    VegetationComparisonOut,
+    VegetationSeriesOut,
+)
 from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
@@ -422,7 +428,10 @@ async def get_location_ndvi(
     location = await _get_owned_or_404(session, user, location_id)
     stmt = (
         select(NdviReading)
-        .where(NdviReading.location_id == location.id)
+        .where(
+            NdviReading.location_id == location.id,
+            NdviReading.index_name == VegetationIndex.NDVI.value,
+        )
         .order_by(NdviReading.observed_at.desc())
         .limit(1)
     )
@@ -447,11 +456,20 @@ async def get_location_ndvi_image(
     user: User = Depends(get_current_user),
 ) -> Response:
     """Same "read what the background pipeline already computed, never
-    call the provider live" rule as `/agro/ndvi` above — only the latest
-    image is ever kept (`NdviImage`), replaced each pipeline cycle."""
+    call the provider live" rule as `/agro/ndvi` above. This compatibility
+    endpoint returns the latest NDVI map; dated maps remain available from
+    the multi-index historical endpoint."""
     location = await _get_owned_or_404(session, user, location_id)
     image = (
-        await session.execute(select(NdviImage).where(NdviImage.location_id == location.id))
+        await session.execute(
+            select(NdviImage)
+            .where(
+                NdviImage.location_id == location.id,
+                NdviImage.index_name == VegetationIndex.NDVI.value,
+            )
+            .order_by(NdviImage.observed_at.desc())
+            .limit(1)
+        )
     ).scalar_one_or_none()
     if image is None:
         raise HTTPException(
@@ -459,6 +477,134 @@ async def get_location_ndvi_image(
             detail="Nenhuma imagem de NDVI disponível para este talhão ainda",
         )
     return Response(content=image.png_data, media_type="image/png")
+
+
+@router.get(
+    "/{location_id}/agro/vegetation",
+    response_model=VegetationSeriesOut,
+    summary="Série histórica e inteligência de um índice espectral do talhão",
+)
+async def get_location_vegetation_series(
+    location_id: uuid.UUID,
+    index_name: VegetationIndex = Query(VegetationIndex.NDVI, alias="index"),
+    days: int = Query(365, ge=1, le=730),
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> VegetationSeriesOut:
+    location = await _get_owned_or_404(session, user, location_id)
+    if location.parent_location_id is None or location.boundary_geojson is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Índices espectrais exigem um talhão com contorno completo",
+        )
+    return await vegetation_service.get_series(
+        session, location_id=location.id, index_name=index_name, days=days
+    )
+
+
+@router.get(
+    "/{location_id}/agro/vegetation/compare",
+    response_model=VegetationComparisonOut,
+    summary="Compara duas aquisições confiáveis do mesmo índice",
+)
+async def compare_location_vegetation(
+    location_id: uuid.UUID,
+    index_name: VegetationIndex = Query(VegetationIndex.NDVI, alias="index"),
+    older_date: date | None = Query(None),
+    newer_date: date | None = Query(None),
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> VegetationComparisonOut:
+    location = await _get_owned_or_404(session, user, location_id)
+    series = await vegetation_service.get_series(
+        session, location_id=location.id, index_name=index_name, days=730
+    )
+    comparison = vegetation_service.compare_readings(
+        location_id=location.id,
+        index_name=index_name,
+        series=series.series,
+        older_date=older_date,
+        newer_date=newer_date,
+    )
+    if comparison is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="São necessárias duas imagens confiáveis, em datas diferentes, para comparar",
+        )
+    return comparison
+
+
+@router.get(
+    "/{location_id}/agro/vegetation/image.png",
+    summary="Mapa histórico de índice espectral com metadados de qualidade",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+)
+async def get_location_vegetation_image(
+    location_id: uuid.UUID,
+    index_name: VegetationIndex = Query(VegetationIndex.NDVI, alias="index"),
+    observed_at: datetime | None = Query(None),
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    location = await _get_owned_or_404(session, user, location_id)
+    stmt = select(NdviImage).where(
+        NdviImage.location_id == location.id,
+        NdviImage.index_name == index_name.value,
+    )
+    if observed_at is not None:
+        stmt = stmt.where(NdviImage.observed_at == observed_at)
+    image = (
+        (await session.execute(stmt.order_by(NdviImage.observed_at.desc()).limit(1)))
+        .scalars()
+        .one_or_none()
+    )
+    if image is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma imagem válida encontrada para o índice e a data solicitados",
+        )
+    return Response(
+        content=image.png_data,
+        media_type="image/png",
+        headers={
+            "X-Vegetation-Index": image.index_name.upper(),
+            "X-Observed-At": image.observed_at.isoformat(),
+            "X-Source": image.source_name,
+            "X-Image-Quality": image.quality,
+            "X-Cloud-Coverage-Percent": str(image.cloud_cover_percent),
+            "X-Reliable": str(image.reliable).lower(),
+        },
+    )
+
+
+@router.get(
+    "/{location_id}/agro/vegetation/export.csv",
+    summary="Exporta a série histórica de um índice espectral",
+    response_class=Response,
+)
+async def export_location_vegetation_series(
+    location_id: uuid.UUID,
+    index_name: VegetationIndex = Query(VegetationIndex.NDVI, alias="index"),
+    days: int = Query(730, ge=1, le=730),
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    location = await _get_owned_or_404(session, user, location_id)
+    series = await vegetation_service.get_series(
+        session, location_id=location.id, index_name=index_name, days=days
+    )
+    if not series.series:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhuma observação disponível para exportar",
+        )
+    filename = f"{location.id}-{index_name.value}-series.csv"
+    return Response(
+        content=vegetation_service.series_csv(series),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get(

@@ -1058,6 +1058,119 @@ button {
   image-rendering: pixelated;
 }
 
+.vegetation-panel {
+  grid-column: 1 / -1;
+}
+.vegetation-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  margin: 12px 0;
+}
+.vegetation-controls label {
+  display: grid;
+  gap: 4px;
+  color: var(--ink-mute);
+  font-size: 0.78rem;
+}
+.vegetation-controls select,
+.vegetation-controls button,
+.vegetation-date-controls select,
+.vegetation-date-controls button {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--ink);
+  padding: 7px 10px;
+}
+.vegetation-date-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
+  margin-top: 16px;
+}
+.vegetation-date-controls label {
+  display: grid;
+  gap: 4px;
+  color: var(--ink-mute);
+  font-size: 0.78rem;
+}
+.vegetation-current {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+}
+.vegetation-current.unreliable {
+  border-color: var(--orange);
+  opacity: 0.78;
+}
+.quality-warning {
+  color: var(--orange);
+  font-weight: 600;
+}
+.vegetation-chart {
+  width: 100%;
+  height: 120px;
+  margin-top: 12px;
+  color: var(--green);
+  background: var(--panel-2);
+  border-radius: 8px;
+}
+.vigor-zones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.vigor-zones span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: 0.75rem;
+}
+.vegetation-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.vegetation-comparison figure {
+  margin: 0;
+}
+.vegetation-comparison img {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+.vegetation-comparison figcaption {
+  color: var(--ink-mute);
+  font-size: 0.75rem;
+  margin-top: 5px;
+}
+.vegetation-comparison > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .vegetation-comparison {
+    grid-template-columns: 1fr;
+  }
+  .vegetation-comparison > p {
+    grid-column: auto;
+  }
+}
+
 @media print {
   body * {
     visibility: hidden;

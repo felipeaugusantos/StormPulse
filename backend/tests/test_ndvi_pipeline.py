@@ -177,10 +177,8 @@ def test_reading_created_for_eligible_talhao() -> None:
         session.rollback()
 
 
-def test_ndvi_image_is_replaced_not_accumulated_across_cycles() -> None:
-    """Only the latest image is ever kept per talhão (`NdviImage`'s own
-    docstring) — a second successful cycle must replace, not add to, the
-    first cycle's row."""
+def test_ndvi_images_are_retained_for_historical_comparison() -> None:
+    """Distinct acquisitions remain available for side-by-side comparison."""
     with session_scope() as session:
         farm = _make_farm(session)
         talhao = _make_talhao(session, farm)
@@ -193,7 +191,7 @@ def test_ndvi_image_is_replaced_not_accumulated_across_cycles() -> None:
         )
 
         images = session.scalars(select(NdviImage).where(NdviImage.location_id == talhao.id)).all()
-        assert len(images) == 1
+        assert len(images) == 2
         session.rollback()
 
 

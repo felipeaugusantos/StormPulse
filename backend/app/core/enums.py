@@ -69,6 +69,24 @@ class WeatherSourceKind(StrEnum):
     FORECAST_MODEL = "forecast_model"
 
 
+class VegetationIndex(StrEnum):
+    """Sentinel-2 spectral indices supported by the plot intelligence module."""
+
+    NDVI = "ndvi"
+    NDRE = "ndre"
+    EVI = "evi"
+    NDMI = "ndmi"
+    NDWI = "ndwi"
+
+
+class ImageQuality(StrEnum):
+    """Quality derived from usable pixels inside the complete plot polygon."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
 class AlertEventType(StrEnum):
     """Event-driven alert lifecycle (see architecture — alerts are event-based)."""
 
@@ -92,6 +110,7 @@ class AlertEventType(StrEnum):
     # WeatherProvider.get_warnings (INMET `/avisos/ativos`), not derived
     # from the storm engine's own risk assessment.
     OFFICIAL_WARNING = "official_warning"
+    VEGETATION_INDEX_DROP = "vegetation_index_drop"
 
 
 class NotificationChannel(StrEnum):

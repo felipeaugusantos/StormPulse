@@ -405,6 +405,9 @@ class Settings(BaseSettings):
     # talhão", used for the colored NDVI map in the weekly report.
     ndvi_sh_process_url: str = "https://sh.dataspace.copernicus.eu/api/v1/process"
     ndvi_lookback_days: float = Field(default=15.0, gt=0)
+    # Historical Statistical API window. One request returns all daily
+    # acquisitions and all five indices; it is not five requests per day.
+    ndvi_history_lookback_days: float = Field(default=365.0, ge=30, le=730)
     ndvi_http_timeout_seconds: float = Field(default=30.0, gt=0)
 
     # --- Checagem de desmatamento (INPE DETER/PRODES, item DETER) ---

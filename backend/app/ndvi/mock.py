@@ -14,7 +14,7 @@ import struct
 import zlib
 from datetime import UTC, datetime
 
-from app.core.enums import WeatherSourceKind
+from app.core.enums import ImageQuality, VegetationIndex, WeatherSourceKind
 from app.ndvi.provider import NdviObservation, NdviProvider
 from app.weather.provider import Provenance
 
@@ -83,4 +83,41 @@ class MockNdviProvider(NdviProvider):
         )
 
     async def get_ndvi_image(self, boundary_geojson: str, *, lookback_days: float) -> bytes:
+        return _placeholder_png()
+
+    async def get_index_history(
+        self,
+        boundary_geojson: str,
+        *,
+        indices: tuple[VegetationIndex, ...],
+        lookback_days: float,
+    ) -> list[NdviObservation]:
+        base = await self.get_ndvi(boundary_geojson, lookback_days=lookback_days)
+        offsets = {
+            VegetationIndex.NDVI: 0.0,
+            VegetationIndex.NDRE: -0.08,
+            VegetationIndex.EVI: -0.04,
+            VegetationIndex.NDMI: -0.18,
+            VegetationIndex.NDWI: -0.28,
+        }
+        return [
+            base.model_copy(
+                update={
+                    "index_name": index_name,
+                    "ndvi_mean": round(base.ndvi_mean + offsets[index_name], 3),
+                    "cloud_cover_percent": 5.0,
+                    "quality": ImageQuality.HIGH,
+                    "reliable": True,
+                }
+            )
+            for index_name in indices
+        ]
+
+    async def get_index_image(
+        self,
+        boundary_geojson: str,
+        *,
+        index_name: VegetationIndex,
+        observed_at: datetime,
+    ) -> bytes:
         return _placeholder_png()

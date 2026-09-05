@@ -12,9 +12,17 @@ from __future__ import annotations
 import abc
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from app.core.enums import ImageQuality, VegetationIndex
 from app.weather.provider import Provenance
+
+
+class VigorZone(BaseModel):
+    label: str
+    min_value: float
+    max_value: float
+    pixel_percent: float
 
 
 class NdviObservation(BaseModel):
@@ -27,6 +35,11 @@ class NdviObservation(BaseModel):
     # only representative of a small sliver of the talhão; the frontend
     # decides whether that's still worth showing.
     valid_pixel_percent: float
+    index_name: VegetationIndex = VegetationIndex.NDVI
+    cloud_cover_percent: float = 0.0
+    quality: ImageQuality = ImageQuality.HIGH
+    reliable: bool = True
+    vigor_zones: list[VigorZone] = Field(default_factory=list)
 
 
 class NdviProviderUnavailableError(RuntimeError):
@@ -60,3 +73,30 @@ class NdviProvider(abc.ABC):
         endpoint, not the numeric-statistics one), so the two aren't
         assumed to share a request under the hood."""
         ...
+
+    async def get_index_history(
+        self,
+        boundary_geojson: str,
+        *,
+        indices: tuple[VegetationIndex, ...],
+        lookback_days: float,
+    ) -> list[NdviObservation]:
+        """Return every valid acquisition available in the lookback.
+
+        The compatibility fallback lets older/custom providers continue to
+        supply NDVI while new providers can fetch all indices in one call.
+        """
+        if VegetationIndex.NDVI not in indices:
+            return []
+        return [await self.get_ndvi(boundary_geojson, lookback_days=lookback_days)]
+
+    async def get_index_image(
+        self,
+        boundary_geojson: str,
+        *,
+        index_name: VegetationIndex,
+        observed_at: datetime,
+    ) -> bytes:
+        if index_name != VegetationIndex.NDVI:
+            raise NdviProviderUnavailableError(f"Imagem {index_name.value.upper()} indisponível")
+        return await self.get_ndvi_image(boundary_geojson, lookback_days=1.0)

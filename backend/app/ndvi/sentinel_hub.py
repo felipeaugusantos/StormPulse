@@ -32,8 +32,14 @@ from typing import Any
 import httpx
 
 from app.core.config import Settings
-from app.core.enums import WeatherSourceKind
-from app.ndvi.provider import NdviObservation, NdviProvider, NdviProviderUnavailableError
+from app.core.enums import ImageQuality, VegetationIndex, WeatherSourceKind
+from app.ndvi.analytics import quality_from_valid_pixels
+from app.ndvi.provider import (
+    NdviObservation,
+    NdviProvider,
+    NdviProviderUnavailableError,
+    VigorZone,
+)
 from app.weather.provider import Provenance
 from engine.geo import haversine_km
 
@@ -103,6 +109,95 @@ function evaluatePixel(samples) {
   }
   return [r, g, b, 1]
 }"""
+
+_INDEX_FORMULAS = {
+    VegetationIndex.NDVI: "(samples.B08 - samples.B04) / (samples.B08 + samples.B04)",
+    VegetationIndex.NDRE: "(samples.B08 - samples.B05) / (samples.B08 + samples.B05)",
+    VegetationIndex.EVI: (
+        "2.5 * (samples.B08 - samples.B04) / "
+        "(samples.B08 + 6 * samples.B04 - 7.5 * samples.B02 + 1)"
+    ),
+    VegetationIndex.NDMI: "(samples.B08 - samples.B11) / (samples.B08 + samples.B11)",
+    VegetationIndex.NDWI: "(samples.B03 - samples.B08) / (samples.B03 + samples.B08)",
+}
+_OUTPUT_IDS: dict[VegetationIndex, str] = {
+    VegetationIndex.NDVI: "data",
+    **{index: index.value for index in VegetationIndex if index != VegetationIndex.NDVI},
+}
+
+
+def _statistics_evalscript(indices: tuple[VegetationIndex, ...]) -> str:
+    outputs = ",\n      ".join(f'{{ id: "{_OUTPUT_IDS[index]}", bands: 1 }}' for index in indices)
+    values = ",\n    ".join(
+        f"{_OUTPUT_IDS[index]}: [{_INDEX_FORMULAS[index]}]" for index in indices
+    )
+    return f"""//VERSION=3
+function setup() {{
+  return {{
+    input: [{{ bands: ["B02", "B03", "B04", "B05", "B08", "B11", "SCL", "dataMask"] }}],
+    output: [
+      {outputs},
+      {{ id: "dataMask", bands: 1 }}
+    ]
+  }}
+}}
+function evaluatePixel(samples) {{
+  let cloud = [3, 8, 9, 10, 11].includes(samples.SCL)
+  let valid = samples.dataMask * (cloud ? 0 : 1)
+  return {{
+    {values},
+    dataMask: [valid]
+  }}
+}}"""
+
+
+def _index_image_evalscript(index_name: VegetationIndex) -> str:
+    formula = _INDEX_FORMULAS[index_name]
+    return f"""//VERSION=3
+function setup() {{
+  return {{
+    input: [{{
+      bands: ["B02", "B03", "B04", "B05", "B08", "B11", "SCL", "dataMask"]
+    }}],
+    output: {{ bands: 4 }}
+  }}
+}}
+function evaluatePixel(samples) {{
+  let cloud = [3, 8, 9, 10, 11].includes(samples.SCL)
+  if (samples.dataMask == 0 || cloud) return [0, 0, 0, 0]
+  let value = {formula}
+  if (!Number.isFinite(value)) return [0, 0, 0, 0]
+  let t = Math.max(0, Math.min(1, (value + 0.2) / 1.0))
+  return [0.85 - t * 0.75, 0.25 + t * 0.65, 0.1, 1]
+}}"""
+
+
+def _vigor_zones(stats: dict[str, Any]) -> list[VigorZone]:
+    bins = stats.get("histogram", {}).get("bins", [])
+    total = sum(int(item.get("count", 0)) for item in bins)
+    if total <= 0:
+        return []
+    grouped: dict[str, dict[str, float]] = {}
+    for item in bins:
+        low = float(item.get("lowEdge", -1))
+        high = float(item.get("highEdge", 1))
+        midpoint = (low + high) / 2
+        label = "baixo" if midpoint < 0.2 else "médio" if midpoint < 0.5 else "alto"
+        count = int(item.get("count", 0))
+        zone = grouped.setdefault(label, {"min": low, "max": high, "count": 0})
+        zone["min"] = min(zone["min"], low)
+        zone["max"] = max(zone["max"], high)
+        zone["count"] += count
+    return [
+        VigorZone(
+            label=label,
+            min_value=round(values["min"], 3),
+            max_value=round(values["max"], 3),
+            pixel_percent=round(values["count"] / total * 100, 1),
+        )
+        for label, values in grouped.items()
+        if values["count"] > 0
+    ]
 
 
 def _pixel_dimensions(polygon: dict[str, Any]) -> tuple[int, int]:
@@ -182,6 +277,25 @@ class SentinelHubNdviProvider(NdviProvider):
         return self._token
 
     async def get_ndvi(self, boundary_geojson: str, *, lookback_days: float) -> NdviObservation:
+        observations = await self.get_index_history(
+            boundary_geojson,
+            indices=(VegetationIndex.NDVI,),
+            lookback_days=lookback_days,
+        )
+        if not observations:
+            raise NdviProviderUnavailableError(
+                "Nenhum pixel válido (sem nuvem) nos últimos "
+                f"{lookback_days:.0f} dias para este talhão"
+            )
+        return max(observations, key=lambda item: item.observed_at)
+
+    async def get_index_history(
+        self,
+        boundary_geojson: str,
+        *,
+        indices: tuple[VegetationIndex, ...],
+        lookback_days: float,
+    ) -> list[NdviObservation]:
         polygon = json.loads(boundary_geojson)
         now = datetime.now(UTC)
         start = now - timedelta(days=lookback_days)
@@ -201,11 +315,17 @@ class SentinelHubNdviProvider(NdviProvider):
             "aggregation": {
                 "timeRange": {"from": start.isoformat(), "to": now.isoformat()},
                 "aggregationInterval": {"of": "P1D"},
-                "evalscript": _NDVI_EVALSCRIPT,
+                "evalscript": _statistics_evalscript(indices),
                 "width": width_px,
                 "height": height_px,
             },
-            "calculations": {"default": {"statistics": {"default": {}}}},
+            "calculations": {
+                _OUTPUT_IDS[index]: {
+                    "statistics": {"default": {}},
+                    "histograms": {"default": {"nBins": 5, "lowEdge": -1, "highEdge": 1}},
+                }
+                for index in indices
+            },
         }
 
         try:
@@ -221,46 +341,53 @@ class SentinelHubNdviProvider(NdviProvider):
                 "Falha ao consultar o Sentinel Hub Statistical API"
             ) from exc
 
-        # Most recent interval that actually has usable (non-cloud) pixels —
-        # `data` is chronological, walk it backwards.
-        for interval in reversed(payload.get("data", [])):
-            try:
-                stats = interval["outputs"]["data"]["bands"]["B0"]["stats"]
-            except KeyError:
-                continue
-            sample_count = stats.get("sampleCount", 0)
-            no_data_count = stats.get("noDataCount", 0)
-            total = sample_count + no_data_count
-            mean = stats.get("mean")
-            # Sentinel Hub can report a non-zero sampleCount yet still
-            # give a degenerate `mean` for that interval — confirmed live
-            # in production 2026-08-28: a talhão with 50% valid pixels got
-            # `NaN` back (Python's `json` module parses the `NaN` token by
-            # default). `ndvi_readings.ndvi_mean` really is NOT NULL at
-            # the DB level (confirmed via `\d ndvi_readings`) — NaN isn't
-            # SQL NULL, so it was never rejected there, but it *is*
-            # unrepresentable in JSON, so Pydantic's response serializer
-            # silently turned it into `null` for the API response,
-            # producing a reading that looked fine end-to-end until the
-            # frontend tried to format it. Treated the same as "no usable
-            # pixels" here: fall back to the next older interval instead
-            # of ever persisting a mean nothing downstream can use.
-            if sample_count == 0 or total == 0 or mean is None or math.isnan(mean):
-                continue
-            return NdviObservation(
-                provenance=Provenance(
-                    source_name=_PROVIDER_NAME,
-                    source_kind=WeatherSourceKind.SATELLITE,
-                    is_mock=False,
-                ),
-                observed_at=datetime.fromisoformat(interval["interval"]["from"]),
-                ndvi_mean=mean,
-                valid_pixel_percent=round(sample_count / total * 100, 1),
-            )
-
-        raise NdviProviderUnavailableError(
-            f"Nenhum pixel válido (sem nuvem) nos últimos {lookback_days:.0f} dias para este talhão"
-        )
+        observations: list[NdviObservation] = []
+        for interval in payload.get("data", []):
+            for index_name in indices:
+                try:
+                    band = interval["outputs"][_OUTPUT_IDS[index_name]]["bands"]["B0"]
+                    stats = band["stats"]
+                except KeyError:
+                    continue
+                sample_count = int(stats.get("sampleCount", 0))
+                no_data_count = int(stats.get("noDataCount", 0))
+                mean = stats.get("mean")
+                if sample_count == 0 or mean is None or not math.isfinite(float(mean)):
+                    continue
+                geometry_count = int(payload.get("geometryPixelCount", 0))
+                if geometry_count > 0:
+                    # Sentinel defines sampleCount as the bounding-box pixels;
+                    # noDataCount also includes pixels outside the polygon. The
+                    # global geometryPixelCount lets us measure cloud/no-data
+                    # strictly inside the complete talhão polygon.
+                    valid_count = max(0, sample_count - no_data_count)
+                    valid_percent = round(min(100.0, valid_count / geometry_count * 100), 1)
+                else:
+                    # Compatibility with older/mock responses that predate
+                    # geometryPixelCount and model sampleCount as valid pixels.
+                    total = sample_count + no_data_count
+                    if total == 0:
+                        continue
+                    valid_percent = round(sample_count / total * 100, 1)
+                quality = quality_from_valid_pixels(valid_percent)
+                observations.append(
+                    NdviObservation(
+                        provenance=Provenance(
+                            source_name=_PROVIDER_NAME,
+                            source_kind=WeatherSourceKind.SATELLITE,
+                            is_mock=False,
+                        ),
+                        observed_at=datetime.fromisoformat(interval["interval"]["from"]),
+                        index_name=index_name,
+                        ndvi_mean=float(mean),
+                        valid_pixel_percent=valid_percent,
+                        cloud_cover_percent=round(100 - valid_percent, 1),
+                        quality=quality,
+                        reliable=quality != ImageQuality.LOW,
+                        vigor_zones=_vigor_zones(band),
+                    )
+                )
+        return observations
 
     async def get_ndvi_image(self, boundary_geojson: str, *, lookback_days: float) -> bytes:
         polygon = json.loads(boundary_geojson)
@@ -303,5 +430,53 @@ class SentinelHubNdviProvider(NdviProvider):
         except httpx.HTTPError as exc:
             raise NdviProviderUnavailableError(
                 "Falha ao consultar o Sentinel Hub Process API"
+            ) from exc
+        return resp.content
+
+    async def get_index_image(
+        self,
+        boundary_geojson: str,
+        *,
+        index_name: VegetationIndex,
+        observed_at: datetime,
+    ) -> bytes:
+        polygon = json.loads(boundary_geojson)
+        token = await self._access_token()
+        width_px, height_px = _pixel_dimensions(polygon)
+        start = observed_at.astimezone(UTC)
+        end = start + timedelta(days=1)
+        request_body = {
+            "input": {
+                "bounds": {
+                    "geometry": polygon,
+                    "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"},
+                },
+                "data": [
+                    {
+                        "type": "sentinel-2-l2a",
+                        "dataFilter": {
+                            "mosaickingOrder": "leastCC",
+                            "timeRange": {"from": start.isoformat(), "to": end.isoformat()},
+                        },
+                    }
+                ],
+            },
+            "output": {
+                "width": width_px,
+                "height": height_px,
+                "responses": [{"identifier": "default", "format": {"type": "image/png"}}],
+            },
+            "evalscript": _index_image_evalscript(index_name),
+        }
+        try:
+            resp = await self._client.post(
+                self._settings.ndvi_sh_process_url,
+                headers={"Authorization": f"Bearer {token}"},
+                json=request_body,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise NdviProviderUnavailableError(
+                f"Falha ao renderizar {index_name.value.upper()} no Sentinel Hub"
             ) from exc
         return resp.content

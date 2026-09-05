@@ -200,6 +200,56 @@ export interface NdviReading {
   is_mock: boolean
 }
 
+export type VegetationIndex = 'ndvi' | 'ndre' | 'evi' | 'ndmi' | 'ndwi'
+export type ImageQuality = 'high' | 'medium' | 'low'
+
+export interface VigorZone {
+  label: string
+  min_value: number
+  max_value: number
+  pixel_percent: number
+}
+
+export interface VegetationReading {
+  id: string
+  observed_at: string
+  index_name: VegetationIndex
+  value_mean: number
+  source_name: string
+  valid_pixel_percent: number
+  cloud_cover_percent: number
+  quality: ImageQuality
+  reliable: boolean
+  vigor_zones: VigorZone[]
+  is_mock: boolean
+}
+
+export interface VegetationSeries {
+  location_id: string
+  index_name: VegetationIndex
+  current: VegetationReading | null
+  series: VegetationReading[]
+  anomaly: {
+    status: 'insufficient_history' | 'below_expected' | 'normal' | 'above_expected'
+    minimum_history: number
+    baseline_count: number
+    baseline_mean: number | null
+    difference: number | null
+    percent_difference: number | null
+    z_score: number | null
+  }
+  persistent_drop: boolean
+}
+
+export interface VegetationComparison {
+  location_id: string
+  index_name: VegetationIndex
+  older: VegetationReading
+  newer: VegetationReading
+  absolute_change: number
+  percent_change: number | null
+}
+
 export interface AlertItem {
   id: string
   location_id: string

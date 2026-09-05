@@ -26,6 +26,9 @@ import type {
   StormCell,
   WarningItem,
   WeeklyReport,
+  VegetationComparison,
+  VegetationIndex,
+  VegetationSeries,
   ZarcWindow,
 } from './types'
 
@@ -350,9 +353,32 @@ export const api = {
   // pipeline hasn't checked yet, same "no data" shape as everything else.
   ndvi: (locationId: string) => request<NdviReading>(`/locations/${locationId}/agro/ndvi`),
   // Item "imagem do talhão" — colored NDVI map (green=vigorous,
-  // red/brown=stressed), only the latest kept, same "no data" 404 shape
-  // as ndvi() above.
+  // red/brown=stressed). This legacy endpoint returns the newest retained
+  // NDVI map, with dated maps exposed by vegetationImage().
   ndviImage: (locationId: string) => requestBlob(`/locations/${locationId}/agro/ndvi-image`),
+  vegetationSeries: (locationId: string, indexName: VegetationIndex, days = 365) =>
+    request<VegetationSeries>(
+      `/locations/${locationId}/agro/vegetation?index=${indexName}&days=${days}`,
+    ),
+  vegetationComparison: (
+    locationId: string,
+    indexName: VegetationIndex,
+    olderDate?: string,
+    newerDate?: string,
+  ) =>
+    request<VegetationComparison>(
+      `/locations/${locationId}/agro/vegetation/compare?index=${indexName}${
+        olderDate ? `&older_date=${encodeURIComponent(olderDate)}` : ''
+      }${newerDate ? `&newer_date=${encodeURIComponent(newerDate)}` : ''}`,
+    ),
+  vegetationImage: (locationId: string, indexName: VegetationIndex, observedAt?: string) =>
+    requestBlob(
+      `/locations/${locationId}/agro/vegetation/image.png?index=${indexName}${
+        observedAt ? `&observed_at=${encodeURIComponent(observedAt)}` : ''
+      }`,
+    ),
+  vegetationCsv: (locationId: string, indexName: VegetationIndex) =>
+    requestBlob(`/locations/${locationId}/agro/vegetation/export.csv?index=${indexName}`),
   // Talhão-only (FASE 32) — 404s for a farm-level point, same shape as ndvi().
   weeklyReport: (locationId: string) =>
     request<WeeklyReport>(`/locations/${locationId}/agro/weekly-report`),

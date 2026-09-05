@@ -18,6 +18,7 @@ import httpx
 import pytest
 
 from app.core.config import Settings
+from app.core.enums import VegetationIndex
 from app.ndvi.provider import NdviProviderUnavailableError
 from app.ndvi.sentinel_hub import SentinelHubNdviProvider, _pixel_dimensions
 
@@ -37,6 +38,7 @@ _SMALL_TALHAO = {
 }
 
 _STATS_RESPONSE = {
+    "geometryPixelCount": 1000,
     "data": [
         {
             "interval": {"from": "2026-08-20T00:00:00Z", "to": "2026-08-21T00:00:00Z"},
@@ -46,7 +48,7 @@ _STATS_RESPONSE = {
                         "B0": {
                             "stats": {
                                 "mean": 0.62,
-                                "sampleCount": 900,
+                                "sampleCount": 1000,
                                 "noDataCount": 100,
                             }
                         }
@@ -54,7 +56,7 @@ _STATS_RESPONSE = {
                 }
             },
         }
-    ]
+    ],
 }
 
 
@@ -274,3 +276,60 @@ async def test_get_ndvi_image_raises_on_a_network_failure() -> None:
     )
     with pytest.raises(NdviProviderUnavailableError):
         await provider.get_ndvi_image(json.dumps(_SMALL_TALHAO), lookback_days=15)
+
+
+async def test_multi_index_history_reports_cloud_quality_and_uses_full_geometry() -> None:
+    outputs = {}
+    for output_id, value in {
+        "data": 0.62,
+        "ndre": 0.54,
+        "evi": 0.58,
+        "ndmi": 0.31,
+        "ndwi": 0.12,
+    }.items():
+        outputs[output_id] = {
+            "bands": {
+                "B0": {
+                    "stats": {"mean": value, "sampleCount": 1000, "noDataCount": 450},
+                    "histogram": {
+                        "bins": [
+                            {"lowEdge": -0.2, "highEdge": 0.2, "count": 100},
+                            {"lowEdge": 0.2, "highEdge": 0.4, "count": 200},
+                            {"lowEdge": 0.4, "highEdge": 0.6, "count": 150},
+                            {"lowEdge": 0.6, "highEdge": 0.8, "count": 100},
+                        ]
+                    },
+                }
+            }
+        }
+    response = {
+        "geometryPixelCount": 1000,
+        "data": [
+            {
+                "interval": {"from": "2026-08-20T00:00:00Z", "to": "2026-08-21T00:00:00Z"},
+                "outputs": outputs,
+            }
+        ],
+    }
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "token" in str(request.url):
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 300})
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(200, json=response)
+
+    provider = SentinelHubNdviProvider(
+        _settings(), client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    )
+    history = await provider.get_index_history(
+        json.dumps(_SMALL_TALHAO), indices=tuple(VegetationIndex), lookback_days=30
+    )
+
+    assert {item.index_name for item in history} == set(VegetationIndex)
+    assert all(item.cloud_cover_percent == 45 for item in history)
+    assert all(item.reliable is False for item in history)
+    assert all(
+        {zone.label for zone in item.vigor_zones} == {"baixo", "médio", "alto"} for item in history
+    )
+    assert captured["body"]["input"]["bounds"]["geometry"] == _SMALL_TALHAO

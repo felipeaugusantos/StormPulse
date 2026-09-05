@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload
 from app.alerts.models import Alert
 from app.alerts.schemas import AlertOut
 from app.core.config import Settings
-from app.core.enums import AlertEventType
+from app.core.enums import AlertEventType, VegetationIndex
 from app.core.rls import set_tenant_context
 from app.deforestation.models import DeforestationCheck
 from app.deforestation.provider import DeforestationAlert
@@ -177,7 +177,11 @@ async def build_weekly_report(
 
     ndvi_stmt = (
         select(NdviReading)
-        .where(NdviReading.location_id == location.id, NdviReading.observed_at >= period_start_dt)
+        .where(
+            NdviReading.location_id == location.id,
+            NdviReading.index_name == VegetationIndex.NDVI.value,
+            NdviReading.observed_at >= period_start_dt,
+        )
         .order_by(NdviReading.observed_at.asc())
     )
     ndvi_readings = list((await session.execute(ndvi_stmt)).scalars().all())

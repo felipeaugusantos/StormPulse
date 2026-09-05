@@ -16,6 +16,8 @@ import type {
   StormCell,
   StormRisk,
   UpdateLocationInput,
+  VegetationIndex,
+  VegetationSeries,
 } from './types'
 
 const V1 = `${API_URL}/api/v1`
@@ -183,6 +185,10 @@ export const api = {
     request<SprayWindow>(`/locations/${locationId}/agro/spray-window`),
   rainfall: (locationId: string) =>
     request<RainfallHistory>(`/locations/${locationId}/agro/rainfall`),
+  vegetationSeries: (locationId: string, indexName: VegetationIndex, days = 365) =>
+    request<VegetationSeries>(
+      `/locations/${locationId}/agro/vegetation?index=${indexName}&days=${days}`,
+    ),
   // Fase 2 (ADR-0082) — accuracy record accumulated by the daily backend
   // jobs, not a live computation. Mirrors web/src/api.ts's forecastComparison.
   forecastComparison: (locationId: string) =>

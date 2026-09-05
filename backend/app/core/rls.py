@@ -39,6 +39,8 @@ _TENANT_SCOPED_TABLES = (
     "alerts",
     "alert_verifications",
     "ndvi_readings",
+    "ndvi_images",
+    "deforestation_checks",
     "notifications",
     "push_subscriptions",
     "user_reports",

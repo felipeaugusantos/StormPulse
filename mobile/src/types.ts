@@ -224,3 +224,41 @@ export interface ForecastComparison {
   min_sample_size: number
   models: ModelMetrics[]
 }
+
+export type VegetationIndex = 'ndvi' | 'ndre' | 'evi' | 'ndmi' | 'ndwi'
+
+export interface VegetationReading {
+  id: string
+  observed_at: string
+  index_name: VegetationIndex
+  value_mean: number
+  source_name: string
+  valid_pixel_percent: number
+  cloud_cover_percent: number
+  quality: 'high' | 'medium' | 'low'
+  reliable: boolean
+  vigor_zones: Array<{
+    label: string
+    min_value: number
+    max_value: number
+    pixel_percent: number
+  }>
+  is_mock: boolean
+}
+
+export interface VegetationSeries {
+  location_id: string
+  index_name: VegetationIndex
+  current: VegetationReading | null
+  series: VegetationReading[]
+  anomaly: {
+    status: 'insufficient_history' | 'below_expected' | 'normal' | 'above_expected'
+    minimum_history: number
+    baseline_count: number
+    baseline_mean: number | null
+    difference: number | null
+    percent_difference: number | null
+    z_score: number | null
+  }
+  persistent_drop: boolean
+}

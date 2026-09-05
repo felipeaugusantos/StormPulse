@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-05 — Fase 5: satélite e inteligência do talhão
+
+- NDVI, NDRE, EVI, NDMI e NDWI com série histórica Sentinel-2.
+- Cobertura de nuvens, qualidade, confiabilidade e zonas de vigor.
+- Anomalias com histórico mínimo e alerta de queda persistente.
+- Comparação lado a lado, mapas PNG históricos e exportação CSV.
+- Web e mobile atualizados; decisão sobre geometria PostGIS em ADR-0083.
+
 Todas as mudanças notáveis deste projeto serão documentadas aqui.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/),

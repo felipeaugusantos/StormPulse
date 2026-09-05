@@ -15,7 +15,14 @@ import {
   type VpdLevel,
 } from '../agro'
 import { classifyCape, type CapeLevel } from '../storm'
-import type { ForecastComparison, ForecastPoint, LocationItem, SprayWindow } from '../types'
+import type {
+  ForecastComparison,
+  ForecastPoint,
+  LocationItem,
+  SprayWindow,
+  VegetationIndex,
+  VegetationSeries,
+} from '../types'
 import { colors } from '../theme'
 
 interface Props {
@@ -30,6 +37,7 @@ const TRAFFICABILITY_RAIN_THRESHOLD_MM = 1
 const TRAFFICABILITY_LOOKAHEAD_DAYS = 2
 const GDD_BASE_TEMP_C = 10
 const DISEASE_RISK_THRESHOLDS = { humidityThresholdPercent: 80, minTempC: 15, maxTempC: 30 }
+const VEGETATION_INDICES: VegetationIndex[] = ['ndvi', 'ndre', 'evi', 'ndmi', 'ndwi']
 
 interface AgroEntry {
   location: LocationItem
@@ -48,6 +56,7 @@ interface AgroEntry {
   vpdKpa: number | null
   vpdLevel: VpdLevel
   forecastComparison: ForecastComparison | null
+  vegetation: VegetationSeries[]
   error: string | null
 }
 
@@ -115,7 +124,8 @@ export function AgroScreen({ onLogout }: Props) {
 
 async function loadEntry(location: LocationItem): Promise<AgroEntry> {
   try {
-    const [forecast, sprayWindow, rainfall, rainForecast, forecastComparison] = await Promise.all([
+    const [forecast, sprayWindow, rainfall, rainForecast, forecastComparison, vegetation] =
+      await Promise.all([
       api.forecast(location.id).catch(() => null),
       api.sprayWindow(location.id).catch(() => null),
       api.rainfall(location.id).catch(() => null),
@@ -124,7 +134,14 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       api.rainForecast(location.id).catch(() => null),
       // Fase 2 (ADR-0082) — accumulated accuracy record, not live data.
       api.forecastComparison(location.id).catch(() => null),
-    ])
+      location.parent_location_id != null && location.boundary_geojson != null
+        ? Promise.all(
+            VEGETATION_INDICES.map((indexName) =>
+              api.vegetationSeries(location.id, indexName).catch(() => null),
+            ),
+          ).then((items) => items.filter((item): item is VegetationSeries => item != null))
+        : Promise.resolve([] as VegetationSeries[]),
+      ])
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const { severe, light } = classifyFrostDays(
@@ -169,6 +186,7 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       vpdKpa,
       vpdLevel: vpdKpa != null ? classifyVpd(vpdKpa) : 'unknown',
       forecastComparison,
+      vegetation,
       error:
         forecast == null && sprayWindow == null && rainfall == null
           ? 'Dados agro indisponíveis no momento'
@@ -192,6 +210,7 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       vpdKpa: null,
       vpdLevel: 'unknown',
       forecastComparison: null,
+      vegetation: [],
       error: 'Dados agro indisponíveis no momento',
     }
   }
@@ -289,6 +308,42 @@ function AgroCard({ entry }: { entry: AgroEntry }) {
           )}
 
           <Row text={forecastComparisonSummary(entry.forecastComparison)} />
+
+          {entry.location.parent_location_id != null && (
+            <View style={styles.vegetationBlock}>
+              <Text style={styles.vegetationTitle}>🛰️ Inteligência do talhão</Text>
+              {entry.vegetation.length === 0 && (
+                <Row text="Nenhuma imagem espectral válida disponível." />
+              )}
+              {entry.vegetation.map((series) => {
+                const current = series.current
+                if (!current) return null
+                return (
+                  <View key={series.index_name} style={styles.vegetationRow}>
+                    <Text style={styles.row}>
+                      {series.index_name.toUpperCase()} {current.value_mean.toFixed(3)} · qualidade{' '}
+                      {current.quality} · {current.cloud_cover_percent.toFixed(0)}% nuvens
+                    </Text>
+                    {!current.reliable && (
+                      <Text style={styles.rowWarn}>Imagem não confiável — excluída das análises.</Text>
+                    )}
+                    {series.anomaly.status === 'insufficient_history' ? (
+                      <Text style={styles.row}>
+                        Histórico {series.anomaly.baseline_count}/{series.anomaly.minimum_history}
+                      </Text>
+                    ) : (
+                      <Text style={styles.row}>
+                        Anomalia {series.anomaly.percent_difference?.toFixed(1) ?? '—'}%
+                      </Text>
+                    )}
+                    {series.persistent_drop && (
+                      <Text style={styles.rowWarn}>Queda persistente detectada.</Text>
+                    )}
+                  </View>
+                )
+              })}
+            </View>
+          )}
         </>
       )}
     </View>
@@ -336,4 +391,7 @@ const styles = StyleSheet.create({
   crop: { color: colors.inkMute, fontSize: 12, marginTop: 2, marginBottom: 4 },
   row: { color: colors.inkDim, fontSize: 13, marginTop: 6 },
   rowWarn: { color: colors.orange },
+  vegetationBlock: { marginTop: 12, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
+  vegetationTitle: { color: colors.ink, fontSize: 14, fontWeight: '600' },
+  vegetationRow: { marginTop: 4 },
 })

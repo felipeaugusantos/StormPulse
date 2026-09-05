@@ -48,10 +48,10 @@ class Location(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     # Polygon outline (FASE 27, ADR-0024) — a GeoJSON Polygon geometry
     # serialized as JSON text, e.g. drawn on the dashboard map for a
     # talhão. latitude/longitude above (not this) is what every weather/
-    # agro call still uses for the actual API lookup — this is never
-    # parsed for that, only for rendering and for the derived `area_ha`
-    # below, so a plain Text column is enough (no PostGIS geometry type,
-    # no spatial queries against it).
+    # agro weather calls use the centroid, while the vegetation-index
+    # provider passes this complete polygon to Sentinel Hub. It remains
+    # Text because the database performs no polygon spatial query yet;
+    # ADR-0083 records the explicit PostGIS migration decision.
     boundary_geojson: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Manual color override (FASE 27, ADR-0025) — `#RRGGBB`. When unset, the
     # frontend derives a color from `crop` instead (`cropColor()`); this
