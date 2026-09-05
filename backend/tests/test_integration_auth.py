@@ -31,7 +31,7 @@ async def test_register_returns_created_user(client: AsyncClient) -> None:
     assert resp.status_code == 201
     body = resp.json()
     assert body["email"] == email
-    assert body["role"] == "user"
+    assert body["role"] == "owner"
     assert body["is_active"] is True
 
 

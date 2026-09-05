@@ -319,7 +319,7 @@ async def test_role_change_to_admin_writes_audit_log_entry(client: AsyncClient) 
         log_resp = await admin_client.get("/api/v1/admin/audit-log", headers=headers)
         entries = log_resp.json()["items"]
         assert entries[0]["action"] == "user.role_change"
-        assert entries[0]["detail"] == {"role": {"from": "user", "to": "admin"}}
+        assert entries[0]["detail"] == {"role": {"from": "owner", "to": "admin"}}
 
 
 async def test_unsupported_role_is_rejected(client: AsyncClient) -> None:

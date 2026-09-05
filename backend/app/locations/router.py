@@ -42,6 +42,7 @@ from app.ndvi.schemas import (
     VegetationComparisonOut,
     VegetationSeriesOut,
 )
+from app.organizations.permissions import can_write
 from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
@@ -57,6 +58,11 @@ from app.weather.provider import (
 from engine.geo import haversine_km
 
 router = APIRouter(tags=["locations"])
+
+
+def _require_write(user: User) -> None:
+    if not can_write(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso somente leitura")
 
 
 async def _get_owned_or_404(session: AsyncSession, user: User, location_id: uuid.UUID) -> Location:
@@ -150,6 +156,12 @@ async def create_location(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Location:
+    _require_write(user)
+    if data.parent_location_id is None and not user.organization_wide_access:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="O acesso concedido não permite criar outra fazenda",
+        )
     parent = await _validate_parent(session, user, data.parent_location_id)
     if parent is not None and data.boundary_geojson is not None:
         _validate_boundary_within_parent_radius(parent, data.boundary_geojson)
@@ -180,6 +192,7 @@ async def update_location(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Location:
+    _require_write(user)
     location = await _get_owned_or_404(session, user, location_id)
     if data.boundary_geojson is not None and location.parent_location_id is not None:
         parent = await service.get_location(session, user, location.parent_location_id)
@@ -198,6 +211,7 @@ async def delete_location(
     session: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> None:
+    _require_write(user)
     location = await _get_owned_or_404(session, user, location_id)
     await service.delete_location(session, location)
 

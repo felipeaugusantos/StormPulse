@@ -41,6 +41,7 @@ import { SafetyDisclaimer } from './SafetyDisclaimer'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
 import { StormMap, type PlotBoundary, type StormMapHandle } from './LazyStormMap'
 import { VegetationIntelligencePanel } from './VegetationIntelligencePanel'
+import { TeamPanel } from './TeamPanel'
 
 interface Props {
   onLogout: () => void
@@ -84,6 +85,7 @@ export function Dashboard({ onLogout }: Props) {
   const [pushError, setPushError] = useState<string | null>(null)
   const [showAdmin, setShowAdmin] = useState(false)
   const [showApiKeys, setShowApiKeys] = useState(false)
+  const [showTeam, setShowTeam] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -262,6 +264,7 @@ export function Dashboard({ onLogout }: Props) {
   if (showAdmin) {
     return <AdminPanel onBack={() => setShowAdmin(false)} meId={me?.id ?? null} />
   }
+  if (showTeam) return <TeamPanel locations={locations} onBack={() => setShowTeam(false)} />
 
   return (
     <>
@@ -289,6 +292,9 @@ export function Dashboard({ onLogout }: Props) {
           <button className="btn ghost" onClick={() => setShowAdmin(true)}>
             🛠️ Admin
           </button>
+        )}
+        {me && ['owner', 'admin', 'user', 'company_admin'].includes(me.role) && (
+          <button className="btn ghost" onClick={() => setShowTeam(true)}>👥 Equipe</button>
         )}
         {isPushSupported() && pushStatus !== 'on' && (
           <button

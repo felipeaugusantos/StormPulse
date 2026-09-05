@@ -379,6 +379,30 @@ export const api = {
     ),
   vegetationCsv: (locationId: string, indexName: VegetationIndex) =>
     requestBlob(`/locations/${locationId}/agro/vegetation/export.csv?index=${indexName}`),
+  organization: () => request<import('./types').Organization>('/organizations/current'),
+  organizationMembers: () =>
+    request<import('./types').OrganizationMember[]>('/organizations/current/members'),
+  organizationInvitations: () =>
+    request<import('./types').OrganizationInvitation[]>('/organizations/current/invitations'),
+  inviteOrganizationMember: (data: {
+    email: string
+    role: import('./types').OrganizationRole
+    location_id?: string | null
+    expires_in_hours?: number
+    access_expires_at?: string | null
+  }) => request<import('./types').OrganizationInvitation>('/organizations/current/invitations', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  updateOrganizationMember: (memberId: string, data: Record<string, unknown>) =>
+    request<import('./types').OrganizationMember>(`/organizations/current/members/${memberId}`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+  revokeOrganizationMember: (memberId: string) =>
+    request<void>(`/organizations/current/members/${memberId}`, { method: 'DELETE' }),
+  acceptOrganizationInvitation: (data: { token: string; password: string; full_name?: string }) =>
+    request<import('./types').OrganizationMember>('/organizations/invitations/accept', {
+      method: 'POST', body: JSON.stringify(data),
+    }),
   // Talhão-only (FASE 32) — 404s for a farm-level point, same shape as ndvi().
   weeklyReport: (locationId: string) =>
     request<WeeklyReport>(`/locations/${locationId}/agro/weekly-report`),

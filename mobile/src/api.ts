@@ -10,6 +10,10 @@ import type {
   LightningStrike,
   LocationItem,
   Me,
+  Organization,
+  OrganizationInvitation,
+  OrganizationMember,
+  OrganizationRole,
   RainfallHistory,
   SatelliteImageMeta,
   SprayWindow,
@@ -158,6 +162,37 @@ export const api = {
     }),
   deleteLocation: (locationId: string) =>
     request<void>(`/locations/${locationId}`, { method: 'DELETE' }),
+  organization: () => request<Organization>('/organizations/current'),
+  organizationMembers: () =>
+    request<OrganizationMember[]>('/organizations/current/members'),
+  organizationInvitations: () =>
+    request<OrganizationInvitation[]>('/organizations/current/invitations'),
+  inviteOrganizationMember: (data: {
+    email: string
+    role: OrganizationRole
+    location_id?: string | null
+    expires_in_hours?: number
+    access_expires_at?: string | null
+  }) =>
+    request<OrganizationInvitation>('/organizations/current/invitations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateOrganizationMember: (
+    memberId: string,
+    data: {
+      role?: OrganizationRole
+      organization_wide_access?: boolean
+      location_ids?: string[]
+      access_expires_at?: string | null
+    },
+  ) =>
+    request<OrganizationMember>(`/organizations/current/members/${memberId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  revokeOrganizationMember: (memberId: string) =>
+    request<void>(`/organizations/current/members/${memberId}`, { method: 'DELETE' }),
   alerts: () => request<AlertItem[]>('/alerts'),
   risk: (locationId: string) => request<StormRisk>(`/locations/${locationId}/risk`),
   storms: () => request<StormCell[]>('/storms?limit=200'),

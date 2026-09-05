@@ -39,7 +39,7 @@ class User(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", native_enum=True),
         nullable=False,
-        default=UserRole.USER,
+        default=UserRole.OWNER,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # Cross-tenant platform operator flag (FASE 28, ADR-0048) — orthogonal to
@@ -56,6 +56,10 @@ class User(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, Base):
     # is the platform-admin "active users" metric — nothing in the app's
     # own auth/authorization logic depends on it.
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    organization_wide_access: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    access_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Account cycle (FASE 8, ADR-0059) — informational, never gates login:
     # flipping every pre-existing unverified account to locked-out on
     # deploy would be a breaking change to already-working accounts, not a

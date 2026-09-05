@@ -6,6 +6,7 @@ import { LandingPage } from './components/LandingPage'
 import { VisitorView } from './components/VisitorView'
 import { VerifyEmail } from './components/VerifyEmail'
 import { ResetPassword } from './components/ResetPassword'
+import { AcceptInvitation } from './components/AcceptInvitation'
 
 type View = 'checking' | 'landing' | 'login' | 'visitor' | 'authed'
 
@@ -14,12 +15,13 @@ type View = 'checking' | 'landing' | 'login' | 'visitor' | 'authed'
 // index.html for any path (web/nginx.conf), so this just has to read the
 // URL once on boot before the normal checking/landing/login flow below
 // ever runs. Neither of these needs an existing session.
-function readDeepLink(): { kind: 'verify-email' | 'reset-password'; token: string } | null {
+function readDeepLink(): { kind: 'verify-email' | 'reset-password' | 'accept-invitation'; token: string } | null {
   const { pathname, search } = window.location
   const token = new URLSearchParams(search).get('token')
   if (!token) return null
   if (pathname === '/verificar-email') return { kind: 'verify-email', token }
   if (pathname === '/redefinir-senha') return { kind: 'reset-password', token }
+  if (pathname === '/aceitar-convite') return { kind: 'accept-invitation', token }
   return null
 }
 
@@ -52,6 +54,9 @@ export default function App() {
   }
   if (deepLink?.kind === 'reset-password') {
     return <ResetPassword token={deepLink.token} onDone={backToLogin} />
+  }
+  if (deepLink?.kind === 'accept-invitation') {
+    return <AcceptInvitation token={deepLink.token} onDone={backToLogin} />
   }
 
   async function handleLogout() {

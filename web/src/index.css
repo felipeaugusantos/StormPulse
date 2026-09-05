@@ -1061,6 +1061,10 @@ button {
 .vegetation-panel {
   grid-column: 1 / -1;
 }
+.team-invite { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0; align-items: end; }
+.team-invite input, .team-invite select { min-height: 40px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--ink); }
+.team-list { display: grid; gap: 10px; }
+.team-list article { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
 .vegetation-controls {
   display: flex;
   flex-wrap: wrap;

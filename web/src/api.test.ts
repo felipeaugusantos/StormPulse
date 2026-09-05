@@ -256,6 +256,33 @@ describe('vegetation intelligence', () => {
   })
 })
 
+describe('organization team management', () => {
+  test('invites and revokes a scoped member through the organization API', async () => {
+    const { api } = await freshApi()
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 'invite-1' }, 201))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await api.inviteOrganizationMember({
+      email: 'viewer@example.com',
+      role: 'viewer',
+      location_id: 'plot-1',
+    })
+    await api.revokeOrganizationMember('member-1')
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/organizations/current/invitations')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      role: 'viewer',
+      location_id: 'plot-1',
+    })
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
+      '/organizations/current/members/member-1',
+    )
+    expect(fetchMock.mock.calls[1][1].method).toBe('DELETE')
+  })
+})
+
 describe('logout', () => {
   test('calls the backend and clears the in-memory token', async () => {
     const { login, logout, getToken } = await freshApi()

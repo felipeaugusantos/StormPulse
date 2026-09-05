@@ -9,8 +9,9 @@ import { LoginScreen } from './src/screens/LoginScreen'
 import { HomeScreen } from './src/screens/HomeScreen'
 import { AgroScreen } from './src/screens/AgroScreen'
 import { LocationsScreen } from './src/screens/LocationsScreen'
+import { TeamScreen } from './src/screens/TeamScreen'
 
-type Tab = 'storm' | 'agro' | 'locations'
+type Tab = 'storm' | 'agro' | 'locations' | 'team'
 
 function MainTabs({ onLogout }: { onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('storm')
@@ -20,6 +21,7 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
       {tab === 'storm' && <HomeScreen onLogout={onLogout} />}
       {tab === 'agro' && <AgroScreen onLogout={onLogout} />}
       {tab === 'locations' && <LocationsScreen onLogout={onLogout} />}
+      {tab === 'team' && <TeamScreen onLogout={onLogout} />}
 
       <SafeAreaView edges={['bottom']} style={styles.tabBar}>
         <TabButton label="⛈️ Tempestade" active={tab === 'storm'} onPress={() => setTab('storm')} />
@@ -29,6 +31,7 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
           active={tab === 'locations'}
           onPress={() => setTab('locations')}
         />
+        <TabButton label="👥 Equipe" active={tab === 'team'} onPress={() => setTab('team')} />
       </SafeAreaView>
     </View>
   )

@@ -46,11 +46,17 @@ from engine.validation import precision_recall as _precision_recall
 
 MAX_PAGE_SIZE = 200
 
-# Only these two roles are actually implemented today (METEOROLOGIST/
-# COMPANY_ADMIN/OPERATOR are reserved for later phases, per
-# app/core/enums.py) — granting a role nothing in the app understands yet
-# would be a silent no-op dressed up as a real permission change.
-ALLOWED_ROLE_CHANGES = {UserRole.USER, UserRole.ADMIN}
+# Team roles are enforced by the organization and location authorization
+# layer (Fase 4). USER remains accepted for accounts created before this
+# rollout; the other reserved legacy roles remain unsupported.
+ALLOWED_ROLE_CHANGES = {
+    UserRole.OWNER,
+    UserRole.ADMIN,
+    UserRole.AGRONOMIST,
+    UserRole.OPERATOR,
+    UserRole.VIEWER,
+    UserRole.USER,
+}
 
 
 class UserNotFound(Exception):

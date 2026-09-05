@@ -287,6 +287,31 @@ describe('paridade mobile (item 5)', () => {
     )
   })
 
+  test('organization team calls use the member-management endpoints', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, []))
+      .mockResolvedValueOnce(jsonResponse(201, { id: 'invite-1' }))
+      .mockResolvedValueOnce({ ok: true, status: 204 } as Response)
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await api.organizationMembers()
+    await api.inviteOrganizationMember({
+      email: 'agronomo@example.com',
+      role: 'agronomist',
+      location_id: 'farm-1',
+    })
+    await api.revokeOrganizationMember('member-1')
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/organizations/current/members')
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      email: 'agronomo@example.com',
+      role: 'agronomist',
+      location_id: 'farm-1',
+    })
+    expect(fetchMock.mock.calls[2][1].method).toBe('DELETE')
+  })
+
   test('satelliteImage() returns null on a 404 (no cycle run yet)', async () => {
     const fetchMock = jest.fn().mockResolvedValueOnce(jsonResponse(404, { detail: 'not found' }))
     globalThis.fetch = fetchMock as unknown as typeof fetch

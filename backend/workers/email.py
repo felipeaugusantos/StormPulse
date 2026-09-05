@@ -34,7 +34,7 @@ def _correlation_hash(email: str) -> str:
     return hashlib.sha256(email.encode("utf-8")).hexdigest()[:12]
 
 
-EmailKind = Literal["email_verification", "password_reset"]
+EmailKind = Literal["email_verification", "password_reset", "organization_invitation"]
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,21 @@ def render_email(kind: EmailKind, *, link: str) -> EmailContent:
                 "StormPulse:</p>"
                 f'<p><a href="{link}">{link}</a></p>'
                 "<p>Se você não criou esta conta, ignore esta mensagem.</p>"
+            ),
+        )
+    if kind == "organization_invitation":
+        return EmailContent(
+            subject="Convite para uma organização — StormPulse",
+            text_body=(
+                "Você recebeu acesso a uma organização no StormPulse.\n\n"
+                f"Aceite o convite: {link}\n\n"
+                "O convite é pessoal, expira automaticamente e só pode ser utilizado uma vez."
+            ),
+            html_body=(
+                "<p>Você recebeu acesso a uma organização no StormPulse.</p>"
+                f'<p><a href="{link}">Aceitar convite</a></p>'
+                "<p>O convite é pessoal, expira automaticamente e só pode ser "
+                "utilizado uma vez.</p>"
             ),
         )
     return EmailContent(

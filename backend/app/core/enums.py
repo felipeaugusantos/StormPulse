@@ -11,14 +11,17 @@ from enum import StrEnum
 
 
 class UserRole(StrEnum):
-    """RBAC roles. ADMIN/USER now; the rest are reserved for later phases."""
+    """Organization roles, ordered by capabilities in permissions.py."""
 
+    OWNER = "owner"
     ADMIN = "admin"
+    AGRONOMIST = "agronomist"
+    OPERATOR = "operator"
+    VIEWER = "viewer"
+    # Legacy values remain readable during the expand/contract migration.
     USER = "user"
-    # Reserved (FASE 18): METEOROLOGIST, COMPANY_ADMIN, OPERATOR
     METEOROLOGIST = "meteorologist"
     COMPANY_ADMIN = "company_admin"
-    OPERATOR = "operator"
 
 
 class AlertType(StrEnum):

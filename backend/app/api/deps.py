@@ -16,6 +16,7 @@ from app.core.config import Settings
 from app.core.enums import UserRole
 from app.core.rls import bypass_rls, set_tenant_context
 from app.core.security import TokenError, decode_token
+from app.organizations.permissions import membership_active
 from app.users.models import User
 
 _bearer = HTTPBearer(auto_error=False)
@@ -82,7 +83,7 @@ async def get_current_user(
 
     await bypass_rls(session)
     user = await session.get(User, user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or not membership_active(user):
         raise unauthorized
     await set_tenant_context(session, user.tenant_id)
     await session.execute(text("SET LOCAL app.bypass_rls = 'off'"))
@@ -120,7 +121,7 @@ async def require_api_key(
 
     await bypass_rls(session)
     user = await session.get(User, key.user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or not membership_active(user):
         raise unauthorized
     await set_tenant_context(session, user.tenant_id)
     await session.execute(text("SET LOCAL app.bypass_rls = 'off'"))

@@ -70,6 +70,10 @@ status fase a fase e os ADRs correspondentes.
 | GET | `/api/v1/locations/{id}/agro/vegetation/compare` | Comparação entre aquisições confiáveis — Fase 5 |
 | GET | `/api/v1/locations/{id}/agro/vegetation/image.png` | Mapa histórico do índice com metadados de fonte/data/qualidade — Fase 5 |
 | GET | `/api/v1/locations/{id}/agro/vegetation/export.csv` | Exportação da série espectral — Fase 5 |
+| GET | `/api/v1/organizations/current` | Organização do usuário — Fase 4, [ADR-0084](docs/adr/0084-fase4-organizacoes-equipes.md) |
+| GET/PATCH/DELETE | `/api/v1/organizations/current/members` | Membros, papéis, escopos e revogação imediata — Fase 4 |
+| POST/GET/DELETE | `/api/v1/organizations/current/invitations` | Convites por e-mail, expiração e uso único — Fase 4 |
+| GET | `/api/v1/organizations/current/access-audit` | Auditoria de alterações de acesso — Fase 4 |
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
 > engine não existe) — nunca dados fictícios. O provider de dados é escolhido

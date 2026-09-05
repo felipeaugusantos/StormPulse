@@ -87,7 +87,7 @@ async def _create_tenant_and_user(
         hashed_password=hashed_password,
         google_sub=google_sub,
         google_sub_index=blind_index(google_sub) if google_sub is not None else None,
-        role=UserRole.USER,
+        role=UserRole.OWNER,
         is_active=True,
         terms_accepted_at=datetime.now(UTC) if terms_accepted else None,
         email_verified=email_verified,

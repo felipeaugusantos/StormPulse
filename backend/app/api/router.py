@@ -16,6 +16,7 @@ from app.auth.router import router as auth_router
 from app.externalapi.router import router as external_api_router
 from app.lightning.router import router as lightning_router
 from app.locations.router import router as locations_router
+from app.organizations.router import router as organizations_router
 from app.public.router import router as public_router
 from app.satellite.router import router as satellite_router
 from app.storms.router import router as storms_router
@@ -29,6 +30,7 @@ v1_router = APIRouter()
 v1_router.include_router(auth_router, prefix="/auth")
 v1_router.include_router(users_router, prefix="/users")
 v1_router.include_router(locations_router, prefix="/locations")
+v1_router.include_router(organizations_router, prefix="/organizations")
 v1_router.include_router(storms_router, prefix="/storms")
 v1_router.include_router(alerts_router, prefix="/alerts")
 v1_router.include_router(satellite_router, prefix="/satellite")

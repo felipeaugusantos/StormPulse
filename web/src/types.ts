@@ -200,6 +200,20 @@ export interface NdviReading {
   is_mock: boolean
 }
 
+export type OrganizationRole = 'owner' | 'admin' | 'agronomist' | 'operator' | 'viewer'
+
+export interface Organization { id: string; name: string; slug: string }
+export interface OrganizationMember {
+  id: string; email: string; full_name: string | null; role: OrganizationRole
+  is_active: boolean; organization_wide_access: boolean
+  access_expires_at: string | null; created_at: string
+}
+export interface OrganizationInvitation {
+  id: string; email: string; role: OrganizationRole; location_id: string | null
+  expires_at: string; access_expires_at: string | null
+  accepted_at: string | null; revoked_at: string | null; created_at: string
+}
+
 export type VegetationIndex = 'ndvi' | 'ndre' | 'evi' | 'ndmi' | 'ndwi'
 export type ImageQuality = 'high' | 'medium' | 'low'
 

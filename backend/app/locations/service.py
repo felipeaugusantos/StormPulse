@@ -35,6 +35,7 @@ from app.locations.schemas import (
 )
 from app.ndvi.models import NdviReading
 from app.ndvi.schemas import NdviOut
+from app.organizations.permissions import can_access_location
 from app.soilmoisture.factory import get_soil_moisture_provider
 from app.soilmoisture.provider import SoilMoistureProviderUnavailableError
 from app.users.models import User
@@ -85,11 +86,14 @@ async def create_location(session: AsyncSession, user: User, data: LocationCreat
 async def list_locations(session: AsyncSession, user: User) -> list[Location]:
     result = await session.execute(
         select(Location)
-        .where(Location.tenant_id == user.tenant_id, Location.user_id == user.id)
+        .where(Location.tenant_id == user.tenant_id)
         .options(selectinload(Location.alert_preferences))
         .order_by(Location.created_at.desc())
     )
-    return list(result.scalars().all())
+    locations = list(result.scalars().all())
+    return [
+        location for location in locations if await can_access_location(session, user, location)
+    ]
 
 
 async def get_location(
@@ -100,11 +104,13 @@ async def get_location(
         .where(
             Location.id == location_id,
             Location.tenant_id == user.tenant_id,
-            Location.user_id == user.id,
         )
         .options(selectinload(Location.alert_preferences))
     )
-    return result.scalar_one_or_none()
+    location = result.scalar_one_or_none()
+    if location is None or not await can_access_location(session, user, location):
+        return None
+    return location
 
 
 async def update_location(
