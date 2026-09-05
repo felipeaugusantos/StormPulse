@@ -65,6 +65,7 @@ status fase a fase e os ADRs correspondentes.
 | GET | `/api/v1/public/satellite/image`, `.../image.png` | Imagem IR do GOES-19 ao vivo (metadados + PNG), sem login — FASE 18 |
 | GET | `/api/v1/locations/{id}/agro/spray-window` | Janela de pulverização (vento + chuva prevista quando disponível) — FASE 19/20 |
 | GET | `/api/v1/locations/{id}/agro/rainfall` | Chuva acumulada por dia, janela recente — FASE 19 |
+| GET | `/api/v1/locations/{id}/forecast-comparison` | Acurácia acumulada por modelo (ECMWF/GFS/ICON) — Fase 2, [ADR-0082](docs/adr/0082-comparacao-validacao-previsoes.md) |
 
 > Rotas de tempestade retornam resultados **reais** (vazios enquanto o storm
 > engine não existe) — nunca dados fictícios. O provider de dados é escolhido

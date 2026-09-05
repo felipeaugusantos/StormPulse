@@ -96,17 +96,29 @@ adicionar risco novo. Ainda não iniciada — aguardando autorização.
   novas no modelo de dados) — sem isso, quem ler a documentação antes de
   mexer no código parte de premissas falsas.
 
-## Fase 2 — Fechar P1 (confiabilidade)
+## Fase 2 — Comparação e Validação de Previsões ✅ concluída (2026-09-05)
+
+Escopo definido diretamente pelo dono do produto (substitui o rascunho
+original desta seção, renumerado abaixo como **Fase 2-A**): comparar
+ECMWF/GFS/ICON (via Open-Meteo, sem credencial nova) contra observação
+real, calculando MAE de temperatura, viés/erro de precipitação, erro de
+vento, taxa de acerto de chuva e Brier Score, por modelo/localidade/
+horizonte, sem recomendar um modelo sem amostra mínima. INMET/CPTEC não
+entram na comparação numérica (não dão número de previsão, só texto).
+Decisões e achados detalhados em
+[ADR-0082](adr/0082-comparacao-validacao-previsoes.md).
+
+## Fase 2-A — Fechar P1 (confiabilidade)
 
 - Dedup de descargas no pipeline de raios (chave estável por
   posição+janela de tempo, não re-inserir o mesmo raio a cada ciclo).
 - Testes de componente web (`@testing-library/react` + `@testing-library/jest-dom`)
   cobrindo pelo menos `useAgroEntries` (o hook que já teve um bug real de
-  staleness corrigido nesta sessão) e os painéis agro.
-- Geração de tipos TypeScript a partir do OpenAPI do backend (ex.
-  `openapi-typescript`), pelo menos como *check* de diff no CI — não
-  necessariamente substituindo `types.ts` de uma vez, mas impedindo que
-  um campo novo do backend suma silenciosamente do frontend de novo.
+  staleness corrigido nesta sessão) e os painéis agro. ✅ Parcialmente feito
+  na Fase 1 (primeiro teste de componente do projeto, `WeeklyReportModal`;
+  `useAgroEntries` continua sem teste dedicado).
+- ✅ Geração de tipos TypeScript a partir do OpenAPI do backend — feito na
+  Fase 1 (`openapi-typescript`, checado no CI).
 - `workflow_dispatch` de rollback (SHA anterior já fica disponível via
   `PREV_*_IMAGE` no `deploy.sh`) em vez de procedimento manual por SSH.
 - Ação do dono do produto, não bloqueante pro código: token INMET
@@ -205,7 +217,7 @@ modelo.**
 ## Ordem recomendada e dependências
 
 ```
-Fase 1 ✅ ──► Fase 1-A (P0) ──► Fase 2 (P1) ──► Fase 3 (visão consolidada)
+Fase 1 ✅ ──► Fase 1-A (P0) ──► Fase 2-A (P1) ──► Fase 3 (visão consolidada)
                                         │
                                         ▼
                               Fase 4 (janela unificada)
@@ -217,9 +229,12 @@ Fase 1 ✅ ──► Fase 1-A (P0) ──► Fase 2 (P1) ──► Fase 3 (visã
                          Fase 7 (colaboração multi-tenant, isolada,
                                  pode rodar em paralelo a qualquer
                                  momento depois da Fase 1)
+
+Fase 2 (Comparação e Validação de Previsões) ✅ já concluída — independente
+desta cadeia (não bloqueia nem é bloqueada por Fase 2-A/3-7).
 ```
 
-Fases 1-A e 2 não são estritamente bloqueantes uma da outra internamente,
+Fases 1-A e 2-A não são estritamente bloqueantes uma da outra internamente,
 mas ambas devem vir antes da Fase 3 em diante — não faz sentido construir
 uma visão consolidada de risco sobre uma base cujo isolamento multitenant
 não é testado.
