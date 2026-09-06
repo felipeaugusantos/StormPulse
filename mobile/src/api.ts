@@ -208,6 +208,7 @@ export const api = {
       throw err
     }
   },
+  satelliteImages: () => request<SatelliteImageMeta[]>('/public/satellite/images?minutes=60'),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
   // Always Open-Meteo, bypassing INMET/CPTEC (ADR-0020) — the only source
   // with a real numeric rain forecast, needed for trafficability/water

@@ -81,6 +81,9 @@ _COLOR_RAMP_RGB = (
 # The rendered frame is a *display* image, not the scientific grid — capped
 # so a live web overlay stays light regardless of the configured resolution.
 _IMAGE_MAX_DIMENSION = 800
+# Enough headroom for the UI's last-hour playback even when one acquisition
+# is delayed. This is intentionally short-lived display data, not an archive.
+_IMAGE_HISTORY_RETENTION = timedelta(hours=2)
 
 
 class SatelliteUnavailableError(RuntimeError):
@@ -460,18 +463,16 @@ def _decide_alerts(
 def _persist_image(
     session: Session, *, png: bytes, width: int, height: int, settings: Settings, now: datetime
 ) -> None:
-    """Replace the current satellite frame — only the latest one is kept.
-
-    A live overlay has no use for history, so each cycle deletes whatever
-    was there before instead of accumulating rows (same "prune, don't
-    accumulate" spirit as ``_prune_stale_watches``/``_prune_old_mock_cells``
-    in ``pipeline_service.py``).
-    """
-    for stale in session.scalars(select(SatelliteImage)).all():
+    """Upsert an observed frame and keep a bounded two-hour playback buffer."""
+    cutoff = datetime.now(UTC) - _IMAGE_HISTORY_RETENTION
+    for stale in session.scalars(
+        select(SatelliteImage).where(SatelliteImage.captured_at < cutoff)
+    ).all():
         session.delete(stale)
     lon_min, lat_min, lon_max, lat_max = settings.satellite_extent_bbox
-    session.add(
-        SatelliteImage(
+    image = session.scalar(select(SatelliteImage).where(SatelliteImage.captured_at == now))
+    if image is None:
+        image = SatelliteImage(
             captured_at=now,
             bbox_lon_min=lon_min,
             bbox_lat_min=lat_min,
@@ -484,7 +485,16 @@ def _persist_image(
             is_mock=False,
             experimental=True,
         )
-    )
+        session.add(image)
+    else:
+        image.bbox_lon_min = lon_min
+        image.bbox_lat_min = lat_min
+        image.bbox_lon_max = lon_max
+        image.bbox_lat_max = lat_max
+        image.band = settings.satellite_band
+        image.width = width
+        image.height = height
+        image.png_data = png
 
 
 def _prune_stale_watches(session: Session, *, older_than: timedelta) -> None:

@@ -1164,6 +1164,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/satellite/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quadros observados de satélite da última hora (público) */
+        get: operations["public_satellite_image_history_api_v1_public_satellite_images_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/satellite/image.png": {
         parameters: {
             query?: never;
@@ -1173,6 +1190,23 @@ export interface paths {
         };
         /** PNG do quadro de satélite atual (público, sem autenticação — usado direto pelo mapa) */
         get: operations["public_satellite_image_png_api_v1_public_satellite_image_png_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/satellite/images/{image_id}.png": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** PNG de um quadro histórico de satélite (público) */
+        get: operations["public_satellite_history_png_api_v1_public_satellite_images__image_id__png_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2432,6 +2466,11 @@ export interface components {
          *     separately (``GET .../satellite/image.png``) since it's binary.
          */
         SatelliteImageMetaOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
             /**
              * Captured At
              * Format: date-time
@@ -5052,6 +5091,37 @@ export interface operations {
             };
         };
     };
+    public_satellite_image_history_api_v1_public_satellite_images_get: {
+        parameters: {
+            query?: {
+                minutes?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SatelliteImageMetaOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     public_satellite_image_png_api_v1_public_satellite_image_png_get: {
         parameters: {
             query?: never;
@@ -5068,6 +5138,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    public_satellite_history_png_api_v1_public_satellite_images__image_id__png_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

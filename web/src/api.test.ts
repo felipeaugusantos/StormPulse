@@ -256,6 +256,21 @@ describe('vegetation intelligence', () => {
   })
 })
 
+describe('satellite playback', () => {
+  test('requests observed frames and builds an immutable historical image URL', async () => {
+    const { publicApi, satelliteImagePngUrl } = await freshApi()
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await publicApi.satelliteImages(60)
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/public/satellite/images?minutes=60')
+    expect(satelliteImagePngUrl('2026-09-05T12:00:00Z', 'frame-1')).toContain(
+      '/public/satellite/images/frame-1.png',
+    )
+  })
+})
+
 describe('organization team management', () => {
   test('invites and revokes a scoped member through the organization API', async () => {
     const { api } = await freshApi()

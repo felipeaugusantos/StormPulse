@@ -78,6 +78,7 @@ export interface LightningStrike {
 }
 
 export interface SatelliteImageMeta {
+  id: string
   captured_at: string
   bbox: [number, number, number, number]
   band: string
@@ -127,6 +128,7 @@ export interface ForecastPoint {
 }
 
 export interface Forecast {
+  provenance: Provenance
   latitude: number
   longitude: number
   points: ForecastPoint[]

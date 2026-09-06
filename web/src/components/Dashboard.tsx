@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, api, publicApi, readiness, resendVerification } from '../api'
 import type {
   AlertItem,
@@ -42,6 +42,7 @@ import { SatelliteWatchRow } from './SatelliteWatchRow'
 import { StormMap, type PlotBoundary, type StormMapHandle } from './LazyStormMap'
 import { VegetationIntelligencePanel } from './VegetationIntelligencePanel'
 import { TeamPanel } from './TeamPanel'
+import { buildSatelliteTimeline, stormsForTimelineStep } from '../stormTimeline'
 
 interface Props {
   onLogout: () => void
@@ -64,6 +65,9 @@ export function Dashboard({ onLogout }: Props) {
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
   const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
+  const [satelliteFrames, setSatelliteFrames] = useState<SatelliteImageMeta[]>([])
+  const [timelineIndex, setTimelineIndex] = useState<number | null>(null)
+  const [timelinePlaying, setTimelinePlaying] = useState(false)
   const [lightning, setLightning] = useState<LightningStrike[]>([])
   const [showSatelliteImage, setShowSatelliteImage] = useState(true)
   const [satelliteBasemap, setSatelliteBasemap] = useState(false)
@@ -89,7 +93,16 @@ export function Dashboard({ onLogout }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [meRes, stormsRes, locsRes, alertsRes, satelliteRes, satelliteImageRes, lightningRes] =
+      const [
+        meRes,
+        stormsRes,
+        locsRes,
+        alertsRes,
+        satelliteRes,
+        satelliteImageRes,
+        satelliteFramesRes,
+        lightningRes,
+      ] =
         await Promise.all([
           api.me(),
           api.storms(),
@@ -97,6 +110,7 @@ export function Dashboard({ onLogout }: Props) {
           api.alerts(),
           api.satelliteWatches(),
           publicApi.satelliteImage(),
+          publicApi.satelliteImages().catch(() => []),
           api.lightning(),
         ])
       setMe(meRes)
@@ -105,6 +119,7 @@ export function Dashboard({ onLogout }: Props) {
       setAlerts(alertsRes)
       setSatelliteWatches(satelliteRes)
       setSatelliteImage(satelliteImageRes)
+      setSatelliteFrames(satelliteFramesRes)
       setLightning(lightningRes)
       setUpdatedAt(new Date())
       setError(null)
@@ -242,6 +257,26 @@ export function Dashboard({ onLogout }: Props) {
   }
 
   const mock = storms.some((s) => s.is_mock)
+  const timelineSteps = useMemo(
+    () =>
+      buildSatelliteTimeline(
+        satelliteFrames,
+        storms.some(
+          (storm) =>
+            storm.projected_latitude_1h != null && storm.projected_longitude_1h != null,
+        ),
+      ),
+    [satelliteFrames, storms],
+  )
+  const activeTimelineStep = timelineIndex == null ? null : timelineSteps[timelineIndex] ?? null
+  const mapStorms = activeTimelineStep
+    ? stormsForTimelineStep(storms, activeTimelineStep)
+    : storms
+  const mapSatelliteImage = activeTimelineStep?.image ?? satelliteImage
+  const currentTimelineIndex = timelineSteps.reduce(
+    (latestIndex, step, index) => (step.estimated ? latestIndex : index),
+    0,
+  )
   const selectedLocation = locations.find((l) => l.id === selectedLocationId) ?? null
   const { entries: agroEntries, activeLocations: agroActiveLocations } = useAgroEntries(locations)
   const plotBoundaries: PlotBoundary[] = locations.flatMap((l) => {
@@ -260,6 +295,38 @@ export function Dashboard({ onLogout }: Props) {
       return []
     }
   })
+
+  useEffect(() => {
+    if (!timelinePlaying || timelineSteps.length < 2) return
+    const timer = window.setInterval(() => {
+      setTimelineIndex((current) => {
+        const next = current == null ? 0 : current + 1
+        if (next >= timelineSteps.length) {
+          setTimelinePlaying(false)
+          return timelineSteps.length - 1
+        }
+        return next
+      })
+    }, 900)
+    return () => window.clearInterval(timer)
+  }, [timelinePlaying, timelineSteps.length])
+
+  useEffect(() => {
+    if (timelineIndex != null && timelineIndex >= timelineSteps.length) {
+      setTimelineIndex(null)
+      setTimelinePlaying(false)
+    }
+  }, [timelineIndex, timelineSteps.length])
+
+  function toggleTimelinePlayback() {
+    if (timelinePlaying) {
+      setTimelinePlaying(false)
+      return
+    }
+    if (timelineSteps.length < 2) return
+    if (timelineIndex == null || timelineIndex >= timelineSteps.length - 1) setTimelineIndex(0)
+    setTimelinePlaying(true)
+  }
 
   if (showAdmin) {
     return <AdminPanel onBack={() => setShowAdmin(false)} meId={me?.id ?? null} />
@@ -458,14 +525,70 @@ export function Dashboard({ onLogout }: Props) {
         <div className="map-card">
           <StormMap
             ref={mapRef}
-            storms={storms}
+            storms={mapStorms}
             locations={locations}
             satelliteWatches={satelliteWatches}
-            satelliteImage={showSatelliteImage ? satelliteImage : null}
+            satelliteImage={showSatelliteImage ? mapSatelliteImage : null}
             lightning={lightning}
             plotBoundaries={plotBoundaries}
             satelliteBasemap={satelliteBasemap}
           />
+          {!drawingActive && !pickingLocation && (
+            <div className="map-timeline" aria-label="Linha do tempo meteorológica">
+              <button
+                type="button"
+                className="timeline-play"
+                onClick={toggleTimelinePlayback}
+                disabled={timelineSteps.length < 2}
+                aria-label={timelinePlaying ? 'Pausar animação' : 'Reproduzir última e próxima hora'}
+              >
+                {timelinePlaying ? '⏸' : '▶'}
+              </button>
+              <div className="timeline-content">
+                <div className="timeline-heading">
+                  <strong>
+                    {activeTimelineStep?.estimated
+                      ? `Estimativa +${activeTimelineStep.offsetMinutes} min`
+                      : activeTimelineStep
+                        ? `Observado ${formatTimeBR(activeTimelineStep.image.captured_at)}`
+                        : 'Agora'}
+                  </strong>
+                  <span>
+                    {activeTimelineStep?.estimated
+                      ? 'trajetória linear das células; imagem é a última observação'
+                      : `${satelliteFrames.length} quadro${satelliteFrames.length === 1 ? '' : 's'} real${satelliteFrames.length === 1 ? '' : 'is'} na última hora`}
+                  </span>
+                </div>
+                {timelineSteps.length > 0 ? (
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(0, timelineSteps.length - 1)}
+                    value={timelineIndex ?? currentTimelineIndex}
+                    onChange={(event) => {
+                      setTimelinePlaying(false)
+                      setTimelineIndex(Number(event.target.value))
+                    }}
+                    aria-label="Posição na linha do tempo"
+                  />
+                ) : (
+                  <span className="timeline-empty">Aguardando quadros de satélite válidos.</span>
+                )}
+              </div>
+              {timelineIndex != null && (
+                <button
+                  type="button"
+                  className="timeline-live"
+                  onClick={() => {
+                    setTimelinePlaying(false)
+                    setTimelineIndex(null)
+                  }}
+                >
+                  Ao vivo
+                </button>
+              )}
+            </div>
+          )}
           {drawingActive && (
             <div className="draw-mode-bar">
               <span>🖊️ Clique no mapa pra marcar os cantos do talhão</span>

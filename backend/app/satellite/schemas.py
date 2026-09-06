@@ -37,6 +37,7 @@ class SatelliteImageMetaOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    id: uuid.UUID
     captured_at: datetime
     bbox: tuple[float, float, float, float]
     band: str

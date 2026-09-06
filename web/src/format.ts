@@ -23,12 +23,56 @@ export function formatDateBR(value: Date | string, opts: Intl.DateTimeFormatOpti
   return toDate(value).toLocaleDateString('pt-BR', { timeZone: BR_TIMEZONE, ...opts })
 }
 
+/** Daily forecast timestamps represent a calendar day, encoded at 00:00 UTC.
+ * Formatting them in Brasília time would incorrectly move every label to the
+ * previous day (00:00 UTC = 21:00 BRT). Keep UTC only for this date-only shape. */
+export function formatForecastDateBR(
+  value: Date | string,
+  opts: Intl.DateTimeFormatOptions = {},
+): string {
+  return toDate(value).toLocaleDateString('pt-BR', { timeZone: 'UTC', ...opts })
+}
+
+function dateKeyInBrazil(value: Date): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: BR_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value)
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? ''
+  return `${part('year')}-${part('month')}-${part('day')}`
+}
+
+function forecastDayKey(value: Date | string): string {
+  return toDate(value).toISOString().slice(0, 10)
+}
+
+export function isForecastDayCurrentOrFuture(
+  value: Date | string,
+  reference = new Date(),
+): boolean {
+  return forecastDayKey(value) >= dateKeyInBrazil(reference)
+}
+
+export function isForecastDayToday(value: Date | string, reference = new Date()): boolean {
+  return forecastDayKey(value) === dateKeyInBrazil(reference)
+}
+
 export function formatTimeBR(value: Date | string, opts: Intl.DateTimeFormatOptions = {}): string {
   return toDate(value).toLocaleTimeString('pt-BR', { timeZone: BR_TIMEZONE, ...opts })
 }
 
 export function formatDateTimeBR(value: Date | string, opts: Intl.DateTimeFormatOptions = {}): string {
   return toDate(value).toLocaleString('pt-BR', { timeZone: BR_TIMEZONE, ...opts })
+}
+
+export function formatDecimalBR(value: number, fractionDigits = 1): string {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  })
 }
 
 export function kelvinToCelsius(kelvin: number): number {

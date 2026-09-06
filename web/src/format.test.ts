@@ -3,10 +3,33 @@ import {
   alertEventLabel,
   cardinalDirection,
   convectiveIntensity,
+  formatDecimalBR,
+  formatForecastDateBR,
+  isForecastDayCurrentOrFuture,
+  isForecastDayToday,
   kelvinToCelsius,
   riskLevelLabel,
   timeAgo,
 } from './format'
+
+describe('formatDecimalBR', () => {
+  test('uses Brazilian decimal punctuation', () => {
+    expect(formatDecimalBR(9.7)).toBe('9,7')
+  })
+})
+
+describe('daily forecast dates', () => {
+  test('does not shift a UTC calendar day back to the previous day in Brasília', () => {
+    expect(formatForecastDateBR('2026-09-06T00:00:00Z', { weekday: 'long' })).toBe('domingo')
+  })
+
+  test('keeps the current UTC-midnight forecast day in a Brazilian local-day filter', () => {
+    const saturdayEvening = new Date('2026-09-05T22:00:00Z')
+    expect(isForecastDayCurrentOrFuture('2026-09-05T00:00:00Z', saturdayEvening)).toBe(true)
+    expect(isForecastDayToday('2026-09-05T00:00:00Z', saturdayEvening)).toBe(true)
+    expect(isForecastDayCurrentOrFuture('2026-09-04T00:00:00Z', saturdayEvening)).toBe(false)
+  })
+})
 
 describe('kelvinToCelsius', () => {
   test('converts freezing point', () => {

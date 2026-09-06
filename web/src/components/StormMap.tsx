@@ -481,7 +481,7 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
       plots.setData(plotBoundariesGeoJSON(plotBoundaries))
 
       if (satelliteImage) {
-        const url = satelliteImagePngUrl(satelliteImage.captured_at)
+        const url = satelliteImagePngUrl(satelliteImage.captured_at, satelliteImage.id)
         const coordinates = imageCoordinates(satelliteImage.bbox)
         const existing = map.getSource('satellite-image') as ImageSource | undefined
         if (existing) {

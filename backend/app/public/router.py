@@ -8,6 +8,8 @@ official warnings, fetched live from the active weather provider per point
 
 from __future__ import annotations
 
+import uuid
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -113,12 +115,41 @@ async def public_satellite_image_meta(
             detail="Nenhuma imagem de satélite disponível no momento",
         )
     return SatelliteImageMetaOut(
+        id=image.id,
         captured_at=image.captured_at,
         bbox=(image.bbox_lon_min, image.bbox_lat_min, image.bbox_lon_max, image.bbox_lat_max),
         band=image.band,
         width=image.width,
         height=image.height,
     )
+
+
+@router.get(
+    "/satellite/images",
+    response_model=list[SatelliteImageMetaOut],
+    summary="Quadros observados de satélite da última hora (público)",
+)
+async def public_satellite_image_history(
+    session: AsyncSession = Depends(get_db),
+    minutes: int = Query(default=60, ge=10, le=120),
+) -> list[SatelliteImageMetaOut]:
+    images = await satellite_service.list_recent_images(session, minutes=minutes)
+    return [
+        SatelliteImageMetaOut(
+            id=image.id,
+            captured_at=image.captured_at,
+            bbox=(
+                image.bbox_lon_min,
+                image.bbox_lat_min,
+                image.bbox_lon_max,
+                image.bbox_lat_max,
+            ),
+            band=image.band,
+            width=image.width,
+            height=image.height,
+        )
+        for image in images
+    ]
 
 
 @router.get(
@@ -138,6 +169,24 @@ async def public_satellite_image_png(
         content=image.png_data,
         media_type="image/png",
         headers={"Cache-Control": "no-cache"},
+    )
+
+
+@router.get(
+    "/satellite/images/{image_id}.png",
+    summary="PNG de um quadro histórico de satélite (público)",
+)
+async def public_satellite_history_png(
+    image_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+) -> Response:
+    image = await satellite_service.get_image(session, image_id)
+    if image is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quadro não encontrado")
+    return Response(
+        content=image.png_data,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600, immutable"},
     )
 
 

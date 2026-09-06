@@ -48,13 +48,11 @@ class ConvectiveWatch(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 
 class SatelliteImage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """The most recent rendered satellite IR frame (FASE 18).
+    """A retained rendered satellite IR frame (FASE 18/time playback).
 
-    Only the latest frame is ever kept — see ``workers.satellite_pipeline
-    ._persist_image``, which deletes any existing row before inserting a new
-    one each cycle. This is a *display* image (downsampled, grayscale IR
-    convention), not the scientific raw grid — the real measurements live on
-    ``ConvectiveWatch`` rows instead.
+    A short rolling history is kept for the map animation. This is a *display*
+    image (downsampled enhanced IR), not the scientific raw grid — the real
+    measurements live on ``ConvectiveWatch`` rows instead.
     """
 
     __tablename__ = "satellite_images"

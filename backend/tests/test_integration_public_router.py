@@ -144,25 +144,27 @@ async def test_public_satellite_image_meta_and_png_work_without_auth(
     with session_scope() as session:
         for stale in session.scalars(select(SatelliteImage)).all():
             session.delete(stale)
-        session.add(
-            SatelliteImage(
-                captured_at=captured_at,
-                bbox_lon_min=-74.0,
-                bbox_lat_min=-34.0,
-                bbox_lon_max=-34.0,
-                bbox_lat_max=6.0,
-                band="B13",
-                width=10,
-                height=8,
-                png_data=png_bytes,
-                is_mock=False,
-                experimental=True,
-            )
+        image = SatelliteImage(
+            captured_at=captured_at,
+            bbox_lon_min=-74.0,
+            bbox_lat_min=-34.0,
+            bbox_lon_max=-34.0,
+            bbox_lat_max=6.0,
+            band="B13",
+            width=10,
+            height=8,
+            png_data=png_bytes,
+            is_mock=False,
+            experimental=True,
         )
+        session.add(image)
+        session.flush()
+        image_id = image.id
 
     meta_resp = await client.get("/api/v1/public/satellite/image")
     assert meta_resp.status_code == 200
     body = meta_resp.json()
+    assert body["id"] == str(image_id)
     assert body["bbox"] == [-74.0, -34.0, -34.0, 6.0]
     assert body["band"] == "B13"
     assert body["width"] == 10
@@ -172,6 +174,15 @@ async def test_public_satellite_image_meta_and_png_work_without_auth(
     assert png_resp.status_code == 200
     assert png_resp.headers["content-type"] == "image/png"
     assert png_resp.content == png_bytes
+
+    history_resp = await client.get("/api/v1/public/satellite/images")
+    assert history_resp.status_code == 200
+    assert [item["id"] for item in history_resp.json()] == [str(image_id)]
+
+    historical_png_resp = await client.get(f"/api/v1/public/satellite/images/{image_id}.png")
+    assert historical_png_resp.status_code == 200
+    assert historical_png_resp.content == png_bytes
+    assert "immutable" in historical_png_resp.headers["cache-control"]
 
     with session_scope() as session:
         for stale in session.scalars(select(SatelliteImage)).all():

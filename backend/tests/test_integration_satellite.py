@@ -22,10 +22,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.alerts.models import Alert
+from app.core.config import Settings
 from app.core.crypto import blind_index
 from app.core.enums import AlertEventType
 from app.locations.models import Location
-from app.satellite.models import ConvectiveWatch
+from app.satellite.models import ConvectiveWatch, SatelliteImage
 from app.tenants.models import Tenant
 from app.users.models import User
 from workers.db import session_scope
@@ -33,6 +34,7 @@ from workers.satellite_pipeline import (
     DetectedSystem,
     _decide_alerts,
     _match_or_create,
+    _persist_image,
     _prune_stale_watches,
 )
 
@@ -188,4 +190,40 @@ def test_prune_stale_watches_removes_old_inactive_rows() -> None:
 
         remaining = session.get(ConvectiveWatch, watch_id)
         assert remaining is None
+        session.rollback()
+
+
+def test_satellite_image_history_is_bounded_and_deduplicated() -> None:
+    now = datetime.now(UTC)
+    settings = Settings()
+    with session_scope() as session:
+        old = SatelliteImage(
+            captured_at=now - timedelta(hours=3),
+            bbox_lon_min=-74.0,
+            bbox_lat_min=-34.0,
+            bbox_lon_max=-34.0,
+            bbox_lat_max=6.0,
+            band="B13",
+            width=1,
+            height=1,
+            png_data=b"old",
+            is_mock=False,
+            experimental=True,
+        )
+        session.add(old)
+        session.flush()
+        old_id = old.id
+
+        _persist_image(session, png=b"first", width=2, height=2, settings=settings, now=now)
+        session.flush()
+        _persist_image(session, png=b"updated", width=3, height=4, settings=settings, now=now)
+        session.flush()
+
+        rows = list(
+            session.scalars(select(SatelliteImage).where(SatelliteImage.captured_at == now))
+        )
+        assert session.get(SatelliteImage, old_id) is None
+        assert len(rows) == 1
+        assert rows[0].png_data == b"updated"
+        assert (rows[0].width, rows[0].height) == (3, 4)
         session.rollback()

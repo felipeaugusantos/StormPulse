@@ -505,13 +505,17 @@ export const publicApi = {
       throw err
     }
   },
+  satelliteImages: (minutes = 60) =>
+    request<SatelliteImageMeta[]>(`/public/satellite/images?minutes=${minutes}`),
 }
 
 // The MapLibre `image` source fetches this URL directly (no Authorization
 // header attached) — the endpoint must be, and is, public. `capturedAt` in
 // the query string busts the browser cache when a new frame is available.
-export function satelliteImagePngUrl(capturedAt: string): string {
-  return `${V1}/public/satellite/image.png?t=${encodeURIComponent(capturedAt)}`
+export function satelliteImagePngUrl(capturedAt: string, imageId?: string): string {
+  return imageId
+    ? `${V1}/public/satellite/images/${encodeURIComponent(imageId)}.png`
+    : `${V1}/public/satellite/image.png?t=${encodeURIComponent(capturedAt)}`
 }
 
 // Health/readiness live at the API root, not under /api/v1.

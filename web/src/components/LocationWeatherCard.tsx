@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
 import { classifyFrostDays, evaluateTrafficability, formatFrostDays } from '../agro'
-import { cardinalDirection, formatDateBR, riskLevelLabel, timeAgo } from '../format'
+import {
+  cardinalDirection,
+  formatDecimalBR,
+  formatForecastDateBR,
+  isForecastDayCurrentOrFuture,
+  isForecastDayToday,
+  riskLevelLabel,
+  timeAgo,
+} from '../format'
 import { CAPE_LABEL, classifyCape } from '../storm'
 import type {
   CurrentConditions,
@@ -30,9 +38,11 @@ export function LocationWeatherCard({ location }: Props) {
   const [risk, setRisk] = useState<LocationRisk | null>(null)
   const [current, setCurrent] = useState<CurrentConditions | null>(null)
   const [forecast, setForecast] = useState<ForecastPoint[] | null>(null)
+  const [forecastSource, setForecastSource] = useState<string | null>(null)
   const [sprayWindow, setSprayWindow] = useState<SprayWindow | null>(null)
   const [rainfall, setRainfall] = useState<DailyRainfall[] | null>(null)
   const [rainForecast, setRainForecast] = useState<ForecastPoint[] | null>(null)
+  const [rainForecastSource, setRainForecastSource] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -40,9 +50,11 @@ export function LocationWeatherCard({ location }: Props) {
     if (!location) {
       setCurrent(null)
       setForecast(null)
+      setForecastSource(null)
       setSprayWindow(null)
       setRainfall(null)
       setRainForecast(null)
+      setRainForecastSource(null)
       setRisk(null)
       setError(null)
       return
@@ -69,9 +81,11 @@ export function LocationWeatherCard({ location }: Props) {
       if (cancelled) return
       setCurrent(currentRes)
       setForecast(forecastRes?.points ?? null)
+      setForecastSource(forecastRes?.provenance.source_name ?? null)
       setSprayWindow(sprayRes)
       setRainfall(rainfallRes?.daily ?? null)
       setRainForecast(rainForecastRes?.points ?? null)
+      setRainForecastSource(rainForecastRes?.provenance.source_name ?? null)
       setRisk(riskRes)
       setLoading(false)
       if (currentRes == null && forecastRes == null) {
@@ -94,10 +108,15 @@ export function LocationWeatherCard({ location }: Props) {
     )
   }
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const upcoming = (forecast ?? [])
-    .filter((p) => new Date(p.time) >= today)
+  // The dedicated numeric series normally comes from Open-Meteo and carries
+  // temperature, rain, gust and CAPE for the same dates. Prefer it for the
+  // daily strip so users never see one-day temperatures beside a five-day
+  // CAPE series. Fall back honestly to the active general provider if it is
+  // unavailable; no placeholder values are manufactured.
+  const dailyForecast = rainForecast?.length ? rainForecast : forecast ?? []
+  const dailyForecastSource = rainForecast?.length ? rainForecastSource : forecastSource
+  const upcoming = dailyForecast
+    .filter((p) => isForecastDayCurrentOrFuture(p.time))
     .slice(0, DAYS_TO_SHOW)
 
   const { severe: severeFrostDays, light: lightFrostDays } = classifyFrostDays(
@@ -105,7 +124,7 @@ export function LocationWeatherCard({ location }: Props) {
     FROST_THRESHOLD_C,
     FROST_LIGHT_THRESHOLD_C,
   )
-  const upcomingRain = (rainForecast ?? []).filter((p) => new Date(p.time) >= today)
+  const upcomingRain = (rainForecast ?? []).filter((p) => isForecastDayCurrentOrFuture(p.time))
   const todayRain = upcomingRain[0] ?? null
   const trafficability = rainfall
     ? evaluateTrafficability(rainfall, upcomingRain, {
@@ -135,19 +154,12 @@ export function LocationWeatherCard({ location }: Props) {
           </span>
           {current.wind_kmh != null && (
             <span className="weather-current-wind">
-              🌬️ {current.wind_kmh.toFixed(0)} km/h
-              {current.wind_gusts_kmh != null && ` (rajada ${current.wind_gusts_kmh.toFixed(0)})`}
+              Vento {current.wind_kmh.toFixed(0)} km/h
+              {current.wind_gusts_kmh != null &&
+                ` · rajadas ${current.wind_gusts_kmh.toFixed(0)} km/h`}
               {current.wind_direction_deg != null && (
-                <span
-                  className="weather-wind-arrow"
-                  style={{ transform: `rotate(${current.wind_direction_deg}deg)` }}
-                  title={`vem de ${cardinalDirection(current.wind_direction_deg)}`}
-                >
-                  ↓
-                </span>
+                <> · {cardinalDirection(current.wind_direction_deg)}</>
               )}
-              {current.wind_direction_deg != null &&
-                ` (${cardinalDirection(current.wind_direction_deg)})`}
             </span>
           )}
           <span className="weather-current-source">
@@ -166,18 +178,31 @@ export function LocationWeatherCard({ location }: Props) {
       )}
 
       {upcoming.length > 0 && (
-        <div className="forecast-strip">
-          {upcoming.map((p, i) => (
-            <div className="forecast-strip-day" key={i}>
-              <div className="sub">
-                {formatDateBR(p.time, { weekday: 'short' })}
+        <div className="daily-forecast">
+          <div className="forecast-source">
+            Previsão diária{dailyForecastSource ? ` · ${dailyForecastSource}` : ''}
+          </div>
+          <div className="forecast-strip daily-strip">
+            {upcoming.map((p) => (
+              <div className="forecast-strip-day" key={p.time}>
+                <div className="sub">
+                  {isForecastDayToday(p.time)
+                    ? 'hoje'
+                    : formatForecastDateBR(p.time, { weekday: 'short' })}
+                </div>
+                <div>{p.temperature_c != null ? `${p.temperature_c.toFixed(0)}°` : '—'}</div>
+                <div className="sub">
+                  {p.temperature_min_c != null ? `${p.temperature_min_c.toFixed(0)}°` : '—'}
+                </div>
               </div>
-              <div>{p.temperature_c != null ? `${p.temperature_c.toFixed(0)}°` : '—'}</div>
-              <div className="sub">
-                {p.temperature_min_c != null ? `${p.temperature_min_c.toFixed(0)}°` : '—'}
-              </div>
+            ))}
+          </div>
+          {upcoming.length < DAYS_TO_SHOW && (
+            <div className="forecast-availability">
+              Fonte retornou somente {upcoming.length} de {DAYS_TO_SHOW} dias; os demais estão
+              indisponíveis.
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -239,7 +264,9 @@ export function LocationWeatherCard({ location }: Props) {
               todayRain.precipitation_probability != null
                 ? `${todayRain.precipitation_probability}% de chance`
                 : null,
-              todayRain.precipitation_mm != null ? `${todayRain.precipitation_mm.toFixed(1)}mm` : null,
+              todayRain.precipitation_mm != null
+                ? `${formatDecimalBR(todayRain.precipitation_mm)} mm`
+                : null,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -247,7 +274,7 @@ export function LocationWeatherCard({ location }: Props) {
         )}
         {todayRain?.wind_gusts_max_kmh != null && (
           <div className="agro-row">
-            💨 Previsão de rajada máxima pro dia: {todayRain.wind_gusts_max_kmh.toFixed(0)} km/h
+            💨 Previsão de rajada máxima para o dia: {todayRain.wind_gusts_max_kmh.toFixed(0)} km/h
           </div>
         )}
         {upcomingRain.some((p) => p.cape_max_jkg != null) && (
@@ -270,11 +297,13 @@ export function LocationWeatherCard({ location }: Props) {
             >
               🌩️ Instabilidade (CAPE, J/kg) ⓘ
             </div>
-            <div className="forecast-strip">
+            <div className="forecast-strip cape-strip">
               {upcomingRain.slice(0, CAPE_DAYS_TO_SHOW).map((p, i) => (
                 <div className="forecast-strip-day" key={i}>
                   <div className="sub">
-                    {i === 0 ? 'hoje' : formatDateBR(p.time, { weekday: 'short' })}
+                    {isForecastDayToday(p.time)
+                      ? 'hoje'
+                      : formatForecastDateBR(p.time, { weekday: 'short' })}
                   </div>
                   <div>{p.cape_max_jkg != null ? p.cape_max_jkg.toFixed(0) : '—'}</div>
                   <div className="sub">

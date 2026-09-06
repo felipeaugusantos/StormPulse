@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime, timedelta
+
 from geoalchemy2.elements import WKTElement
 from geoalchemy2.functions import ST_Distance, ST_DWithin
 from sqlalchemy import select
@@ -56,3 +59,21 @@ async def get_latest_image(session: AsyncSession) -> SatelliteImage | None:
         select(SatelliteImage).order_by(SatelliteImage.captured_at.desc()).limit(1)
     )
     return result.scalars().first()
+
+
+async def list_recent_images(
+    session: AsyncSession, *, minutes: int = 60, limit: int = 24
+) -> list[SatelliteImage]:
+    """Observed frames inside the requested window, oldest first."""
+    cutoff = datetime.now(UTC) - timedelta(minutes=minutes)
+    result = await session.execute(
+        select(SatelliteImage)
+        .where(SatelliteImage.captured_at >= cutoff)
+        .order_by(SatelliteImage.captured_at.desc())
+        .limit(limit)
+    )
+    return list(reversed(result.scalars().all()))
+
+
+async def get_image(session: AsyncSession, image_id: uuid.UUID) -> SatelliteImage | None:
+    return await session.get(SatelliteImage, image_id)
