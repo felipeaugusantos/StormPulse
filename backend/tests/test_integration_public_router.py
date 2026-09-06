@@ -7,7 +7,7 @@ conftest.py). The whole point of these endpoints is that they work
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from geoalchemy2.elements import WKTElement
@@ -183,6 +183,44 @@ async def test_public_satellite_image_meta_and_png_work_without_auth(
     assert historical_png_resp.status_code == 200
     assert historical_png_resp.content == png_bytes
     assert "immutable" in historical_png_resp.headers["cache-control"]
+
+    with session_scope() as session:
+        for stale in session.scalars(select(SatelliteImage)).all():
+            session.delete(stale)
+
+
+async def test_satellite_history_window_follows_latest_provider_acquisition(
+    client: AsyncClient,
+) -> None:
+    latest_at = datetime.now(UTC) - timedelta(hours=3)
+    previous_at = latest_at - timedelta(minutes=50)
+    with session_scope() as session:
+        for stale in session.scalars(select(SatelliteImage)).all():
+            session.delete(stale)
+        for frame_at in (previous_at, latest_at):
+            session.add(
+                SatelliteImage(
+                    captured_at=frame_at,
+                    bbox_lon_min=-74.0,
+                    bbox_lat_min=-34.0,
+                    bbox_lon_max=-34.0,
+                    bbox_lat_max=6.0,
+                    band="B13",
+                    width=1,
+                    height=1,
+                    png_data=b"frame",
+                    is_mock=False,
+                    experimental=True,
+                )
+            )
+
+    response = await client.get("/api/v1/public/satellite/images?minutes=60")
+    assert response.status_code == 200
+    captured = [
+        datetime.fromisoformat(item["captured_at"].replace("Z", "+00:00"))
+        for item in response.json()
+    ]
+    assert captured == [previous_at, latest_at]
 
     with session_scope() as session:
         for stale in session.scalars(select(SatelliteImage)).all():

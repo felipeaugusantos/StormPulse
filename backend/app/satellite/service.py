@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from geoalchemy2.elements import WKTElement
 from geoalchemy2.functions import ST_Distance, ST_DWithin
@@ -64,8 +64,17 @@ async def get_latest_image(session: AsyncSession) -> SatelliteImage | None:
 async def list_recent_images(
     session: AsyncSession, *, minutes: int = 60, limit: int = 24
 ) -> list[SatelliteImage]:
-    """Observed frames inside the requested window, oldest first."""
-    cutoff = datetime.now(UTC) - timedelta(minutes=minutes)
+    """Observed frames ending at the provider's latest acquisition.
+
+    Satellite catalogues can publish with operational delay. Anchoring the
+    playback window to wall-clock time would erase an otherwise valid series
+    and leave a misleading disabled control. Freshness is still exposed by
+    each frame's ``captured_at`` and rendered by the UI.
+    """
+    latest = await get_latest_image(session)
+    if latest is None:
+        return []
+    cutoff = latest.captured_at - timedelta(minutes=minutes)
     result = await session.execute(
         select(SatelliteImage)
         .where(SatelliteImage.captured_at >= cutoff)

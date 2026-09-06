@@ -84,6 +84,9 @@ _IMAGE_MAX_DIMENSION = 800
 # Enough headroom for the UI's last-hour playback even when one acquisition
 # is delayed. This is intentionally short-lived display data, not an archive.
 _IMAGE_HISTORY_RETENTION = timedelta(hours=2)
+# Fetch enough catalogue entries to fill a one-hour animation. Only one
+# missing item is downloaded per cycle, keeping the worker's runtime bounded.
+_PLAYBACK_ITEM_LIMIT = 7
 
 
 class SatelliteUnavailableError(RuntimeError):
@@ -210,6 +213,21 @@ def _item_timestamp(item: dict[str, Any]) -> datetime:
     if not raw:
         raise SatelliteUnavailableError(f"STAC item {item.get('id')!r} has no datetime.")
     return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+
+
+def _select_unstored_item(
+    items: list[dict[str, Any]], stored_timestamps: set[datetime]
+) -> tuple[dict[str, Any], bool] | None:
+    """Pick one missing frame, newest first, and flag a new live frame.
+
+    Once the newest acquisition is stored, subsequent cycles backfill the
+    catalogue's preceding frames. Historical frames are display-only and
+    must never rewind the live convective-watch state.
+    """
+    for index, item in enumerate(items):
+        if _item_timestamp(item) not in stored_timestamps:
+            return item, index == 0
+    return None
 
 
 def _download(client: httpx.Client, href: str, dest_dir: Path) -> Path:
@@ -518,12 +536,23 @@ def run_satellite_detection_cycle(
     own_client = client is None
     client = client or httpx.Client(timeout=60.0)
     try:
-        items = _stac_search(client, settings, limit=1)
+        items = _stac_search(client, settings, limit=_PLAYBACK_ITEM_LIMIT)
         if not items:
             logger.warning("no satellite items found for the configured extent/collection")
             return SatelliteCycleSummary(enabled=True)
 
-        item = items[0]
+        item_timestamps = [_item_timestamp(item) for item in items]
+        stored_timestamps = set(
+            session.scalars(
+                select(SatelliteImage.captured_at).where(
+                    SatelliteImage.captured_at.in_(item_timestamps)
+                )
+            ).all()
+        )
+        selected = _select_unstored_item(items, stored_timestamps)
+        if selected is None:
+            return SatelliteCycleSummary(enabled=True)
+        item, is_latest_acquisition = selected
         timestamp = _item_timestamp(item)
         href = _asset_href(item, settings.satellite_band)
 
@@ -534,13 +563,6 @@ def run_satellite_detection_cycle(
         if own_client:
             client.close()
 
-    now = datetime.now(UTC)
-    touched, dissipated = _match_or_create(session, artifacts.systems, now)
-    session.flush()
-    alerts = _decide_alerts(session, touched, dissipated)
-    _prune_stale_watches(
-        session, older_than=timedelta(hours=settings.satellite_max_watch_age_hours)
-    )
     _persist_image(
         session,
         png=artifacts.image_png,
@@ -548,6 +570,17 @@ def run_satellite_detection_cycle(
         height=artifacts.image_height,
         settings=settings,
         now=timestamp,
+    )
+
+    if not is_latest_acquisition:
+        return SatelliteCycleSummary(enabled=True, frames_downloaded=1)
+
+    now = datetime.now(UTC)
+    touched, dissipated = _match_or_create(session, artifacts.systems, now)
+    session.flush()
+    alerts = _decide_alerts(session, touched, dissipated)
+    _prune_stale_watches(
+        session, older_than=timedelta(hours=settings.satellite_max_watch_age_hours)
     )
 
     return SatelliteCycleSummary(

@@ -577,7 +577,7 @@ export function Dashboard({ onLogout }: Props) {
                       ? 'trajetória linear das células; imagem é a última observação'
                       : satelliteFrames.length === 1
                         ? '1 quadro real · histórico em formação'
-                        : `${satelliteFrames.length} quadros reais na última hora`}
+                        : `${satelliteFrames.length} quadros reais · 1h até a última aquisição`}
                   </span>
                 </div>
                 {timelineSteps.length > 0 ? (

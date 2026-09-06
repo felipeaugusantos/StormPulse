@@ -25,6 +25,7 @@ from workers.satellite_pipeline import (
     _asset_href,
     _dedup_key,
     _item_timestamp,
+    _select_unstored_item,
     _stac_search,
     _velocity,
 )
@@ -87,6 +88,25 @@ def test_asset_href_raises_when_band_missing() -> None:
 def test_item_timestamp_parses_iso_with_z_suffix() -> None:
     ts = _item_timestamp(_ITEMS[1])
     assert ts == datetime(2026, 8, 19, 22, 30, tzinfo=UTC)
+
+
+def test_select_unstored_item_backfills_without_marking_it_live() -> None:
+    newest_timestamp = _item_timestamp(_ITEMS[1])
+    selected = _select_unstored_item(list(reversed(_ITEMS)), {newest_timestamp})
+
+    assert selected is not None
+    item, is_latest = selected
+    assert item["id"] == "GOES19_L2_ABI_202608192220"
+    assert is_latest is False
+
+
+def test_select_unstored_item_marks_newest_missing_frame_live() -> None:
+    selected = _select_unstored_item(list(reversed(_ITEMS)), set())
+
+    assert selected is not None
+    item, is_latest = selected
+    assert item["id"] == "GOES19_L2_ABI_202608192230"
+    assert is_latest is True
 
 
 def test_dedup_key_is_stable_and_scoped_to_event() -> None:
