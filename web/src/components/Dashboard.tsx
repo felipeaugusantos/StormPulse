@@ -323,7 +323,15 @@ export function Dashboard({ onLogout }: Props) {
       setTimelinePlaying(false)
       return
     }
-    if (timelineSteps.length < 2) return
+    if (timelineSteps.length === 0) return
+    if (timelineSteps.length === 1) {
+      // A fresh deployment may only have the first observed frame. Let the
+      // operator open it instead of presenting a mysteriously disabled play
+      // control; animation starts naturally once another real/projection
+      // step becomes available. No duplicate frame is invented here.
+      setTimelineIndex(0)
+      return
+    }
     if (timelineIndex == null || timelineIndex >= timelineSteps.length - 1) setTimelineIndex(0)
     setTimelinePlaying(true)
   }
@@ -539,8 +547,19 @@ export function Dashboard({ onLogout }: Props) {
                 type="button"
                 className="timeline-play"
                 onClick={toggleTimelinePlayback}
-                disabled={timelineSteps.length < 2}
-                aria-label={timelinePlaying ? 'Pausar animação' : 'Reproduzir última e próxima hora'}
+                disabled={timelineSteps.length === 0}
+                aria-label={
+                  timelinePlaying
+                    ? 'Pausar animação'
+                    : timelineSteps.length === 1
+                      ? 'Exibir único quadro de satélite disponível'
+                      : 'Reproduzir última e próxima hora'
+                }
+                title={
+                  timelineSteps.length === 1
+                    ? 'Histórico em formação — o próximo ciclo adicionará outro quadro'
+                    : undefined
+                }
               >
                 {timelinePlaying ? '⏸' : '▶'}
               </button>
@@ -556,7 +575,9 @@ export function Dashboard({ onLogout }: Props) {
                   <span>
                     {activeTimelineStep?.estimated
                       ? 'trajetória linear das células; imagem é a última observação'
-                      : `${satelliteFrames.length} quadro${satelliteFrames.length === 1 ? '' : 's'} real${satelliteFrames.length === 1 ? '' : 'is'} na última hora`}
+                      : satelliteFrames.length === 1
+                        ? '1 quadro real · histórico em formação'
+                        : `${satelliteFrames.length} quadros reais na última hora`}
                   </span>
                 </div>
                 {timelineSteps.length > 0 ? (
