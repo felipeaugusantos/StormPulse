@@ -858,6 +858,186 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alert-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Alert Rules */
+        get: operations["list_alert_rules_api_v1_alert_rules_get"];
+        put?: never;
+        /** Create Alert Rule */
+        post: operations["create_alert_rule_api_v1_alert_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Alert Rule */
+        get: operations["get_alert_rule_api_v1_alert_rules__rule_id__get"];
+        /** Update Alert Rule */
+        put: operations["update_alert_rule_api_v1_alert_rules__rule_id__put"];
+        post?: never;
+        /** Delete Alert Rule */
+        delete: operations["delete_alert_rule_api_v1_alert_rules__rule_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-rules/{rule_id}/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Simulate Alert Rule
+         * @description Runs the exact same condition evaluation the real cycle uses,
+         *     against the location's *current* metric snapshot — never writes an
+         *     AlertEvent/AlertDelivery/Alert (Fase 3's explicit acceptance
+         *     criterion: simulation never sends a real alert).
+         */
+        post: operations["simulate_alert_rule_api_v1_alert_rules__rule_id__simulate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-rules/{rule_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Alert Rule Events */
+        get: operations["list_alert_rule_events_api_v1_alert_rules__rule_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-rules/events/{event_id}/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge Alert Event */
+        post: operations["acknowledge_alert_event_api_v1_alert_rules_events__event_id__acknowledge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-rules/{rule_id}/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Alert Recipient */
+        post: operations["add_alert_recipient_api_v1_alert_rules__rule_id__recipients_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-rules/recipients/{recipient_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Alert Recipient */
+        delete: operations["delete_alert_recipient_api_v1_alert_rules_recipients__recipient_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-rules/{rule_id}/escalations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Alert Escalation */
+        post: operations["add_alert_escalation_api_v1_alert_rules__rule_id__escalations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Alert Channels */
+        get: operations["list_alert_channels_api_v1_alert_channels_get"];
+        put?: never;
+        /** Create Alert Channel */
+        post: operations["create_alert_channel_api_v1_alert_channels_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alert-channels/{channel_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Alert Channel */
+        delete: operations["delete_alert_channel_api_v1_alert_channels__channel_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/satellite": {
         parameters: {
             query?: never;
@@ -1321,6 +1501,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AcknowledgeIn */
+        AcknowledgeIn: {
+            /** Notes */
+            notes?: string | null;
+        };
         /** AdminAuditLogListOut */
         AdminAuditLogListOut: {
             /** Items */
@@ -1499,12 +1684,168 @@ export interface components {
              */
             confirm: boolean;
         };
+        /** AlertChannelIn */
+        AlertChannelIn: {
+            kind: components["schemas"]["NotificationChannel"];
+            /** Name */
+            name: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Webhook Url */
+            webhook_url?: string | null;
+            /** Webhook Secret */
+            webhook_secret?: string | null;
+            /** Phone Number */
+            phone_number?: string | null;
+        };
+        /** AlertChannelOut */
+        AlertChannelOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["NotificationChannel"];
+            /** Name */
+            name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Webhook Url */
+            webhook_url: string | null;
+            /** Phone Number */
+            phone_number: string | null;
+            /**
+             * Has Webhook Secret
+             * @default false
+             */
+            has_webhook_secret: boolean;
+        };
+        /** AlertConditionIn */
+        AlertConditionIn: {
+            /** Metric */
+            metric: string;
+            /** Operator */
+            operator: string;
+            /** Threshold */
+            threshold: number;
+            /**
+             * Group
+             * @default 0
+             */
+            group: number;
+        };
+        /** AlertConditionOut */
+        AlertConditionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Metric */
+            metric: string;
+            /** Operator */
+            operator: string;
+            /** Threshold */
+            threshold: number;
+            /** Group */
+            group: number;
+        };
+        /** AlertEscalationIn */
+        AlertEscalationIn: {
+            /**
+             * Step Order
+             * @default 0
+             */
+            step_order: number;
+            /** Delay Minutes */
+            delay_minutes: number;
+            /**
+             * Recipient Id
+             * Format: uuid
+             */
+            recipient_id: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        /** AlertEscalationOut */
+        AlertEscalationOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Step Order */
+            step_order: number;
+            /** Delay Minutes */
+            delay_minutes: number;
+            /**
+             * Recipient Id
+             * Format: uuid
+             */
+            recipient_id: string;
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** AlertEventOut */
+        AlertEventOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Rule Id
+             * Format: uuid
+             */
+            rule_id: string;
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Alert Id */
+            alert_id: string | null;
+            status: components["schemas"]["AlertEventStatus"];
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /**
+             * Last Updated At
+             * Format: date-time
+             */
+            last_updated_at: string;
+            /** Closed At */
+            closed_at: string | null;
+            /**
+             * Acknowledged
+             * @default false
+             */
+            acknowledged: boolean;
+        };
+        /**
+         * AlertEventStatus
+         * @description Lifecycle of one AlertEvent (Fase 3, ADR-0086) — mirrors the three
+         *     notice kinds the phase's own spec calls for: "aviso de início" (OPEN),
+         *     "atualização" (UPDATED, still matching but with materially different
+         *     values) and "encerramento ou 'tudo seguro'" (CLOSED, the rule's
+         *     conditions stopped matching).
+         * @enum {string}
+         */
+        AlertEventStatus: "open" | "updated" | "closed";
         /**
          * AlertEventType
          * @description Event-driven alert lifecycle (see architecture — alerts are event-based).
          * @enum {string}
          */
-        AlertEventType: "storm_detected" | "storm_approaching" | "storm_intensified" | "storm_entered_monitoring_area" | "storm_risk_changed" | "storm_passed" | "satellite_watch_detected" | "satellite_watch_dissipated" | "frost_warning" | "dry_spell_warning" | "official_warning" | "vegetation_index_drop";
+        AlertEventType: "storm_detected" | "storm_approaching" | "storm_intensified" | "storm_entered_monitoring_area" | "storm_risk_changed" | "storm_passed" | "satellite_watch_detected" | "satellite_watch_dissipated" | "frost_warning" | "dry_spell_warning" | "official_warning" | "vegetation_index_drop" | "custom_rule";
         /** AlertOut */
         AlertOut: {
             /**
@@ -1545,6 +1886,115 @@ export interface components {
             alert_type: components["schemas"]["AlertType"];
             /** Enabled */
             enabled: boolean;
+        };
+        /** AlertRecipientIn */
+        AlertRecipientIn: {
+            /**
+             * Channel Id
+             * Format: uuid
+             */
+            channel_id: string;
+            /** User Id */
+            user_id?: string | null;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+        };
+        /** AlertRecipientOut */
+        AlertRecipientOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Channel Id
+             * Format: uuid
+             */
+            channel_id: string;
+            /** User Id */
+            user_id: string | null;
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** AlertRuleCreate */
+        AlertRuleCreate: {
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Lead Time Minutes
+             * @default 0
+             */
+            lead_time_minutes: number;
+            /** Quiet Hours Start */
+            quiet_hours_start?: string | null;
+            /** Quiet Hours End */
+            quiet_hours_end?: string | null;
+            /**
+             * Cooldown Minutes
+             * @default 0
+             */
+            cooldown_minutes: number;
+            /** Conditions */
+            conditions: components["schemas"]["AlertConditionIn"][];
+        };
+        /** AlertRuleOut */
+        AlertRuleOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Name */
+            name: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Lead Time Minutes */
+            lead_time_minutes: number;
+            /** Quiet Hours Start */
+            quiet_hours_start: string | null;
+            /** Quiet Hours End */
+            quiet_hours_end: string | null;
+            /** Cooldown Minutes */
+            cooldown_minutes: number;
+            /** Last Fired At */
+            last_fired_at: string | null;
+            /** Conditions */
+            conditions: components["schemas"]["AlertConditionOut"][];
+        };
+        /** AlertRuleUpdate */
+        AlertRuleUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Lead Time Minutes */
+            lead_time_minutes?: number | null;
+            /** Quiet Hours Start */
+            quiet_hours_start?: string | null;
+            /** Quiet Hours End */
+            quiet_hours_end?: string | null;
+            /** Cooldown Minutes */
+            cooldown_minutes?: number | null;
+            /** Conditions */
+            conditions?: components["schemas"]["AlertConditionIn"][] | null;
         };
         /**
          * AlertType
@@ -2290,6 +2740,11 @@ export interface components {
             /** Distance Km */
             distance_km: number;
         };
+        /**
+         * NotificationChannel
+         * @enum {string}
+         */
+        NotificationChannel: "push" | "email" | "webhook" | "whatsapp" | "sms";
         /** OrganizationOut */
         OrganizationOut: {
             /**
@@ -2489,6 +2944,22 @@ export interface components {
             width: number;
             /** Height */
             height: number;
+        };
+        /**
+         * SimulateResult
+         * @description Fase 3 acceptance criterion: a simulation never writes an
+         *     AlertEvent/AlertDelivery/Alert — this is the entire response, nothing
+         *     persisted.
+         */
+        SimulateResult: {
+            /** Would Fire */
+            would_fire: boolean;
+            /** Snapshot */
+            snapshot: {
+                [key: string]: number | null;
+            };
+            /** Matched Groups */
+            matched_groups: number[];
         };
         /**
          * SoilMoistureOut
@@ -4543,6 +5014,432 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AlertOut"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_alert_rules_api_v1_alert_rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRuleOut"][];
+                };
+            };
+        };
+    };
+    create_alert_rule_api_v1_alert_rules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRuleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRuleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_alert_rule_api_v1_alert_rules__rule_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRuleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_alert_rule_api_v1_alert_rules__rule_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRuleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRuleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_alert_rule_api_v1_alert_rules__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    simulate_alert_rule_api_v1_alert_rules__rule_id__simulate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimulateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_alert_rule_events_api_v1_alert_rules__rule_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acknowledge_alert_event_api_v1_alert_rules_events__event_id__acknowledge_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcknowledgeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_alert_recipient_api_v1_alert_rules__rule_id__recipients_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertRecipientIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRecipientOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_alert_recipient_api_v1_alert_rules_recipients__recipient_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                recipient_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_alert_escalation_api_v1_alert_rules__rule_id__escalations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertEscalationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertEscalationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_alert_channels_api_v1_alert_channels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannelOut"][];
+                };
+            };
+        };
+    };
+    create_alert_channel_api_v1_alert_channels_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertChannelIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertChannelOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_alert_channel_api_v1_alert_channels__channel_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
