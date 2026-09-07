@@ -28,7 +28,7 @@ function emptyCondition(): AlertConditionInput {
   return { metric: 'wind_kmh', operator: '>', threshold: 40, group: 0 }
 }
 
-/** Criar e simular regras de alerta personalizadas (Fase 3, ADR-0083) —
+/** Criar e simular regras de alerta personalizadas (Fase 3, ADR-0086) —
  * escopo do formulário: condições em grupos (mesmo grupo = E, grupos
  * diferentes = OU), cooldown, horário silencioso. Simulação nunca envia
  * um alerta real — só mostra se dispararia agora e com quais valores. */

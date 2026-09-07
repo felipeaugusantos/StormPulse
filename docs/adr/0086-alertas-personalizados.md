@@ -1,4 +1,4 @@
-# ADR-0083 — Fase 3: Alertas Personalizados
+# ADR-0086 — Fase 3: Alertas Personalizados
 
 - **Status:** Aceito
 - **Data:** 2026-09-07

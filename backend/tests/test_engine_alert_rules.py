@@ -1,5 +1,5 @@
 """Tests for engine/alert_rules.py — condition evaluation (AND/OR), quiet
-hours and cooldown (Fase 3, ADR-0083). Quiet hours and encerramento
+hours and cooldown (Fase 3, ADR-0086). Quiet hours and encerramento
 (cooldown/closing) are explicit acceptance criteria for this phase."""
 
 from __future__ import annotations

@@ -1,5 +1,5 @@
 """Tests for app/alert_rules/providers.py — webhook HMAC signing and the
-WhatsApp/SMS mock (Fase 3, ADR-0083)."""
+WhatsApp/SMS mock (Fase 3, ADR-0086)."""
 
 from __future__ import annotations
 

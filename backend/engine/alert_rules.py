@@ -1,4 +1,4 @@
-"""Custom alert rule evaluation (Fase 3 — Alertas Personalizados, ADR-0083).
+"""Custom alert rule evaluation (Fase 3 — Alertas Personalizados, ADR-0086).
 
 Pure, side-effect-free functions — same "no I/O, testable against synthetic
 data" approach as ``engine/validation.py``. ``app.alert_rules.service`` (or

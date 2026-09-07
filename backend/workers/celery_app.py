@@ -114,7 +114,7 @@ celery_app.conf.update(
         },
         "alert-rules-every-5-minutes": {
             "task": "workers.tasks.run_alert_rules_task",
-            # Fase 3 (ADR-0083): same cadence as the main storm ingestion —
+            # Fase 3 (ADR-0086): same cadence as the main storm ingestion —
             # a custom rule (e.g. "vento > 40km/h") is exactly as time-
             # sensitive as the built-in storm alerts it sits alongside.
             "schedule": 300.0,  # seconds

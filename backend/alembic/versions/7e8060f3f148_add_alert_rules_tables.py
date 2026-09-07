@@ -1,4 +1,4 @@
-"""add alert_rules tables (Fase 3 — Alertas Personalizados, ADR-0083)
+"""add alert_rules tables (Fase 3 — Alertas Personalizados, ADR-0086)
 
 Revision ID: 7e8060f3f148
 Revises: 67c40c366af6

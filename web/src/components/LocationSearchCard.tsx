@@ -86,7 +86,7 @@ export function LocationSearchCard({
   // Comparação de modelos (Fase 2, ADR-0082) — qual talhão tem o modal
   // aberto, se algum.
   const [comparisonFor, setComparisonFor] = useState<LocationItem | null>(null)
-  // Alertas personalizados (Fase 3, ADR-0083) — qual talhão tem o painel
+  // Alertas personalizados (Fase 3, ADR-0086) — qual talhão tem o painel
   // de regras aberto, se algum.
   const [alertRulesFor, setAlertRulesFor] = useState<LocationItem | null>(null)
 

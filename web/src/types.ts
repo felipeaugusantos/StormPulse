@@ -495,7 +495,7 @@ export interface PushSubscriptionInput {
   keys: { p256dh: string; auth: string }
 }
 
-// Fase 3 (Alertas Personalizados, ADR-0083).
+// Fase 3 (Alertas Personalizados, ADR-0086).
 export type AlertMetric =
   | 'rain_mm'
   | 'rain_probability_percent'

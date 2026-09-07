@@ -1,5 +1,5 @@
 """Integration tests for workers/alert_rules_pipeline.py (Fase 3 —
-Alertas Personalizados, ADR-0083).
+Alertas Personalizados, ADR-0086).
 
 Needs a real Postgres — same pattern as ``test_agro_pipeline.py``: tenant/
 user/location/rule built directly in the sync session, rolled back at the

@@ -1,5 +1,5 @@
 """Integration tests for the alert-rules CRUD + simulate endpoints (Fase 3
-— Alertas Personalizados, ADR-0083).
+— Alertas Personalizados, ADR-0086).
 
 Needs real Postgres+PostGIS and Redis — auto-skipped otherwise.
 """

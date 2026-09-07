@@ -1,4 +1,4 @@
-"""Custom alert rule endpoints (Fase 3 — Alertas Personalizados, ADR-0083).
+"""Custom alert rule endpoints (Fase 3 — Alertas Personalizados, ADR-0086).
 
 Ownership is checked directly against ``user_id``/``tenant_id`` on each
 row — RLS (the same policy every other tenant-scoped table gets) is the

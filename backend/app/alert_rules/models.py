@@ -1,9 +1,9 @@
 """Custom alert rules — data model (Fase 3 — Alertas Personalizados,
-ADR-0083).
+ADR-0086).
 
 Eight tenant-scoped tables, additive alongside the existing `Alert`/
 `Notification`/`AlertPreference` (never touched by this module) — see
-ADR-0083 for why this is a parallel system, not a refactor of the storm
+ADR-0086 for why this is a parallel system, not a refactor of the storm
 engine's own alerting:
 
 - ``AlertRule`` — one user-defined rule for one location: name, on/off,

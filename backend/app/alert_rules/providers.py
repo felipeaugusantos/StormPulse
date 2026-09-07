@@ -1,4 +1,4 @@
-"""Delivery providers for custom alert channels (Fase 3, ADR-0083).
+"""Delivery providers for custom alert channels (Fase 3, ADR-0086).
 
 Email and push already have real, working implementations elsewhere
 (``workers/notification_pipeline.py``) — this module only adds what didn't

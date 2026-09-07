@@ -1,5 +1,5 @@
 """add webhook/whatsapp/sms to notification_channel, custom_rule to
-alert_event_type (Fase 3 — Alertas Personalizados, ADR-0083)
+alert_event_type (Fase 3 — Alertas Personalizados, ADR-0086)
 
 Revision ID: 67c40c366af6
 Revises: 08c0fdcd06e8

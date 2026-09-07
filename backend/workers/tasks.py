@@ -180,7 +180,7 @@ def run_forecast_observation_fill_task() -> dict[str, Any]:
 @celery_app.task(name="workers.tasks.run_alert_rules_task")
 def run_alert_rules_task() -> dict[str, Any]:
     """Run one custom-alert-rule evaluation cycle (Fase 3 — Alertas
-    Personalizados, ADR-0083): open/update/close AlertEvents for every
+    Personalizados, ADR-0086): open/update/close AlertEvents for every
     enabled rule, fanning out AlertDelivery rows."""
     with track_pipeline_cycle("alert_rules"), session_scope() as session:
         summary = run_alert_rules_cycle(session)
@@ -197,7 +197,7 @@ def run_alert_rules_task() -> dict[str, Any]:
 
 @celery_app.task(name="workers.tasks.run_alert_delivery_task")
 def run_alert_delivery_task() -> dict[str, Any]:
-    """Run one custom-alert-rule delivery cycle (Fase 3, ADR-0083): sends
+    """Run one custom-alert-rule delivery cycle (Fase 3, ADR-0086): sends
     whatever's PENDING/retry-due in AlertDelivery."""
     with track_pipeline_cycle("alert_delivery"), session_scope() as session:
         summary = run_alert_delivery_cycle(session)
@@ -213,7 +213,7 @@ def run_alert_delivery_task() -> dict[str, Any]:
 
 @celery_app.task(name="workers.tasks.run_alert_escalation_task")
 def run_alert_escalation_task() -> dict[str, Any]:
-    """Run one escalation cycle (Fase 3, ADR-0083): for every open,
+    """Run one escalation cycle (Fase 3, ADR-0086): for every open,
     unacknowledged event past a configured escalation step's delay, fans
     out an extra AlertDelivery to that step's recipient."""
     with track_pipeline_cycle("alert_escalation"), session_scope() as session:

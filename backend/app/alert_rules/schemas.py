@@ -1,4 +1,4 @@
-"""Custom alert rule schemas (Fase 3 — Alertas Personalizados, ADR-0083)."""
+"""Custom alert rule schemas (Fase 3 — Alertas Personalizados, ADR-0086)."""
 
 from __future__ import annotations
 

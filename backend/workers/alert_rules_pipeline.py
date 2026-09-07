@@ -1,5 +1,5 @@
 """Custom alert rule evaluation cycle (Fase 3 — Alertas Personalizados,
-ADR-0083).
+ADR-0086).
 
 Mirrors ``workers/agro_pipeline.py``'s structure (own decision logic,
 per-rule error isolation). Two independent cycles, same split as

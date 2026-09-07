@@ -138,7 +138,7 @@ início/atualização/encerramento, horário silencioso, cooldown,
 deduplicação, confirmação de recebimento, escalonamento, e-mail, push,
 webhook com assinatura HMAC, abstrações para WhatsApp e SMS, tela de
 criar e simular regras. Decisões e achados detalhados em
-[ADR-0083](adr/0083-alertas-personalizados.md). Mobile UI fica fora do
+[ADR-0086](adr/0086-alertas-personalizados.md). Mobile UI fica fora do
 escopo desta entrega inicial (API pronta para consumo quando isso
 acontecer).
 

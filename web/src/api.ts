@@ -424,7 +424,7 @@ export const api = {
   // (farm or talhão), unlike zarcWindow()/ndvi() above.
   forecastComparison: (locationId: string) =>
     request<ForecastComparison>(`/locations/${locationId}/forecast-comparison`),
-  // Fase 3 (Alertas Personalizados, ADR-0083).
+  // Fase 3 (Alertas Personalizados, ADR-0086).
   alertRules: (locationId?: string) =>
     request<AlertRule[]>('/alert-rules').then((rules) =>
       locationId ? rules.filter((r) => r.location_id === locationId) : rules,
