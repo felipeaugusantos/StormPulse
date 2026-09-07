@@ -5,6 +5,7 @@ import { reverseGeocodeCity, searchCity } from '../geocode'
 import type { CitySearchResult, LocationItem } from '../types'
 import { AlertRulesModal } from './AlertRulesModal'
 import { ForecastComparisonModal } from './ForecastComparisonModal'
+import { RiskDigestModal } from './RiskDigestModal'
 import { WeeklyReportModal } from './WeeklyReportModal'
 
 const SEARCH_DEBOUNCE_MS = 400
@@ -89,6 +90,9 @@ export function LocationSearchCard({
   // Alertas personalizados (Fase 3, ADR-0086) — qual talhão tem o painel
   // de regras aberto, se algum.
   const [alertRulesFor, setAlertRulesFor] = useState<LocationItem | null>(null)
+  // Risco consolidado (Fase 3-A, ADR-0087) — qual talhão tem o painel
+  // aberto, se algum.
+  const [riskDigestFor, setRiskDigestFor] = useState<LocationItem | null>(null)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -415,6 +419,16 @@ export function LocationSearchCard({
                     </button>
                     <button
                       className="btn ghost small"
+                      title="Risco consolidado"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setRiskDigestFor(plot)
+                      }}
+                    >
+                      🧭
+                    </button>
+                    <button
+                      className="btn ghost small"
                       title="Editar talhão"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -587,6 +601,13 @@ export function LocationSearchCard({
           locationId={alertRulesFor.id}
           locationName={alertRulesFor.name}
           onClose={() => setAlertRulesFor(null)}
+        />
+      )}
+      {riskDigestFor && (
+        <RiskDigestModal
+          locationId={riskDigestFor.id}
+          locationName={riskDigestFor.name}
+          onClose={() => setRiskDigestFor(null)}
         />
       )}
     </section>

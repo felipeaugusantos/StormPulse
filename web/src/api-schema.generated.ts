@@ -340,6 +340,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{location_id}/risk-digest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Visão consolidada dos sinais de risco já calculados para o local (Fase 3-A)
+         * @description Aggregates every signal already computed/persisted for this
+         *     location — storm, NDVI, deforestation, frost/dry-spell's last alert,
+         *     soil moisture — into one read. Never 404s: an empty digest (every
+         *     field `None`) is itself a meaningful, honest answer for a brand-new
+         *     location with no pipeline cycle run yet, unlike `/risk` above.
+         */
+        get: operations["get_location_risk_digest_api_v1_locations__location_id__risk_digest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/{location_id}/forecast": {
         parameters: {
             query?: never;
@@ -2418,6 +2442,27 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * LastAlertOut
+         * @description The most recent `Alert` of one event type for a location — used by
+         *     `RiskDigestOut` for frost/dry-spell, which (unlike storm/NDVI/
+         *     deforestation) have no persisted "current state" to read: the pipeline
+         *     only writes a row when it decides to warn (Fase 3-A). Deliberately
+         *     historical, not a risk level: `None` on the digest means "no alert of
+         *     this type has ever fired here", never "safe right now".
+         */
+        LastAlertOut: {
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            level: components["schemas"]["RiskLevel"];
+            /** Title */
+            title: string;
+            /** Message */
+            message: string;
+        };
         /** LightningStrikeOut */
         LightningStrikeOut: {
             /**
@@ -2908,6 +2953,35 @@ export interface components {
             token: string;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * RiskDigestOut
+         * @description Aggregates every risk signal already computed/persisted for one
+         *     location into a single read (Fase 3-A, ADR-0087) — nothing here is
+         *     recalculated. Each field is independently `None` when that signal
+         *     doesn't apply to this location (e.g. NDVI for a farm-level point
+         *     without a drawn talhão) or simply hasn't been computed yet — never a
+         *     zero/default standing in for "no data". ZARC is deliberately excluded
+         *     (it's resolved via a live geocoding call, not a per-location
+         *     persisted "current risk" read, unlike everything else here).
+         */
+        RiskDigestOut: {
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            storm?: components["schemas"]["StormRiskOut"] | null;
+            ndvi?: components["schemas"]["NdviOut"] | null;
+            deforestation?: components["schemas"]["DeforestationCheckOut"] | null;
+            frost_last_alert?: components["schemas"]["LastAlertOut"] | null;
+            dry_spell_last_alert?: components["schemas"]["LastAlertOut"] | null;
+            soil_moisture?: components["schemas"]["SoilMoistureOut"] | null;
         };
         /**
          * RiskLevel
@@ -4138,6 +4212,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StormRiskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_location_risk_digest_api_v1_locations__location_id__risk_digest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskDigestOut"];
                 };
             };
             /** @description Validation Error */

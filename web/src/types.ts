@@ -23,6 +23,34 @@ export interface LocationRisk {
   ai_summary: string | null
 }
 
+// Last Alert of one event type (frost/dry-spell) — deliberately
+// historical, not a computed risk level: `null` on RiskDigest means "no
+// alert of this type has ever fired here", never "safe now" (Fase 3-A,
+// ADR-0087).
+export interface LastAlert {
+  occurred_at: string
+  level: RiskLevel
+  title: string
+  message: string
+}
+
+// Aggregates every risk signal already computed/persisted for one
+// location into a single read (GET /locations/:id/risk-digest, Fase 3-A,
+// ADR-0087) — nothing here is recalculated. Each field is independently
+// `null` when that signal doesn't apply (e.g. NDVI for a farm-level
+// point) or hasn't been computed yet. ZARC is deliberately excluded (live
+// geocoding lookup, not a persisted per-location signal).
+export interface RiskDigest {
+  location_id: string
+  generated_at: string
+  storm: LocationRisk | null
+  ndvi: NdviReading | null
+  deforestation: DeforestationCheck | null
+  frost_last_alert: LastAlert | null
+  dry_spell_last_alert: LastAlert | null
+  soil_moisture: SoilMoisture | null
+}
+
 export interface Me {
   id: string
   tenant_id: string

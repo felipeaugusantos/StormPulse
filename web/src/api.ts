@@ -24,6 +24,7 @@ import type {
   PushSubscriptionInput,
   RainfallHistory,
   ReadyStatus,
+  RiskDigest,
   SimulateResult,
   SatelliteImageMeta,
   SprayWindow,
@@ -337,6 +338,10 @@ export const api = {
   // 404 quando nenhuma avaliação de risco foi calculada ainda para o
   // local — caller trata isso como "sem risco por enquanto", não erro.
   risk: (locationId: string) => request<LocationRisk>(`/locations/${locationId}/risk`),
+  // Nunca 404 — resposta honesta com campos null quando nada foi
+  // calculado ainda (Fase 3-A, ADR-0087).
+  riskDigest: (locationId: string) =>
+    request<RiskDigest>(`/locations/${locationId}/risk-digest`),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
   // Always Open-Meteo, bypassing INMET/CPTEC — the only source with a real
   // numeric rain forecast (backend: get_numeric_rain_forecast_provider,
