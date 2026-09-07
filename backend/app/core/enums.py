@@ -114,11 +114,36 @@ class AlertEventType(StrEnum):
     # from the storm engine's own risk assessment.
     OFFICIAL_WARNING = "official_warning"
     VEGETATION_INDEX_DROP = "vegetation_index_drop"
+    # Fase 3 (Alertas Personalizados, ADR-0086) — fired by a user-defined
+    # AlertRule, not by any of the deterministic engines above. The bridge
+    # Alert row this creates keeps custom-rule alerts visible in the same
+    # /alerts feed as every other event type.
+    CUSTOM_RULE = "custom_rule"
+
+
+class AlertEventStatus(StrEnum):
+    """Lifecycle of one AlertEvent (Fase 3, ADR-0086) — mirrors the three
+    notice kinds the phase's own spec calls for: "aviso de início" (OPEN),
+    "atualização" (UPDATED, still matching but with materially different
+    values) and "encerramento ou 'tudo seguro'" (CLOSED, the rule's
+    conditions stopped matching)."""
+
+    OPEN = "open"
+    UPDATED = "updated"
+    CLOSED = "closed"
 
 
 class NotificationChannel(StrEnum):
     PUSH = "push"  # browser Web Push / VAPID (FASE 22)
     EMAIL = "email"
+    # Fase 3 (Alertas Personalizados, ADR-0086).
+    WEBHOOK = "webhook"
+    # Abstractions only — no real provider wired up yet (no WhatsApp
+    # Business API / SMS gateway contract exists). See
+    # app/alert_rules/providers.py for the explicit mock + the config a
+    # real provider would need.
+    WHATSAPP = "whatsapp"
+    SMS = "sms"
 
 
 class NotificationStatus(StrEnum):

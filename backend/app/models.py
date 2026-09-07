@@ -6,6 +6,16 @@ Alembic (autogenerate / bootstrap) and anywhere the full schema is needed.
 
 from __future__ import annotations
 
+from app.alert_rules.models import (
+    AlertAcknowledgement,
+    AlertChannel,
+    AlertCondition,
+    AlertDelivery,
+    AlertEscalation,
+    AlertEvent,
+    AlertRecipient,
+    AlertRule,
+)
 from app.alerts.models import Alert
 from app.alerts.verification_models import AlertVerification
 from app.apikeys.models import ApiKey
@@ -26,7 +36,15 @@ from app.zarc.models import ZarcRiskWindow
 
 __all__ = [
     "Alert",
+    "AlertAcknowledgement",
+    "AlertChannel",
+    "AlertCondition",
+    "AlertDelivery",
+    "AlertEscalation",
+    "AlertEvent",
     "AlertPreference",
+    "AlertRecipient",
+    "AlertRule",
     "AlertVerification",
     "ApiKey",
     "ConvectiveWatch",

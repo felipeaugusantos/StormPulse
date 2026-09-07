@@ -112,5 +112,22 @@ celery_app.conf.update(
             # needs to have actually finished before its observation exists.
             "schedule": 86_400.0,  # seconds (24h)
         },
+        "alert-rules-every-5-minutes": {
+            "task": "workers.tasks.run_alert_rules_task",
+            # Fase 3 (ADR-0083): same cadence as the main storm ingestion —
+            # a custom rule (e.g. "vento > 40km/h") is exactly as time-
+            # sensitive as the built-in storm alerts it sits alongside.
+            "schedule": 300.0,  # seconds
+        },
+        "alert-delivery-every-minute": {
+            "task": "workers.tasks.run_alert_delivery_task",
+            # Same cadence as run_notification_delivery_task — alerts are
+            # time-sensitive, no-op cost is a single indexed SELECT.
+            "schedule": 60.0,  # seconds
+        },
+        "alert-escalation-every-5-minutes": {
+            "task": "workers.tasks.run_alert_escalation_task",
+            "schedule": 300.0,  # seconds
+        },
     },
 )

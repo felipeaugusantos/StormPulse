@@ -16,6 +16,11 @@ from app.core.metrics import (
 from app.storms.models import StormRisk
 from workers.agro_pipeline import run_agro_advisory_cycle
 from workers.ai_summary import generate_summary
+from workers.alert_rules_pipeline import (
+    run_alert_delivery_cycle,
+    run_alert_rules_cycle,
+    run_escalation_cycle,
+)
 from workers.celery_app import celery_app
 from workers.db import session_scope
 from workers.deforestation_pipeline import run_deforestation_check_cycle
@@ -169,6 +174,52 @@ def run_forecast_observation_fill_task() -> dict[str, Any]:
         "observations_filled": summary.observations_filled,
     }
     logger.info("forecast observation fill cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_alert_rules_task")
+def run_alert_rules_task() -> dict[str, Any]:
+    """Run one custom-alert-rule evaluation cycle (Fase 3 — Alertas
+    Personalizados, ADR-0083): open/update/close AlertEvents for every
+    enabled rule, fanning out AlertDelivery rows."""
+    with track_pipeline_cycle("alert_rules"), session_scope() as session:
+        summary = run_alert_rules_cycle(session)
+    result = {
+        "rules_evaluated": summary.rules_evaluated,
+        "events_opened": summary.events_opened,
+        "events_updated": summary.events_updated,
+        "events_closed": summary.events_closed,
+        "deliveries_created": summary.deliveries_created,
+    }
+    logger.info("alert rules cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_alert_delivery_task")
+def run_alert_delivery_task() -> dict[str, Any]:
+    """Run one custom-alert-rule delivery cycle (Fase 3, ADR-0083): sends
+    whatever's PENDING/retry-due in AlertDelivery."""
+    with track_pipeline_cycle("alert_delivery"), session_scope() as session:
+        summary = run_alert_delivery_cycle(session)
+    result = {
+        "attempted": summary.attempted,
+        "sent": summary.sent,
+        "failed": summary.failed,
+        "retrying": summary.retrying,
+    }
+    logger.info("alert delivery cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_alert_escalation_task")
+def run_alert_escalation_task() -> dict[str, Any]:
+    """Run one escalation cycle (Fase 3, ADR-0083): for every open,
+    unacknowledged event past a configured escalation step's delay, fans
+    out an extra AlertDelivery to that step's recipient."""
+    with track_pipeline_cycle("alert_escalation"), session_scope() as session:
+        escalated = run_escalation_cycle(session)
+    result = {"escalated": escalated}
+    logger.info("alert escalation cycle complete", extra=result)
     return result
 
 

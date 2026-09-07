@@ -50,6 +50,14 @@ _TENANT_SCOPED_TABLES = (
     "organization_invitations",
     "location_access_grants",
     "access_audit_logs",
+    "alert_rules",
+    "alert_conditions",
+    "alert_channels",
+    "alert_recipients",
+    "alert_events",
+    "alert_deliveries",
+    "alert_acknowledgements",
+    "alert_escalations",
 )
 
 

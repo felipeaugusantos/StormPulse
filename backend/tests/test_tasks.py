@@ -20,6 +20,7 @@ from typing import Any
 
 import workers.tasks as tasks_module
 from workers.agro_pipeline import AgroCycleSummary
+from workers.alert_rules_pipeline import AlertDeliveryCycleSummary, AlertRulesCycleSummary
 from workers.forecast_comparison_pipeline import ForecastComparisonCycleSummary
 from workers.lightning_pipeline import LightningCycleSummary
 from workers.notification_pipeline import NotificationDeliverySummary
@@ -302,3 +303,50 @@ def test_generate_risk_ai_summary_task_handles_unconfigured_or_failed(monkeypatc
     assert result["generated"] is False
     assert result["reason"] == "unconfigured_or_failed"
     assert risk.ai_summary is None
+
+
+def test_run_alert_rules_task_returns_summary_dict(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "run_alert_rules_cycle",
+        lambda session: AlertRulesCycleSummary(
+            rules_evaluated=3,
+            events_opened=1,
+            events_updated=0,
+            events_closed=0,
+            deliveries_created=2,
+        ),
+    )
+
+    result = tasks_module.run_alert_rules_task()
+
+    assert result == {
+        "rules_evaluated": 3,
+        "events_opened": 1,
+        "events_updated": 0,
+        "events_closed": 0,
+        "deliveries_created": 2,
+    }
+
+
+def test_run_alert_delivery_task_returns_summary_dict(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(
+        tasks_module,
+        "run_alert_delivery_cycle",
+        lambda session: AlertDeliveryCycleSummary(attempted=2, sent=1, failed=0, retrying=1),
+    )
+
+    result = tasks_module.run_alert_delivery_task()
+
+    assert result == {"attempted": 2, "sent": 1, "failed": 0, "retrying": 1}
+
+
+def test_run_alert_escalation_task_returns_summary_dict(monkeypatch: Any) -> None:
+    monkeypatch.setattr(tasks_module, "session_scope", _fake_session_scope)
+    monkeypatch.setattr(tasks_module, "run_escalation_cycle", lambda session: 4)
+
+    result = tasks_module.run_alert_escalation_task()
+
+    assert result == {"escalated": 4}
