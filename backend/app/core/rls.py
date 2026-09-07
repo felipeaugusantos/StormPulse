@@ -58,6 +58,7 @@ _TENANT_SCOPED_TABLES = (
     "alert_deliveries",
     "alert_acknowledgements",
     "alert_escalations",
+    "recommended_actions",
 )
 
 

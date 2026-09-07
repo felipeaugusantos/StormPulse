@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -44,6 +44,8 @@ from app.ndvi.schemas import (
     VegetationSeriesOut,
 )
 from app.organizations.permissions import can_write
+from app.recommendations.models import RecommendedAction
+from app.recommendations.schemas import RecommendedActionOut
 from app.storms import service as storm_service
 from app.storms.schemas import StormRiskOut
 from app.users.models import User
@@ -256,6 +258,34 @@ async def get_location_risk_digest(
     location with no pipeline cycle run yet, unlike `/risk` above."""
     location = await _get_owned_or_404(session, user, location_id)
     return await service.build_risk_digest(session, location, settings)
+
+
+@router.get(
+    "/{location_id}/recommended-actions",
+    response_model=list[RecommendedActionOut],
+    summary="Recomendações de ação determinísticas geradas pelo pipeline (Fase 5)",
+)
+async def get_location_recommended_actions(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[RecommendedAction]:
+    """Reads the recommendations `workers/recommendation_pipeline.py` has
+    already generated for this location in the last 3 days (matches the
+    pipeline's own once-per-rule-per-day dedup window) — never computes
+    anything here, and an empty list is itself an honest answer, not an
+    error."""
+    location = await _get_owned_or_404(session, user, location_id)
+    since = datetime.now(UTC) - timedelta(days=3)
+    stmt = (
+        select(RecommendedAction)
+        .where(
+            RecommendedAction.location_id == location.id,
+            RecommendedAction.created_at >= since,
+        )
+        .order_by(RecommendedAction.created_at.desc())
+    )
+    return list((await session.execute(stmt)).scalars().all())
 
 
 @router.get(

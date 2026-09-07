@@ -26,6 +26,7 @@ from app.locations.models import AlertPreference, Location
 from app.ndvi.models import NdviImage, NdviReading
 from app.notifications.models import Notification, PushSubscription
 from app.organizations.models import AccessAuditLog, LocationAccessGrant, OrganizationInvitation
+from app.recommendations.models import RecommendedAction
 from app.reports.models import UserReport
 from app.satellite.models import ConvectiveWatch, SatelliteImage
 from app.storms.models import StormCell, StormObservation, StormRisk, StormTrack
@@ -60,6 +61,7 @@ __all__ = [
     "OrganizationInvitation",
     "PushSubscription",
     "RadarFrame",
+    "RecommendedAction",
     "SatelliteImage",
     "StormCell",
     "StormObservation",

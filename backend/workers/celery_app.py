@@ -129,5 +129,13 @@ celery_app.conf.update(
             "task": "workers.tasks.run_alert_escalation_task",
             "schedule": 300.0,  # seconds
         },
+        "recommendations-every-15-minutes": {
+            "task": "workers.tasks.run_recommendation_task",
+            # Fase 5 (ADR-0089): dedup is per (location, rule, day), so a
+            # tighter cadence would only add no-op cycles — 15 min is
+            # frequent enough for a forecast-driven signal that itself
+            # doesn't change minute-to-minute.
+            "schedule": 900.0,  # seconds
+        },
     },
 )

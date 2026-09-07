@@ -31,6 +31,7 @@ from workers.ndvi_pipeline import run_ndvi_pipeline_cycle
 from workers.notification_pipeline import run_notification_delivery_cycle
 from workers.official_warnings_pipeline import run_official_warnings_cycle
 from workers.pipeline_service import run_ingestion_cycle
+from workers.recommendation_pipeline import run_recommendation_cycle
 from workers.satellite_pipeline import run_satellite_detection_cycle
 from workers.zarc_pipeline import run_zarc_ingestion_cycle
 
@@ -220,6 +221,22 @@ def run_alert_escalation_task() -> dict[str, Any]:
         escalated = run_escalation_cycle(session)
     result = {"escalated": escalated}
     logger.info("alert escalation cycle complete", extra=result)
+    return result
+
+
+@celery_app.task(name="workers.tasks.run_recommendation_task")
+def run_recommendation_task() -> dict[str, Any]:
+    """Run one recommendation-generation cycle (Fase 5, ADR-0089): the
+    fixed deterministic catalog in engine/recommendations.py is evaluated
+    against every active location, deduplicated per (location, rule, day)."""
+    with track_pipeline_cycle("recommendations"), session_scope() as session:
+        summary = run_recommendation_cycle(session)
+    result = {
+        "locations_evaluated": summary.locations_evaluated,
+        "recommendations_created": summary.recommendations_created,
+        "recommendations_skipped_duplicate": summary.recommendations_skipped_duplicate,
+    }
+    logger.info("recommendation cycle complete", extra=result)
     return result
 
 
