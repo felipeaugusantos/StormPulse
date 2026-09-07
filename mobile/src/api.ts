@@ -15,6 +15,7 @@ import type {
   OrganizationMember,
   OrganizationRole,
   RainfallHistory,
+  RiskDigest,
   SatelliteImageMeta,
   SprayWindow,
   StormCell,
@@ -195,6 +196,10 @@ export const api = {
     request<void>(`/organizations/current/members/${memberId}`, { method: 'DELETE' }),
   alerts: () => request<AlertItem[]>('/alerts'),
   risk: (locationId: string) => request<StormRisk>(`/locations/${locationId}/risk`),
+  // Nunca 404 — resposta honesta com campos null quando nada foi
+  // calculado ainda (Fase 3-A, ADR-0087).
+  riskDigest: (locationId: string) =>
+    request<RiskDigest>(`/locations/${locationId}/risk-digest`),
   storms: () => request<StormCell[]>('/storms?limit=200'),
   lightning: () => request<LightningStrike[]>('/lightning'),
   satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),

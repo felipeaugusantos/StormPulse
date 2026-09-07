@@ -19,6 +19,7 @@ import type {
   ForecastComparison,
   ForecastPoint,
   LocationItem,
+  RiskDigest,
   SprayWindow,
   VegetationIndex,
   VegetationSeries,
@@ -56,6 +57,7 @@ interface AgroEntry {
   vpdKpa: number | null
   vpdLevel: VpdLevel
   forecastComparison: ForecastComparison | null
+  riskDigest: RiskDigest | null
   vegetation: VegetationSeries[]
   error: string | null
 }
@@ -124,7 +126,7 @@ export function AgroScreen({ onLogout }: Props) {
 
 async function loadEntry(location: LocationItem): Promise<AgroEntry> {
   try {
-    const [forecast, sprayWindow, rainfall, rainForecast, forecastComparison, vegetation] =
+    const [forecast, sprayWindow, rainfall, rainForecast, forecastComparison, riskDigest, vegetation] =
       await Promise.all([
       api.forecast(location.id).catch(() => null),
       api.sprayWindow(location.id).catch(() => null),
@@ -134,6 +136,8 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       api.rainForecast(location.id).catch(() => null),
       // Fase 2 (ADR-0082) — accumulated accuracy record, not live data.
       api.forecastComparison(location.id).catch(() => null),
+      // Fase 3-A (ADR-0087) — already-computed signals, never recalculated.
+      api.riskDigest(location.id).catch(() => null),
       location.parent_location_id != null && location.boundary_geojson != null
         ? Promise.all(
             VEGETATION_INDICES.map((indexName) =>
@@ -186,6 +190,7 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       vpdKpa,
       vpdLevel: vpdKpa != null ? classifyVpd(vpdKpa) : 'unknown',
       forecastComparison,
+      riskDigest,
       vegetation,
       error:
         forecast == null && sprayWindow == null && rainfall == null
@@ -210,6 +215,7 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       vpdKpa: null,
       vpdLevel: 'unknown',
       forecastComparison: null,
+      riskDigest: null,
       vegetation: [],
       error: 'Dados agro indisponíveis no momento',
     }
@@ -308,6 +314,10 @@ function AgroCard({ entry }: { entry: AgroEntry }) {
           )}
 
           <Row text={forecastComparisonSummary(entry.forecastComparison)} />
+          <Row
+            warn={riskDigestHasSevereSignal(entry.riskDigest)}
+            text={riskDigestSummary(entry.riskDigest)}
+          />
 
           {entry.location.parent_location_id != null && (
             <View style={styles.vegetationBlock}>
@@ -367,6 +377,43 @@ function forecastComparisonSummary(comparison: ForecastComparison | null): strin
   }
   const best = withMae.reduce((a, b) => (b.temperature_mae_c! < a.temperature_mae_c! ? b : a))
   return `📊 Modelo mais preciso aqui: ${best.model} (erro médio de temperatura ${best.temperature_mae_c!.toFixed(1)}°C)`
+}
+
+const RISK_SEVERITY_LABEL: Record<string, string> = {
+  green: 'baixo',
+  yellow: 'moderado',
+  orange: 'alto',
+  red: 'severo',
+}
+
+// Fase 3-A (ADR-0087) — compact single-line summary for the mobile card,
+// same "intentionally more compact than web" choice already made for
+// forecastComparisonSummary above. web/src/components/RiskDigestModal.tsx
+// has the full per-signal breakdown. Frost/dry-spell are deliberately
+// worded as "último alerta" — a historical fact, never a current risk
+// level (there is no "safe now" baseline for those two signals).
+function riskDigestSummary(digest: RiskDigest | null): string {
+  if (!digest) return '🧭 Risco consolidado: indisponível no momento.'
+  const parts: string[] = []
+  if (digest.storm) {
+    parts.push(`tempestade ${RISK_SEVERITY_LABEL[digest.storm.severity] ?? digest.storm.severity}`)
+  }
+  if (digest.frost_last_alert) parts.push('último alerta de geada registrado')
+  if (digest.dry_spell_last_alert) parts.push('último alerta de seca registrado')
+  if (digest.deforestation && digest.deforestation.alerts.length > 0) {
+    parts.push(`${digest.deforestation.alerts.length} alerta(s) de desmatamento`)
+  }
+  if (parts.length === 0) return '🧭 Risco consolidado: nenhum sinal calculado ainda.'
+  return `🧭 Risco consolidado: ${parts.join(' · ')}.`
+}
+
+function riskDigestHasSevereSignal(digest: RiskDigest | null): boolean {
+  if (!digest) return false
+  return (
+    digest.storm?.severity === 'orange' ||
+    digest.storm?.severity === 'red' ||
+    (digest.deforestation?.alerts.length ?? 0) > 0
+  )
 }
 
 function Row({ text, warn }: { text: string; warn?: boolean }) {

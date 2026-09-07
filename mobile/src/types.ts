@@ -57,6 +57,67 @@ export interface StormRisk {
   ai_summary: string | null
 }
 
+// NDVI per talhão (FASE 29, ADR-0053) — only ever meaningful for a plot
+// with a drawn boundary.
+export interface NdviReading {
+  observed_at: string
+  ndvi_mean: number | null
+  valid_pixel_percent: number
+  is_mock: boolean
+}
+
+// One INPE DETER/PRODES alert intersecting a talhão's drawn boundary.
+export interface DeforestationAlert {
+  source: string // "DETER-AMZ" | "PRODES-CERRADO"
+  classname: string
+  detected_at: string | null
+  area_ha: number | null
+  municipio: string | null
+  uf: string | null
+}
+
+export interface DeforestationCheck {
+  checked_sources: string[]
+  last_checked_at: string | null
+  alerts: DeforestationAlert[]
+}
+
+// Regional soil-wetness context from NASA POWER — a model-based estimate
+// (~50km native resolution), never a per-talhão measurement like NDVI.
+export interface SoilMoisture {
+  observed_at: string
+  surface_wetness_percent: number
+  root_zone_wetness_percent: number
+  profile_wetness_percent: number
+  is_mock: boolean
+}
+
+// Last Alert of one event type (frost/dry-spell) — deliberately
+// historical, not a computed risk level: `null` on RiskDigest means "no
+// alert of this type has ever fired here", never "safe now" (Fase 3-A,
+// ADR-0087).
+export interface LastAlert {
+  occurred_at: string
+  level: RiskLevel
+  title: string
+  message: string
+}
+
+// Aggregates every risk signal already computed/persisted for one
+// location into a single read (GET /locations/:id/risk-digest, Fase 3-A,
+// ADR-0087) — nothing here is recalculated. ZARC is deliberately excluded
+// (live geocoding lookup, not a persisted per-location signal).
+export interface RiskDigest {
+  location_id: string
+  generated_at: string
+  storm: StormRisk | null
+  ndvi: NdviReading | null
+  deforestation: DeforestationCheck | null
+  frost_last_alert: LastAlert | null
+  dry_spell_last_alert: LastAlert | null
+  soil_moisture: SoilMoisture | null
+}
+
 export interface StormCell {
   id: string
   detected_at: string

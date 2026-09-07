@@ -274,6 +274,27 @@ describe('paridade mobile (item 5)', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/locations/loc-1/forecast-comparison')
   })
 
+  test('riskDigest() hits the location-scoped endpoint (Fase 3-A, ADR-0087)', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      jsonResponse(200, {
+        location_id: 'loc-1',
+        generated_at: '2026-09-07T12:00:00Z',
+        storm: null,
+        ndvi: null,
+        deforestation: null,
+        frost_last_alert: null,
+        dry_spell_last_alert: null,
+        soil_moisture: null,
+      }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await api.riskDigest('loc-1')
+
+    expect(result.storm).toBeNull()
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/locations/loc-1/risk-digest')
+  })
+
   test('vegetationSeries() requests the selected spectral index and history', async () => {
     const fetchMock = jest.fn().mockResolvedValueOnce(
       jsonResponse(200, { location_id: 'plot-1', index_name: 'evi', current: null, series: [] }),

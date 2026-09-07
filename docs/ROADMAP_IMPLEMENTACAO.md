@@ -142,23 +142,23 @@ criar e simular regras. Decisões e achados detalhados em
 escopo desta entrega inicial (API pronta para consumo quando isso
 acontecer).
 
-## Fase 3-A — Visão consolidada de risco por talhão
+## Fase 3-A — Visão consolidada de risco por talhão ✅ concluída (2026-09-07)
 
-Hoje cada sinal (tempestade, geada, seca, ZARC, NDVI, desmatamento,
-umidade de solo) tem seu próprio painel/endpoint, sem lugar único que
-responda "qual risco ameaça ESTE talhão agora". Esta fase:
-
-- Novo endpoint `GET /locations/{id}/risk-digest` (ou nome equivalente)
-  que agrega os sinais já calculados (nenhum recálculo — só leitura dos
-  resultados já materializados de cada pipeline) num único payload
-  tipado, com proveniência de cada sinal preservada (`is_mock`/
-  `experimental`/fonte/`observed_at` de cada um, nunca colapsados numa
-  média sem sentido).
-- Web e mobile ganham uma tela/card "Risco consolidado" por talhão,
-  reaproveitando os componentes de exibição já existentes por sinal
-  (não recriar).
-- Sem migração de schema necessária nesta fase — é uma camada de leitura
-  sobre dados já persistidos.
+Cada sinal (tempestade, geada, seca, ZARC, NDVI, desmatamento, umidade de
+solo) tinha seu próprio painel/endpoint, sem lugar único que respondesse
+"qual risco ameaça ESTE talhão agora". Endpoint `GET
+/locations/{id}/risk-digest` agrega tempestade/NDVI/desmatamento (leitura
+pura do último registro já calculado), último alerta de geada/seca
+(histórico, sem "estado atual" — não existe baseline "sem risco" para
+esses dois sinais) e umidade do solo (chamada ao vivo ao provider, sem
+tabela de persistência) — nunca recalcula nada, nunca 404 (campos `None`
+são resposta honesta). ZARC deliberadamente excluído (geocodificação HTTP
+ao vivo, não leitura por talhão). Web: modal dedicado
+(`RiskDigestModal.tsx`). Mobile: linha resumida no card do `AgroScreen`
+(sem modal — mesmo padrão "mais compacto" já usado na comparação de
+modelos da Fase 2, já que o app não tem nenhum precedente de `Modal`).
+Sem migração de schema. Decisões e achados detalhados em
+[ADR-0087](adr/0087-risk-digest-visao-consolidada.md).
 
 ## Fase 4 — Janela de risco unificada ("quando pode chegar")
 
