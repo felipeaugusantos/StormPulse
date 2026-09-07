@@ -494,3 +494,72 @@ export interface PushSubscriptionInput {
   endpoint: string
   keys: { p256dh: string; auth: string }
 }
+
+// Fase 3 (Alertas Personalizados, ADR-0083).
+export type AlertMetric =
+  | 'rain_mm'
+  | 'rain_probability_percent'
+  | 'wind_kmh'
+  | 'temperature_c'
+  | 'frost_temperature_c'
+  | 'vpd_kpa'
+  | 'soil_moisture_percent'
+  | 'disease_risk_high'
+  | 'lightning_distance_km'
+  | 'storm_eta_minutes'
+
+export type AlertOperator = '>' | '>=' | '<' | '<=' | '=='
+
+export interface AlertConditionInput {
+  metric: AlertMetric
+  operator: AlertOperator
+  threshold: number
+  group?: number
+}
+
+export interface AlertCondition extends AlertConditionInput {
+  id: string
+  group: number
+}
+
+export interface AlertRule {
+  id: string
+  location_id: string
+  name: string
+  enabled: boolean
+  lead_time_minutes: number
+  quiet_hours_start: string | null
+  quiet_hours_end: string | null
+  cooldown_minutes: number
+  last_fired_at: string | null
+  conditions: AlertCondition[]
+}
+
+export interface AlertRuleInput {
+  location_id: string
+  name: string
+  enabled?: boolean
+  lead_time_minutes?: number
+  quiet_hours_start?: string | null
+  quiet_hours_end?: string | null
+  cooldown_minutes?: number
+  conditions: AlertConditionInput[]
+}
+
+export interface SimulateResult {
+  would_fire: boolean
+  snapshot: Record<string, number | null>
+  matched_groups: number[]
+}
+
+export type AlertChannelKind = 'email' | 'push' | 'webhook' | 'whatsapp' | 'sms'
+
+export interface AlertChannel {
+  id: string
+  kind: AlertChannelKind
+  name: string
+  enabled: boolean
+  webhook_url: string | null
+  phone_number: string | null
+  has_webhook_secret: boolean
+}

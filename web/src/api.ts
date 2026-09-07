@@ -5,7 +5,10 @@ import type {
   AdminTenantList,
   AdminUser,
   AdminUserList,
+  AlertChannel,
   AlertItem,
+  AlertRule,
+  AlertRuleInput,
   ApiKey,
   ApiKeyCreated,
   ConvectiveWatch,
@@ -21,6 +24,7 @@ import type {
   PushSubscriptionInput,
   RainfallHistory,
   ReadyStatus,
+  SimulateResult,
   SatelliteImageMeta,
   SprayWindow,
   StormCell,
@@ -420,6 +424,32 @@ export const api = {
   // (farm or talhão), unlike zarcWindow()/ndvi() above.
   forecastComparison: (locationId: string) =>
     request<ForecastComparison>(`/locations/${locationId}/forecast-comparison`),
+  // Fase 3 (Alertas Personalizados, ADR-0083).
+  alertRules: (locationId?: string) =>
+    request<AlertRule[]>('/alert-rules').then((rules) =>
+      locationId ? rules.filter((r) => r.location_id === locationId) : rules,
+    ),
+  createAlertRule: (data: AlertRuleInput) =>
+    request<AlertRule>('/alert-rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateAlertRule: (ruleId: string, data: Partial<AlertRuleInput>) =>
+    request<AlertRule>(`/alert-rules/${ruleId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAlertRule: (ruleId: string) =>
+    request<void>(`/alert-rules/${ruleId}`, { method: 'DELETE' }),
+  simulateAlertRule: (ruleId: string) =>
+    request<SimulateResult>(`/alert-rules/${ruleId}/simulate`, { method: 'POST' }),
+  alertChannels: () => request<AlertChannel[]>('/alert-channels'),
+  createAlertChannel: (data: {
+    kind: string
+    name: string
+    webhook_url?: string
+    webhook_secret?: string
+    phone_number?: string
+  }) => request<AlertChannel>('/alert-channels', { method: 'POST', body: JSON.stringify(data) }),
+  addAlertRecipient: (ruleId: string, channelId: string) =>
+    request<{ id: string }>(`/alert-rules/${ruleId}/recipients`, {
+      method: 'POST',
+      body: JSON.stringify({ channel_id: channelId }),
+    }),
   // Cross-tenant platform-admin panel (FASE 28, ADR-0048) — only ever
   // called when `Me.is_platform_admin` is true; the backend 403s otherwise.
   adminUsers: (opts: { search?: string; limit?: number; offset?: number } = {}) => {

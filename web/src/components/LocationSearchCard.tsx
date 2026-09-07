@@ -3,6 +3,7 @@ import { ApiError, api } from '../api'
 import { cropColor } from '../cropColors'
 import { reverseGeocodeCity, searchCity } from '../geocode'
 import type { CitySearchResult, LocationItem } from '../types'
+import { AlertRulesModal } from './AlertRulesModal'
 import { ForecastComparisonModal } from './ForecastComparisonModal'
 import { WeeklyReportModal } from './WeeklyReportModal'
 
@@ -85,6 +86,9 @@ export function LocationSearchCard({
   // Comparação de modelos (Fase 2, ADR-0082) — qual talhão tem o modal
   // aberto, se algum.
   const [comparisonFor, setComparisonFor] = useState<LocationItem | null>(null)
+  // Alertas personalizados (Fase 3, ADR-0083) — qual talhão tem o painel
+  // de regras aberto, se algum.
+  const [alertRulesFor, setAlertRulesFor] = useState<LocationItem | null>(null)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -401,6 +405,16 @@ export function LocationSearchCard({
                     </button>
                     <button
                       className="btn ghost small"
+                      title="Alertas personalizados"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setAlertRulesFor(plot)
+                      }}
+                    >
+                      🔔
+                    </button>
+                    <button
+                      className="btn ghost small"
                       title="Editar talhão"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -566,6 +580,13 @@ export function LocationSearchCard({
           locationId={comparisonFor.id}
           locationName={comparisonFor.name}
           onClose={() => setComparisonFor(null)}
+        />
+      )}
+      {alertRulesFor && (
+        <AlertRulesModal
+          locationId={alertRulesFor.id}
+          locationName={alertRulesFor.name}
+          onClose={() => setAlertRulesFor(null)}
         />
       )}
     </section>
