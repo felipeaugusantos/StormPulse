@@ -124,7 +124,25 @@ Decisões e achados detalhados em
 - Ação do dono do produto, não bloqueante pro código: token INMET
   (e-mail já enviado) e chave REDEMET.
 
-## Fase 3 — Visão consolidada de risco por talhão
+## Fase 3 — Alertas Personalizados ✅ concluída (2026-09-07)
+
+Escopo definido diretamente pelo dono do produto (substitui o rascunho
+original desta seção, renumerado abaixo como **Fase 3-A**): transformar
+alertas em regras operacionais configuráveis — `AlertRule`/
+`AlertCondition`/`AlertChannel`/`AlertRecipient`/`AlertEvent`/
+`AlertDelivery`/`AlertAcknowledgement`/`AlertEscalation`, condições sobre
+chuva/probabilidade de chuva/vento/temperatura/geada/VPD/umidade do
+solo/risco de doença/raios por distância/aproximação de tempestade,
+operadores AND/OR, antecedência configurável, aviso de
+início/atualização/encerramento, horário silencioso, cooldown,
+deduplicação, confirmação de recebimento, escalonamento, e-mail, push,
+webhook com assinatura HMAC, abstrações para WhatsApp e SMS, tela de
+criar e simular regras. Decisões e achados detalhados em
+[ADR-0083](adr/0083-alertas-personalizados.md). Mobile UI fica fora do
+escopo desta entrega inicial (API pronta para consumo quando isso
+acontecer).
+
+## Fase 3-A — Visão consolidada de risco por talhão
 
 Hoje cada sinal (tempestade, geada, seca, ZARC, NDVI, desmatamento,
 umidade de solo) tem seu próprio painel/endpoint, sem lugar único que
@@ -172,7 +190,7 @@ de validação de domínio agronômico, não só código.
 - Novo modelo `RecommendedAction` (tenant-scoped, RLS desde a migração
   que cria a tabela), ligado ao `Alert`/sinal que a originou.
 - Exposto em `GET /locations/{id}/recommended-actions` (ou embutido no
-  `risk-digest` da Fase 3) — web e mobile.
+  `risk-digest` da Fase 3-A) — web e mobile.
 
 ## Fase 6 — Registro de execução da ação (auditoria)
 
@@ -217,7 +235,7 @@ modelo.**
 ## Ordem recomendada e dependências
 
 ```
-Fase 1 ✅ ──► Fase 1-A (P0) ──► Fase 2-A (P1) ──► Fase 3 (visão consolidada)
+Fase 1 ✅ ──► Fase 1-A (P0) ──► Fase 2-A (P1) ──► Fase 3-A (visão consolidada)
                                         │
                                         ▼
                               Fase 4 (janela unificada)
@@ -230,12 +248,13 @@ Fase 1 ✅ ──► Fase 1-A (P0) ──► Fase 2-A (P1) ──► Fase 3 (vis
                                  pode rodar em paralelo a qualquer
                                  momento depois da Fase 1)
 
-Fase 2 (Comparação e Validação de Previsões) ✅ já concluída — independente
-desta cadeia (não bloqueia nem é bloqueada por Fase 2-A/3-7).
+Fase 2 (Comparação e Validação de Previsões) ✅ e Fase 3 (Alertas
+Personalizados) ✅ já concluídas — independentes desta cadeia (não
+bloqueiam nem são bloqueadas por Fase 2-A/3-A/4-7).
 ```
 
 Fases 1-A e 2-A não são estritamente bloqueantes uma da outra internamente,
-mas ambas devem vir antes da Fase 3 em diante — não faz sentido construir
+mas ambas devem vir antes da Fase 3-A em diante — não faz sentido construir
 uma visão consolidada de risco sobre uma base cujo isolamento multitenant
 não é testado.
 
