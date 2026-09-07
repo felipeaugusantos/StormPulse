@@ -160,17 +160,20 @@ modelos da Fase 2, já que o app não tem nenhum precedente de `Modal`).
 Sem migração de schema. Decisões e achados detalhados em
 [ADR-0087](adr/0087-risk-digest-visao-consolidada.md).
 
-## Fase 4 — Janela de risco unificada ("quando pode chegar")
+## Fase 4 — Janela de risco unificada ("quando pode chegar") ✅ concluída (2026-09-07)
 
-- Consolidar os diferentes conceitos de "quando" que já existem (ETA de
-  célula em minutos, dias de geada prevista, janela ZARC em dias) num
-  formato de exibição comum ("daqui a X horas", "nos próximos N dias"),
-  sem fingir uma precisão que a fonte não tem — cada sinal mantém sua
-  própria unidade de tempo internamente, só a apresentação é unificada.
-- Avaliar, com o dono do produto, se faz sentido um "próximo evento"
-  cross-sinal (ex.: "o risco mais iminente neste talhão hoje é X, chega
-  em Y") — decisão de produto, não só engenharia; registrar em ADR antes
-  de implementar.
+Consolida os diferentes conceitos de "quando" que já existiam (ETA de
+célula em minutos — duas fontes, backend e cálculo por satélite no
+cliente —, dias de geada prevista, janela ZARC em decêndios, este último
+nunca lido pelo frontend antes) num formato de exibição comum (`timeUntil`
+em `web/src/format.ts` e no novo `mobile/src/format.ts`) — sem fingir uma
+precisão que a fonte não tem; cada sinal mantém sua própria unidade de
+tempo internamente, só a apresentação é unificada. Decisão do dono do
+produto: **sem** "próximo evento" cross-sinal — juntaria dado
+materializado (ETA) com cálculo ao vivo (geada/ZARC), recuo da fronteira
+já traçada no ADR-0087. Puramente frontend, sem migração nem endpoint
+novo. Decisões e achados detalhados em
+[ADR-0088](adr/0088-janela-de-risco-unificada.md).
 
 ## Fase 5 — Motor de recomendação de ação (determinístico)
 
