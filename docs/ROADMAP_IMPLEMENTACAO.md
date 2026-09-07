@@ -175,25 +175,26 @@ já traçada no ADR-0087. Puramente frontend, sem migração nem endpoint
 novo. Decisões e achados detalhados em
 [ADR-0088](adr/0088-janela-de-risco-unificada.md).
 
-## Fase 5 — Motor de recomendação de ação (determinístico)
+## Fase 5 — Motor de recomendação de ação (determinístico) ✅ concluída (2026-09-07)
 
-**Não existe hoje.** Núcleo novo, e o mais sensível desta fase — precisa
-de validação de domínio agronômico, não só código.
-
-- Catálogo de regras determinísticas risco→ação recomendada (ex.: "chuva
-  forte prevista em ≤2h + colheita pendente → recomendar antecipar/adiar
-  colheita"; "geada forte prevista + cultura sensível → recomendar
-  irrigação por aspersão ou cobertura"), documentado e versionado como
-  as regras do `StormRiskEngine`/`AlertEngine` já são — nunca uma LLM
-  decidindo a ação, só (opcionalmente) redigindo o texto de uma
-  recomendação já decidida pela regra.
-- Escopo inicial deliberadamente pequeno (2–3 pares risco→ação bem
-  validados) em vez de um catálogo grande e não revisado — mesma
-  filosofia YAGNI já usada no resto do projeto.
-- Novo modelo `RecommendedAction` (tenant-scoped, RLS desde a migração
-  que cria a tabela), ligado ao `Alert`/sinal que a originou.
-- Exposto em `GET /locations/{id}/recommended-actions` (ou embutido no
-  `risk-digest` da Fase 3-A) — web e mobile.
+**Não existia antes desta fase.** Marcada como a mais sensível do ciclo —
+os dois exemplos originais do roadmap ("colheita pendente", "cultura
+sensível") não eram implementáveis (dados que o sistema não coleta);
+substituídos, com autorização do dono do produto, por 3 regras
+equivalentes usando só sinais já calculados: geada severa
+(`frost_temperature_c ≤ 3°C`), vento forte + chuva prevista
+(`wind_kmh > 40` E `rain_probability_percent ≥ 60`), estresse hídrico
+(`soil_moisture_percent < 30` E `vpd_kpa > 1.6`). `engine/recommendations.py`
+reaproveita a máquina de condições DNF da Fase 3
+(`engine/alert_rules.py::MetricSnapshot`/`matching_groups`) sem
+reimplementar nada. Novo modelo `RecommendedAction` (tenant-scoped, RLS
+desde a migração), ligado ao `Alert` de origem quando existe um do mesmo
+dia — sem campo de status ainda (explicitamente escopo da Fase 6). Novo
+pipeline a cada 15 min, dedup por (local, regra, dia). Exposto em `GET
+/locations/{id}/recommended-actions`, endpoint próprio (não embutido no
+`risk-digest`, mesma fronteira do ADR-0087/0088). Web e mobile reaproveitam
+a superfície do risco consolidado já existente. Decisões e achados
+detalhados em [ADR-0089](adr/0089-motor-recomendacao-acao.md).
 
 ## Fase 6 — Registro de execução da ação (auditoria)
 
