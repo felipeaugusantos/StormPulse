@@ -28,8 +28,10 @@ from app.locations.models import AlertPreference, Location
 from app.locations.schemas import (
     AlertPreferenceIn,
     DeforestationCheckOut,
+    LastAlertOut,
     LocationCreate,
     LocationUpdate,
+    RiskDigestOut,
     SoilMoistureOut,
     WeeklyReportOut,
 )
@@ -38,6 +40,8 @@ from app.ndvi.schemas import NdviOut
 from app.organizations.permissions import can_access_location
 from app.soilmoisture.factory import get_soil_moisture_provider
 from app.soilmoisture.provider import SoilMoistureProviderUnavailableError
+from app.storms import service as storm_service
+from app.storms.schemas import StormRiskOut
 from app.users.models import User
 from app.weather.factory import get_weather_provider
 from app.weather.provider import WeatherProviderUnavailableError
@@ -139,6 +143,127 @@ async def delete_location(session: AsyncSession, location: Location) -> None:
     await session.commit()
 
 
+async def _gather_deforestation(
+    session: AsyncSession, location_id: uuid.UUID
+) -> DeforestationCheckOut | None:
+    """Merges every source's last check (Amazônia DETER / Cerrado PRODES)
+    into one summary — shared by the weekly report and the risk digest, so
+    both show exactly the same reading."""
+    deforestation_checks = list(
+        (
+            await session.execute(
+                select(DeforestationCheck).where(DeforestationCheck.location_id == location_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not deforestation_checks:
+        return None
+    deforestation_alerts: list[DeforestationAlert] = []
+    for row in deforestation_checks:
+        deforestation_alerts.extend(
+            DeforestationAlert.model_validate(a) for a in json.loads(row.alerts_json)
+        )
+    return DeforestationCheckOut(
+        checked_sources=[row.source for row in deforestation_checks],
+        last_checked_at=max(row.checked_at for row in deforestation_checks),
+        alerts=deforestation_alerts,
+    )
+
+
+async def _gather_soil_moisture(location: Location, settings: Settings) -> SoilMoistureOut | None:
+    """The one live call in either the weekly report or the risk digest —
+    NASA POWER (or its mock) has no per-location persistence, so there is
+    no "already computed" reading to fall back to. A failure here never
+    fails the caller; it just means this one signal is missing."""
+    soil_moisture_provider = get_soil_moisture_provider(settings)
+    try:
+        observation = await soil_moisture_provider.get_soil_moisture(
+            location.latitude, location.longitude
+        )
+        return SoilMoistureOut(
+            observed_at=observation.observed_at,
+            surface_wetness_percent=observation.surface_wetness_percent,
+            root_zone_wetness_percent=observation.root_zone_wetness_percent,
+            profile_wetness_percent=observation.profile_wetness_percent,
+            is_mock=observation.provenance.is_mock,
+        )
+    except (SoilMoistureProviderUnavailableError, httpx.HTTPError):
+        return None
+    finally:
+        await soil_moisture_provider.aclose()
+
+
+async def _latest_alert_of_type(
+    session: AsyncSession, location_id: uuid.UUID, event_type: AlertEventType
+) -> Alert | None:
+    stmt = (
+        select(Alert)
+        .where(Alert.location_id == location_id, Alert.event_type == event_type)
+        .order_by(Alert.created_at.desc())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+def _to_last_alert(alert: Alert | None) -> LastAlertOut | None:
+    if alert is None:
+        return None
+    return LastAlertOut(
+        occurred_at=alert.created_at, level=alert.level, title=alert.title, message=alert.message
+    )
+
+
+async def build_risk_digest(
+    session: AsyncSession, location: Location, settings: Settings
+) -> RiskDigestOut:
+    """Reads every risk signal already computed/persisted for this
+    location into one payload (Fase 3-A, ADR-0087) — never recalculates
+    anything itself. Storm/NDVI/deforestation are exact reads of the
+    latest already-materialized row; frost/dry-spell surface only the
+    last `Alert` ever fired (see `LastAlertOut`); soil moisture is the one
+    live call, same degrade-gracefully behavior as `build_weekly_report`.
+    ZARC is deliberately excluded (live geocoding lookup, not a persisted
+    per-location signal)."""
+    storm_row = await storm_service.latest_risk_for_location(session, location.id)
+    storm = StormRiskOut.model_validate(storm_row) if storm_row is not None else None
+
+    ndvi_stmt = (
+        select(NdviReading)
+        .where(
+            NdviReading.location_id == location.id,
+            NdviReading.index_name == VegetationIndex.NDVI.value,
+        )
+        .order_by(NdviReading.observed_at.desc())
+        .limit(1)
+    )
+    ndvi_row = (await session.execute(ndvi_stmt)).scalar_one_or_none()
+    ndvi = NdviOut.model_validate(ndvi_row) if ndvi_row is not None else None
+
+    deforestation = await _gather_deforestation(session, location.id)
+
+    frost_alert = await _latest_alert_of_type(session, location.id, AlertEventType.FROST_WARNING)
+    dry_spell_alert = await _latest_alert_of_type(
+        session, location.id, AlertEventType.DRY_SPELL_WARNING
+    )
+
+    soil_moisture = (
+        await _gather_soil_moisture(location, settings) if settings.soil_moisture_enabled else None
+    )
+
+    return RiskDigestOut(
+        location_id=location.id,
+        generated_at=datetime.now(UTC),
+        storm=storm,
+        ndvi=ndvi,
+        deforestation=deforestation,
+        frost_last_alert=_to_last_alert(frost_alert),
+        dry_spell_last_alert=_to_last_alert(dry_spell_alert),
+        soil_moisture=soil_moisture,
+    )
+
+
 async def build_weekly_report(
     session: AsyncSession, location: Location, settings: Settings
 ) -> WeeklyReportOut:
@@ -192,48 +317,10 @@ async def build_weekly_report(
     )
     ndvi_readings = list((await session.execute(ndvi_stmt)).scalars().all())
 
-    deforestation_checks = list(
-        (
-            await session.execute(
-                select(DeforestationCheck).where(DeforestationCheck.location_id == location.id)
-            )
-        )
-        .scalars()
-        .all()
+    deforestation = await _gather_deforestation(session, location.id)
+    soil_moisture = (
+        await _gather_soil_moisture(location, settings) if settings.soil_moisture_enabled else None
     )
-    deforestation = None
-    if deforestation_checks:
-        deforestation_alerts: list[DeforestationAlert] = []
-        for row in deforestation_checks:
-            deforestation_alerts.extend(
-                DeforestationAlert.model_validate(a) for a in json.loads(row.alerts_json)
-            )
-        deforestation = DeforestationCheckOut(
-            checked_sources=[row.source for row in deforestation_checks],
-            last_checked_at=max(row.checked_at for row in deforestation_checks),
-            alerts=deforestation_alerts,
-        )
-
-    soil_moisture = None
-    if settings.soil_moisture_enabled:
-        soil_moisture_provider = get_soil_moisture_provider(settings)
-        try:
-            observation = await soil_moisture_provider.get_soil_moisture(
-                location.latitude, location.longitude
-            )
-            soil_moisture = SoilMoistureOut(
-                observed_at=observation.observed_at,
-                surface_wetness_percent=observation.surface_wetness_percent,
-                root_zone_wetness_percent=observation.root_zone_wetness_percent,
-                profile_wetness_percent=observation.profile_wetness_percent,
-                is_mock=observation.provenance.is_mock,
-            )
-        except (SoilMoistureProviderUnavailableError, httpx.HTTPError):
-            # Never a second source of the rainfall numbers, only added
-            # context — a failure here must never fail the whole report.
-            pass
-        finally:
-            await soil_moisture_provider.aclose()
 
     report = WeeklyReportOut(
         location_id=location.id,

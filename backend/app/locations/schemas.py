@@ -10,9 +10,10 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.alerts.schemas import AlertOut
-from app.core.enums import AlertType
+from app.core.enums import AlertType, RiskLevel
 from app.deforestation.provider import DeforestationAlert
 from app.ndvi.schemas import NdviOut
+from app.storms.schemas import StormRiskOut
 
 _MIN_POLYGON_RING_POINTS = 4
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -234,6 +235,40 @@ class WeeklyReportOut(BaseModel):
     # second source of the numbers themselves, only a rephrasing of what's
     # already in this same object.
     ai_summary: str | None = None
+
+
+class LastAlertOut(BaseModel):
+    """The most recent `Alert` of one event type for a location — used by
+    `RiskDigestOut` for frost/dry-spell, which (unlike storm/NDVI/
+    deforestation) have no persisted "current state" to read: the pipeline
+    only writes a row when it decides to warn (Fase 3-A). Deliberately
+    historical, not a risk level: `None` on the digest means "no alert of
+    this type has ever fired here", never "safe right now"."""
+
+    occurred_at: datetime
+    level: RiskLevel
+    title: str
+    message: str
+
+
+class RiskDigestOut(BaseModel):
+    """Aggregates every risk signal already computed/persisted for one
+    location into a single read (Fase 3-A, ADR-0087) — nothing here is
+    recalculated. Each field is independently `None` when that signal
+    doesn't apply to this location (e.g. NDVI for a farm-level point
+    without a drawn talhão) or simply hasn't been computed yet — never a
+    zero/default standing in for "no data". ZARC is deliberately excluded
+    (it's resolved via a live geocoding call, not a per-location
+    persisted "current risk" read, unlike everything else here)."""
+
+    location_id: uuid.UUID
+    generated_at: datetime
+    storm: StormRiskOut | None = None
+    ndvi: NdviOut | None = None
+    deforestation: DeforestationCheckOut | None = None
+    frost_last_alert: LastAlertOut | None = None
+    dry_spell_last_alert: LastAlertOut | None = None
+    soil_moisture: SoilMoistureOut | None = None
 
 
 class ZarcMatchOut(BaseModel):

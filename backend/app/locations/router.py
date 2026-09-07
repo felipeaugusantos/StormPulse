@@ -30,6 +30,7 @@ from app.locations.schemas import (
     LocationUpdate,
     ModelMetricsOut,
     PrecipitationErrorOut,
+    RiskDigestOut,
     SprayWindowOut,
     WeeklyReportOut,
     ZarcWindowOut,
@@ -235,6 +236,26 @@ async def get_location_risk(
             detail="Nenhuma avaliação de risco disponível para este local ainda",
         )
     return risk
+
+
+@router.get(
+    "/{location_id}/risk-digest",
+    response_model=RiskDigestOut,
+    summary="Visão consolidada dos sinais de risco já calculados para o local (Fase 3-A)",
+)
+async def get_location_risk_digest(
+    location_id: uuid.UUID,
+    session: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_request_settings),
+) -> RiskDigestOut:
+    """Aggregates every signal already computed/persisted for this
+    location — storm, NDVI, deforestation, frost/dry-spell's last alert,
+    soil moisture — into one read. Never 404s: an empty digest (every
+    field `None`) is itself a meaningful, honest answer for a brand-new
+    location with no pipeline cycle run yet, unlike `/risk` above."""
+    location = await _get_owned_or_404(session, user, location_id)
+    return await service.build_risk_digest(session, location, settings)
 
 
 @router.get(
