@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ApiError, api } from '../api'
 import { alertEventLabel, riskLevelLabel, timeAgo, timeUntil } from '../format'
-import type { RiskDigest } from '../types'
+import type { RecommendedAction, RiskDigest } from '../types'
 
 interface Props {
   locationId: string
@@ -15,6 +15,7 @@ interface Props {
  * ainda não foi calculado — nunca um placeholder de "zero". */
 export function RiskDigestModal({ locationId, locationName, onClose }: Props) {
   const [digest, setDigest] = useState<RiskDigest | null>(null)
+  const [recommendations, setRecommendations] = useState<RecommendedAction[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -22,10 +23,17 @@ export function RiskDigestModal({ locationId, locationName, onClose }: Props) {
     let cancelled = false
     setLoading(true)
     setError(null)
-    api
-      .riskDigest(locationId)
-      .then((d) => {
-        if (!cancelled) setDigest(d)
+    Promise.all([
+      api.riskDigest(locationId),
+      // Ações recomendadas (Fase 5, ADR-0089) — endpoint próprio, nunca
+      // 404, lista vazia é uma resposta honesta, não um erro do painel.
+      api.recommendedActions(locationId).catch(() => []),
+    ])
+      .then(([d, actions]) => {
+        if (!cancelled) {
+          setDigest(d)
+          setRecommendations(actions)
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -147,6 +155,25 @@ export function RiskDigestModal({ locationId, locationName, onClose }: Props) {
                 </div>
               )}
             </div>
+
+            {recommendations.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <h3 style={{ margin: '0 0 8px' }}>💡 Ações recomendadas</h3>
+                <div className="list">
+                  {recommendations.map((action) => (
+                    <div
+                      className="row"
+                      key={action.id}
+                      style={{ flexDirection: 'column', alignItems: 'stretch' }}
+                    >
+                      <strong>{action.title}</strong>
+                      <p className="panel-hint">{action.message}</p>
+                      <p className="panel-hint">{timeAgo(action.created_at)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
 

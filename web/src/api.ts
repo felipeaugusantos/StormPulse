@@ -24,6 +24,7 @@ import type {
   PushSubscriptionInput,
   RainfallHistory,
   ReadyStatus,
+  RecommendedAction,
   RiskDigest,
   SimulateResult,
   SatelliteImageMeta,
@@ -342,6 +343,10 @@ export const api = {
   // calculado ainda (Fase 3-A, ADR-0087).
   riskDigest: (locationId: string) =>
     request<RiskDigest>(`/locations/${locationId}/risk-digest`),
+  // Sempre 200, lista vazia quando nada foi recomendado ainda (Fase 5,
+  // ADR-0089).
+  recommendedActions: (locationId: string) =>
+    request<RecommendedAction[]>(`/locations/${locationId}/recommended-actions`),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
   // Always Open-Meteo, bypassing INMET/CPTEC — the only source with a real
   // numeric rain forecast (backend: get_numeric_rain_forecast_provider,

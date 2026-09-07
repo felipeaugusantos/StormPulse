@@ -364,6 +364,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{location_id}/recommended-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recomendações de ação determinísticas geradas pelo pipeline (Fase 5)
+         * @description Reads the recommendations `workers/recommendation_pipeline.py` has
+         *     already generated for this location in the last 3 days (matches the
+         *     pipeline's own once-per-rule-per-day dedup window) — never computes
+         *     anything here, and an empty list is itself an honest answer, not an
+         *     error.
+         */
+        get: operations["get_location_recommended_actions_api_v1_locations__location_id__recommended_actions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/{location_id}/forecast": {
         parameters: {
             query?: never;
@@ -2906,6 +2930,33 @@ export interface components {
                 [key: string]: "ok" | "error" | "skipped";
             };
         };
+        /** RecommendedActionOut */
+        RecommendedActionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Rule Key */
+            rule_key: string;
+            /** Title */
+            title: string;
+            /** Message */
+            message: string;
+            level: components["schemas"]["RiskLevel"];
+            /** Alert Id */
+            alert_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** RefreshIn */
         RefreshIn: {
             /** Refresh Token */
@@ -4243,6 +4294,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RiskDigestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_location_recommended_actions_api_v1_locations__location_id__recommended_actions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendedActionOut"][];
                 };
             };
             /** @description Validation Error */

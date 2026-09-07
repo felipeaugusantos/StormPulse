@@ -20,6 +20,7 @@ import type {
   ForecastComparison,
   ForecastPoint,
   LocationItem,
+  RecommendedAction,
   RiskDigest,
   SprayWindow,
   VegetationIndex,
@@ -59,6 +60,7 @@ interface AgroEntry {
   vpdLevel: VpdLevel
   forecastComparison: ForecastComparison | null
   riskDigest: RiskDigest | null
+  recommendedActions: RecommendedAction[]
   vegetation: VegetationSeries[]
   error: string | null
 }
@@ -127,8 +129,16 @@ export function AgroScreen({ onLogout }: Props) {
 
 async function loadEntry(location: LocationItem): Promise<AgroEntry> {
   try {
-    const [forecast, sprayWindow, rainfall, rainForecast, forecastComparison, riskDigest, vegetation] =
-      await Promise.all([
+    const [
+      forecast,
+      sprayWindow,
+      rainfall,
+      rainForecast,
+      forecastComparison,
+      riskDigest,
+      recommendedActions,
+      vegetation,
+    ] = await Promise.all([
       api.forecast(location.id).catch(() => null),
       api.sprayWindow(location.id).catch(() => null),
       api.rainfall(location.id).catch(() => null),
@@ -139,6 +149,8 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       api.forecastComparison(location.id).catch(() => null),
       // Fase 3-A (ADR-0087) — already-computed signals, never recalculated.
       api.riskDigest(location.id).catch(() => null),
+      // Fase 5 (ADR-0089) — deterministic catalog, never an LLM decision.
+      api.recommendedActions(location.id).catch(() => []),
       location.parent_location_id != null && location.boundary_geojson != null
         ? Promise.all(
             VEGETATION_INDICES.map((indexName) =>
@@ -192,6 +204,7 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       vpdLevel: vpdKpa != null ? classifyVpd(vpdKpa) : 'unknown',
       forecastComparison,
       riskDigest,
+      recommendedActions,
       vegetation,
       error:
         forecast == null && sprayWindow == null && rainfall == null
@@ -217,6 +230,7 @@ async function loadEntry(location: LocationItem): Promise<AgroEntry> {
       vpdLevel: 'unknown',
       forecastComparison: null,
       riskDigest: null,
+      recommendedActions: [],
       vegetation: [],
       error: 'Dados agro indisponíveis no momento',
     }
@@ -325,6 +339,9 @@ function AgroCard({ entry }: { entry: AgroEntry }) {
             warn={riskDigestHasSevereSignal(entry.riskDigest)}
             text={riskDigestSummary(entry.riskDigest)}
           />
+          {entry.recommendedActions.map((action) => (
+            <Row key={action.id} warn text={`💡 ${action.title} — ${action.message}`} />
+          ))}
 
           {entry.location.parent_location_id != null && (
             <View style={styles.vegetationBlock}>

@@ -295,6 +295,16 @@ describe('paridade mobile (item 5)', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/locations/loc-1/risk-digest')
   })
 
+  test('recommendedActions() hits the location-scoped endpoint (Fase 5, ADR-0089)', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(jsonResponse(200, []))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await api.recommendedActions('loc-1')
+
+    expect(result).toEqual([])
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/locations/loc-1/recommended-actions')
+  })
+
   test('vegetationSeries() requests the selected spectral index and history', async () => {
     const fetchMock = jest.fn().mockResolvedValueOnce(
       jsonResponse(200, { location_id: 'plot-1', index_name: 'evi', current: null, series: [] }),

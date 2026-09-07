@@ -11,6 +11,7 @@ vi.mock('../api', async () => {
     ...actual,
     api: {
       riskDigest: vi.fn(),
+      recommendedActions: vi.fn(),
     },
   }
 })
@@ -31,6 +32,7 @@ function emptyDigest(overrides: Partial<RiskDigest> = {}): RiskDigest {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.mocked(api.recommendedActions).mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -115,5 +117,28 @@ describe('RiskDigestModal (Fase 3-A — risco consolidado)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Fechar' }))
     expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  test('shows recommended actions alongside the risk signals (Fase 5, ADR-0089)', async () => {
+    vi.mocked(api.riskDigest).mockResolvedValue(emptyDigest())
+    vi.mocked(api.recommendedActions).mockResolvedValue([
+      {
+        id: 'rec-1',
+        location_id: 'loc-1',
+        rule_key: 'frost_severe_irrigation',
+        title: 'Geada severa prevista',
+        message: 'Considere irrigação por aspersão ou cobertura das plantas.',
+        level: 'red',
+        alert_id: null,
+        created_at: '2026-09-07T12:00:00Z',
+      },
+    ])
+
+    render(<RiskDigestModal locationId="loc-1" locationName="Talhão Norte" onClose={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText('Geada severa prevista')).toBeInTheDocument())
+    expect(
+      screen.getByText('Considere irrigação por aspersão ou cobertura das plantas.'),
+    ).toBeInTheDocument()
   })
 })

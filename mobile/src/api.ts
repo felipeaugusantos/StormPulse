@@ -15,6 +15,7 @@ import type {
   OrganizationMember,
   OrganizationRole,
   RainfallHistory,
+  RecommendedAction,
   RiskDigest,
   SatelliteImageMeta,
   SprayWindow,
@@ -200,6 +201,10 @@ export const api = {
   // calculado ainda (Fase 3-A, ADR-0087).
   riskDigest: (locationId: string) =>
     request<RiskDigest>(`/locations/${locationId}/risk-digest`),
+  // Sempre 200, lista vazia quando nada foi recomendado ainda (Fase 5,
+  // ADR-0089).
+  recommendedActions: (locationId: string) =>
+    request<RecommendedAction[]>(`/locations/${locationId}/recommended-actions`),
   storms: () => request<StormCell[]>('/storms?limit=200'),
   lightning: () => request<LightningStrike[]>('/lightning'),
   satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),
