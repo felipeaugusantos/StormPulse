@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest'
-import { classifyFrostDays, classifyNdvi, dryStreakDays, formatFrostDays } from './agro'
+import {
+  classifyFrostDays,
+  classifyNdvi,
+  dryStreakDays,
+  formatFrostDays,
+  formatFrostDaysAhead,
+  formatZarcWindowAhead,
+} from './agro'
 import type { DailyRainfall, ForecastPoint } from './types'
 
 function point(time: string, temperature_min_c: number | null): ForecastPoint {
@@ -68,6 +75,48 @@ describe('formatFrostDays', () => {
   test('shows an em-dash placeholder when temperature is missing', () => {
     const formatted = formatFrostDays([point('2026-08-01T00:00:00Z', null)])
     expect(formatted).toContain('—')
+  })
+})
+
+describe('formatFrostDaysAhead (Fase 4, ADR-0088)', () => {
+  test('null for an empty list — no frost day to point at', () => {
+    expect(formatFrostDaysAhead([])).toBeNull()
+  })
+
+  test('picks the earliest day when several are given, out of order', () => {
+    const now = new Date('2026-08-01T00:00:00Z')
+    const formatted = formatFrostDaysAhead(
+      [point('2026-08-03T00:00:00Z', 1), point('2026-08-02T00:00:00Z', 0)],
+      now,
+    )
+    expect(formatted).toBe('geada em 1 dia')
+  })
+})
+
+describe('formatZarcWindowAhead (Fase 4, ADR-0088)', () => {
+  test('null when every decêndio is 0 — no recommended window at all', () => {
+    expect(formatZarcWindowAhead(new Array(36).fill(0))).toBeNull()
+  })
+
+  test('reports the soonest recommended decêndio ahead of now', () => {
+    // decêndio 0 = Jan 1-10 — from Jan 5th, that's "em ~5 dias" until Jan 10
+    // is irrelevant; the window STARTS Jan 1, already passed this year, so
+    // the next occurrence is decêndio 0 next year unless a later one in the
+    // current year is also recommended.
+    const decendios = new Array(36).fill(0)
+    decendios[5] = 20 // decêndio 5 = Feb 21 (month 1, period 2 -> day 21)
+    const now = new Date(2026, 0, 1) // Jan 1, 2026 (local time)
+    const formatted = formatZarcWindowAhead(decendios, now)
+    expect(formatted).toMatch(/^janela recomendada em/)
+  })
+
+  test('wraps to next year when the only recommended decêndio already passed', () => {
+    const decendios = new Array(36).fill(0)
+    decendios[0] = 20 // decêndio 0 = Jan 1
+    const now = new Date(2026, 5, 15) // June 15, well past Jan 1
+    const formatted = formatZarcWindowAhead(decendios, now)
+    // ~200 days until next Jan 1 — must still resolve, never null/negative.
+    expect(formatted).toMatch(/^janela recomendada em \d+ dias$/)
   })
 })
 

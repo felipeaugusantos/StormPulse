@@ -21,6 +21,7 @@ import {
   classifyVpd,
   evaluateTrafficability,
   formatFrostDays,
+  formatZarcWindowAhead,
   growingDegreeDays,
   vaporPressureDeficitKpa,
   waterBalanceMm,
@@ -31,7 +32,7 @@ import {
 } from '../agro'
 import { classifyCape, estimateStormEta, type CapeLevel } from '../storm'
 import { cropColor } from '../cropColors'
-import { cardinalDirection, formatTimeBR, riskLevelLabel, timeAgo } from '../format'
+import { cardinalDirection, formatTimeBR, riskLevelLabel, timeAgo, timeUntil } from '../format'
 import { isPushSupported, subscribeToPush } from '../push'
 import { AdminPanel } from './AdminPanel'
 import { ApiKeysModal } from './ApiKeysModal'
@@ -820,10 +821,7 @@ function bestStormEtaLabel(watch: ConvectiveWatch, locations: LocationItem[]): s
     }
   }
   if (!best) return null
-  const minutes = Math.round(best.etaMinutes)
-  return minutes < 60
-    ? `chegada estimada em ~${minutes} min em ${best.name}`
-    : `chegada estimada em ~${(minutes / 60).toFixed(1)}h em ${best.name}`
+  return `chegada estimada ${timeUntil(best.etaMinutes)} em ${best.name}`
 }
 
 function SatelliteWatchesPanel({
@@ -1482,15 +1480,16 @@ function ZarcPanel({ activeLocations, entries, onSelect }: AgroPanelProps) {
                 {entry && (
                   <div className="agro-section">
                     {entry.zarcWindow && entry.zarcWindow.matches.length > 0 ? (
-                      entry.zarcWindow.matches.map((m) => (
-                        <div
-                          className="agro-row"
-                          key={`${m.cultura}-${m.cod_ciclo}`}
-                        >
-                          {m.cultura} ({m.ciclo_label}) — safra {m.safra_ini}/{m.safra_fin}
-                          {m.portaria && ` — ${m.portaria}`}
-                        </div>
-                      ))
+                      entry.zarcWindow.matches.map((m) => {
+                        const windowAhead = formatZarcWindowAhead(m.decendios)
+                        return (
+                          <div className="agro-row" key={`${m.cultura}-${m.cod_ciclo}`}>
+                            {m.cultura} ({m.ciclo_label}) — safra {m.safra_ini}/{m.safra_fin}
+                            {m.portaria && ` — ${m.portaria}`}
+                            {windowAhead && ` — ${windowAhead}`}
+                          </div>
+                        )
+                      })
                     ) : (
                       <div className="agro-row sub">
                         Nenhuma janela ZARC encontrada para este talhão

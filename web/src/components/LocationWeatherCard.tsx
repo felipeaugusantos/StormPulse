@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import { classifyFrostDays, evaluateTrafficability, formatFrostDays } from '../agro'
+import { classifyFrostDays, evaluateTrafficability, formatFrostDays, formatFrostDaysAhead } from '../agro'
 import {
   cardinalDirection,
   formatDecimalBR,
@@ -209,12 +209,14 @@ export function LocationWeatherCard({ location }: Props) {
       <div className="agro-section">
         {severeFrostDays.length > 0 && (
           <div className="agro-row warn">
-            ❄️ Geada forte prevista (≤{FROST_THRESHOLD_C}°C): {formatFrostDays(severeFrostDays)}
+            ❄️ Geada forte prevista (≤{FROST_THRESHOLD_C}°C, {formatFrostDaysAhead(severeFrostDays)}):{' '}
+            {formatFrostDays(severeFrostDays)}
           </div>
         )}
         {lightFrostDays.length > 0 && (
           <div className="agro-row warn">
-            🌡️ Risco leve de geada (≤{FROST_LIGHT_THRESHOLD_C}°C): {formatFrostDays(lightFrostDays)}
+            🌡️ Risco leve de geada (≤{FROST_LIGHT_THRESHOLD_C}°C, {formatFrostDaysAhead(lightFrostDays)}):{' '}
+            {formatFrostDays(lightFrostDays)}
           </div>
         )}
         {sprayWindow && (

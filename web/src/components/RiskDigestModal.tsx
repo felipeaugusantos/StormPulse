@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ApiError, api } from '../api'
-import { alertEventLabel, riskLevelLabel, timeAgo } from '../format'
+import { alertEventLabel, riskLevelLabel, timeAgo, timeUntil } from '../format'
 import type { RiskDigest } from '../types'
 
 interface Props {
@@ -76,7 +76,8 @@ export function RiskDigestModal({ locationId, locationName, onClose }: Props) {
                 <div className="row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
                   <strong>⛈️ Tempestade — {riskLevelLabel(digest.storm.severity)}</strong>
                   <p className="panel-hint">
-                    {digest.storm.eta_minutes != null && `chega em ~${digest.storm.eta_minutes} min · `}
+                    {digest.storm.eta_minutes != null &&
+                      `chega ${timeUntil(digest.storm.eta_minutes)} · `}
                     {digest.storm.storm_distance_km != null &&
                       `${digest.storm.storm_distance_km.toFixed(0)} km · `}
                     calculado {timeAgo(digest.storm.computed_at)}

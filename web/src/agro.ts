@@ -4,7 +4,7 @@
  * `dry_streak_days` client-side since only raw daily totals are exposed via
  * `/agro/rainfall`, not the computed streak itself (FASE 22, ADR-0018). */
 
-import { formatDateBR } from './format'
+import { formatDateBR, timeUntil } from './format'
 import type { DailyRainfall, ForecastPoint } from './types'
 
 export interface FrostDayTiers {
@@ -37,6 +37,49 @@ export function formatFrostDays(points: ForecastPoint[]): string {
       return `${day} (${temp})`
     })
     .join(', ')
+}
+
+/** Compact "geada em N dias" for the earliest day in `points`, same
+ * presentation as storm ETA/ZARC window (Fase 4, ADR-0088) — complements
+ * `formatFrostDays` above (which stays the full-list view), doesn't
+ * replace it. `null` when `points` is empty (no frost day to point at). */
+export function formatFrostDaysAhead(points: ForecastPoint[], now: Date = new Date()): string | null {
+  if (points.length === 0) return null
+  const earliest = points.reduce((a, b) => (new Date(a.time) < new Date(b.time) ? a : b))
+  const minutesUntil = (new Date(earliest.time).getTime() - now.getTime()) / 60_000
+  return `geada ${timeUntil(minutesUntil)}`
+}
+
+const DAYS_IN_MONTH_NON_LEAP = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+/** Day-of-year (0-indexed) a ZARC `decêndio` starts on — official MAPA
+ * convention: 3 ten-day periods per month (days 1-10, 11-20, 21-end-of-
+ * month), 36 total, not a calendar-agnostic 1/36th of the year. */
+function decendioStartDayOfYear(index: number): number {
+  const month = Math.floor(index / 3)
+  const periodInMonth = index % 3
+  let dayOfYear = 0
+  for (let m = 0; m < month; m++) dayOfYear += DAYS_IN_MONTH_NON_LEAP[m]
+  return dayOfYear + periodInMonth * 10
+}
+
+/** Compact "janela recomendada em N dias" for the next non-zero `decêndio`
+ * from `now` — same presentation as storm ETA/frost (Fase 4, ADR-0088).
+ * Checks both this year's and next year's occurrence of every recommended
+ * decêndio so a window near year-end/January still resolves correctly.
+ * `null` when every decêndio is 0 (no recommended window at all for this
+ * cultura/solo/município). */
+export function formatZarcWindowAhead(decendios: number[], now: Date = new Date()): string | null {
+  const nonZeroIndices = decendios.map((v, i) => (v !== 0 ? i : -1)).filter((i) => i !== -1)
+  if (nonZeroIndices.length === 0) return null
+
+  const minutesUntil = (index: number, yearOffset: number) => {
+    const start = new Date(now.getFullYear() + yearOffset, 0, 1 + decendioStartDayOfYear(index))
+    return (start.getTime() - now.getTime()) / 60_000
+  }
+  const candidates = nonZeroIndices.flatMap((i) => [minutesUntil(i, 0), minutesUntil(i, 1)])
+  const soonest = Math.min(...candidates.filter((m) => m >= 0))
+  return `janela recomendada ${timeUntil(soonest)}`
 }
 
 /** Consecutive most-recent days with rainfall below `thresholdMm`. Stops at

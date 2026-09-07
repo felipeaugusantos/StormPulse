@@ -5,6 +5,7 @@
  * `dry_streak_days` client-side since only raw daily totals are exposed via
  * `/agro/rainfall`, not the computed streak itself (FASE 22, ADR-0018). */
 
+import { timeUntil } from './format'
 import type { DailyRainfall, ForecastPoint } from './types'
 
 export interface FrostDayTiers {
@@ -37,6 +38,17 @@ export function formatFrostDays(points: ForecastPoint[]): string {
       return `${day} (${temp})`
     })
     .join(', ')
+}
+
+/** Compact "geada em N dias" for the earliest day in `points`, same
+ * presentation as storm ETA/ZARC window (Fase 4, ADR-0088) — complements
+ * `formatFrostDays` above (which stays the full-list view), doesn't
+ * replace it. `null` when `points` is empty (no frost day to point at). */
+export function formatFrostDaysAhead(points: ForecastPoint[], now: Date = new Date()): string | null {
+  if (points.length === 0) return null
+  const earliest = points.reduce((a, b) => (new Date(a.time) < new Date(b.time) ? a : b))
+  const minutesUntil = (new Date(earliest.time).getTime() - now.getTime()) / 60_000
+  return `geada ${timeUntil(minutesUntil)}`
 }
 
 /** Consecutive most-recent days with rainfall below `thresholdMm`. Stops at

@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { ApiError, api, logout } from '../api'
 import { StormMapView } from '../components/StormMapView'
+import { timeUntil } from '../format'
 import type {
   AlertItem,
   ConvectiveWatch,
@@ -282,7 +283,7 @@ function LocationCard({ location, risk }: LocationWithRisk) {
         {risk ? (
           <Text style={styles.sub}>
             {LEVEL_LABEL[level]}
-            {risk.eta_minutes != null ? ` · ETA ~${risk.eta_minutes} min` : ''}
+            {risk.eta_minutes != null ? ` · chega ${timeUntil(risk.eta_minutes)}` : ''}
             {risk.storm_distance_km != null ? ` · ${risk.storm_distance_km.toFixed(0)} km` : ''}
             {risk.is_mock ? ' · MOCK' : ''}
           </Text>

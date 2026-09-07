@@ -76,7 +76,7 @@ describe('RiskDigestModal (Fase 3-A — risco consolidado)', () => {
     render(<RiskDigestModal locationId="loc-1" locationName="Talhão Norte" onClose={vi.fn()} />)
 
     await waitFor(() => expect(screen.getByText(/Tempestade — Alto/)).toBeInTheDocument())
-    expect(screen.getByText(/chega em ~30 min/)).toBeInTheDocument()
+    expect(screen.getByText(/chega em 30 min/)).toBeInTheDocument()
   })
 
   test('labels frost/dry-spell as last alert, not a current risk level', async () => {

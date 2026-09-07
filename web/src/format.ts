@@ -139,3 +139,18 @@ export function timeAgo(iso: string): string {
   const hours = Math.round(minutes / 60)
   return `há ${hours} h`
 }
+
+/** "em 5 min" / "em ~2 h" / "em 3 dias" — the future-facing counterpart to
+ * `timeAgo`, same rounding convention. Fase 4 (ADR-0088): a shared
+ * presentation for "when" across signals that each keep their own time
+ * unit internally (storm ETA in minutes, frost/ZARC in days) — never
+ * claims more precision than the source actually has. */
+export function timeUntil(minutes: number): string {
+  const rounded = Math.max(0, Math.round(minutes))
+  if (rounded < 1) return 'a qualquer momento'
+  if (rounded < 60) return `em ${rounded} min`
+  const hours = Math.round(rounded / 60)
+  if (hours < 24) return `em ~${hours} h`
+  const days = Math.round(rounded / (60 * 24))
+  return days === 1 ? 'em 1 dia' : `em ${days} dias`
+}

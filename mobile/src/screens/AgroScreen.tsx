@@ -7,6 +7,7 @@ import {
   classifyVpd,
   evaluateTrafficability,
   formatFrostDays,
+  formatFrostDaysAhead,
   growingDegreeDays,
   vaporPressureDeficitKpa,
   waterBalanceMm,
@@ -238,10 +239,16 @@ function AgroCard({ entry }: { entry: AgroEntry }) {
       ) : (
         <>
           {entry.severeFrostDays.length > 0 && (
-            <Row warn text={`❄️ Geada forte: ${formatFrostDays(entry.severeFrostDays)}`} />
+            <Row
+              warn
+              text={`❄️ Geada forte (${formatFrostDaysAhead(entry.severeFrostDays)}): ${formatFrostDays(entry.severeFrostDays)}`}
+            />
           )}
           {entry.lightFrostDays.length > 0 && (
-            <Row warn text={`🌡️ Risco leve de geada: ${formatFrostDays(entry.lightFrostDays)}`} />
+            <Row
+              warn
+              text={`🌡️ Risco leve de geada (${formatFrostDaysAhead(entry.lightFrostDays)}): ${formatFrostDays(entry.lightFrostDays)}`}
+            />
           )}
           {!hasFrost && <Row text="Sem risco de geada previsto." />}
 
