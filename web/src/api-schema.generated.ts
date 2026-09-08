@@ -1307,6 +1307,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{location_id}/field-occurrences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Occurrences */
+        get: operations["list_occurrences_api_v1_locations__location_id__field_occurrences_get"];
+        put?: never;
+        /** Create Occurrence */
+        post: operations["create_occurrence_api_v1_locations__location_id__field_occurrences_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/field-occurrences/{occurrence_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Occurrence */
+        patch: operations["update_occurrence_api_v1_field_occurrences__occurrence_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/locations/{location_id}/field-inspections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Inspections */
+        get: operations["list_inspections_api_v1_locations__location_id__field_inspections_get"];
+        put?: never;
+        /** Create Inspection */
+        post: operations["create_inspection_api_v1_locations__location_id__field_inspections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/field-inspections/{inspection_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Inspection */
+        patch: operations["update_inspection_api_v1_field_inspections__inspection_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/field-inspections/{inspection_id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Inspection Photos */
+        get: operations["list_inspection_photos_api_v1_field_inspections__inspection_id__photos_get"];
+        put?: never;
+        /**
+         * Upload Inspection Photo
+         * @description Expects an already-compressed image (the mobile app compresses
+         *     client-side before queueing the upload — see ADR-0090); this endpoint
+         *     only rejects an unreasonably large body, it never compresses itself.
+         */
+        post: operations["upload_inspection_photo_api_v1_field_inspections__inspection_id__photos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{location_id}/field-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tasks */
+        get: operations["list_tasks_api_v1_locations__location_id__field_tasks_get"];
+        put?: never;
+        /** Create Task */
+        post: operations["create_task_api_v1_locations__location_id__field_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/field-tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Task */
+        patch: operations["update_task_api_v1_field_tasks__task_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/locations/{location_id}/field-timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Field Timeline
+         * @description Merges occurrences/inspections/tasks/alerts for this talhão into one
+         *     chronological read — never a new source of truth, each entry just
+         *     points back (`ref_id`) at the record its own endpoint already serves.
+         */
+        get: operations["get_field_timeline_api_v1_locations__location_id__field_timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/storms": {
         parameters: {
             query?: never;
@@ -2175,6 +2325,11 @@ export interface components {
              */
             created_at: string;
         };
+        /** Body_upload_inspection_photo_api_v1_field_inspections__inspection_id__photos_post */
+        Body_upload_inspection_photo_api_v1_field_inspections__inspection_id__photos_post: {
+            /** File */
+            file: string;
+        };
         /** ConvectiveWatchOut */
         ConvectiveWatchOut: {
             /**
@@ -2320,6 +2475,82 @@ export interface components {
             /** Expo Push Token */
             expo_push_token: string;
         };
+        /** FieldOccurrenceCreate */
+        FieldOccurrenceCreate: {
+            /** Id */
+            id?: string | null;
+            /** Alert Id */
+            alert_id?: string | null;
+            /** Recommended Action Id */
+            recommended_action_id?: string | null;
+            /** Category */
+            category: string;
+            /** Description */
+            description: string;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            /** Reported At */
+            reported_at?: string | null;
+        };
+        /** FieldOccurrenceOut */
+        FieldOccurrenceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Alert Id */
+            alert_id: string | null;
+            /** Recommended Action Id */
+            recommended_action_id: string | null;
+            /** Category */
+            category: string;
+            /** Description */
+            description: string;
+            /** Latitude */
+            latitude: number;
+            /** Longitude */
+            longitude: number;
+            status: components["schemas"]["FieldOccurrenceStatus"];
+            /**
+             * Reported By
+             * Format: uuid
+             */
+            reported_by: string;
+            /**
+             * Reported At
+             * Format: date-time
+             */
+            reported_at: string;
+            /** Version */
+            version: number;
+        };
+        /**
+         * FieldOccurrenceStatus
+         * @description Caderno de Campo (Fase 6, ADR-0090).
+         * @enum {string}
+         */
+        FieldOccurrenceStatus: "open" | "resolved";
+        /** FieldOccurrenceUpdate */
+        FieldOccurrenceUpdate: {
+            /** Base Version */
+            base_version: number;
+            status?: components["schemas"]["FieldOccurrenceStatus"] | null;
+            /** Description */
+            description?: string | null;
+        };
+        /**
+         * FieldTaskStatus
+         * @enum {string}
+         */
+        FieldTaskStatus: "pending" | "in_progress" | "done" | "cancelled";
         /** Forecast */
         Forecast: {
             provenance: components["schemas"]["Provenance"];
@@ -2406,6 +2637,61 @@ export interface components {
          * @enum {string}
          */
         ImageQuality: "high" | "medium" | "low";
+        /** InspectionCreate */
+        InspectionCreate: {
+            /** Id */
+            id?: string | null;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Notes */
+            notes: string;
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
+            /** Inspected At */
+            inspected_at?: string | null;
+        };
+        /** InspectionOut */
+        InspectionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Occurrence Id */
+            occurrence_id: string | null;
+            /** Notes */
+            notes: string;
+            /** Latitude */
+            latitude: number | null;
+            /** Longitude */
+            longitude: number | null;
+            /**
+             * Inspected By
+             * Format: uuid
+             */
+            inspected_by: string;
+            /**
+             * Inspected At
+             * Format: date-time
+             */
+            inspected_at: string;
+            /** Version */
+            version: number;
+        };
+        /** InspectionUpdate */
+        InspectionUpdate: {
+            /** Base Version */
+            base_version: number;
+            /** Notes */
+            notes?: string | null;
+        };
         /** InvitationAcceptIn */
         InvitationAcceptIn: {
             /** Token */
@@ -2826,6 +3112,35 @@ export interface components {
             /** Slug */
             slug: string;
         };
+        /** PhotoOut */
+        PhotoOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Inspection Id
+             * Format: uuid
+             */
+            inspection_id: string;
+            /** Content Type */
+            content_type: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Uploaded By
+             * Format: uuid
+             */
+            uploaded_by: string;
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
+            /** Url */
+            url: string;
+        };
         /**
          * PipelineHealthOut
          * @description How fresh each background pipeline's most recent data is (FASE 34
@@ -3221,6 +3536,98 @@ export interface components {
          * @enum {string}
          */
         StormSeverity: "weak" | "moderate" | "strong" | "severe";
+        /** TaskCreate */
+        TaskCreate: {
+            /** Id */
+            id?: string | null;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Alert Id */
+            alert_id?: string | null;
+            /** Recommended Action Id */
+            recommended_action_id?: string | null;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Assigned To */
+            assigned_to?: string | null;
+            /** Due At */
+            due_at?: string | null;
+        };
+        /** TaskOut */
+        TaskOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Occurrence Id */
+            occurrence_id: string | null;
+            /** Alert Id */
+            alert_id: string | null;
+            /** Recommended Action Id */
+            recommended_action_id: string | null;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string | null;
+            /** Assigned To */
+            assigned_to: string | null;
+            /** Due At */
+            due_at: string | null;
+            status: components["schemas"]["FieldTaskStatus"];
+            /** Completed By */
+            completed_by: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /** Version */
+            version: number;
+        };
+        /** TaskUpdate */
+        TaskUpdate: {
+            /** Base Version */
+            base_version: number;
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Assigned To */
+            assigned_to?: string | null;
+            /** Due At */
+            due_at?: string | null;
+            status?: components["schemas"]["FieldTaskStatus"] | null;
+        };
+        /**
+         * TimelineEntry
+         * @description One chronological entry in a talhão's field-notebook timeline —
+         *     `kind` tags which underlying record `ref_id` points to (never a
+         *     second, separate source of truth: the client fetches the full record
+         *     from its own endpoint if it needs more than this summary).
+         */
+        TimelineEntry: {
+            /** Kind */
+            kind: string;
+            /**
+             * Ref Id
+             * Format: uuid
+             */
+            ref_id: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Title */
+            title: string;
+            /** Summary */
+            summary: string;
+        };
         /** TokenPair */
         TokenPair: {
             /** Access Token */
@@ -6023,6 +6430,406 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ValidationMetricsOut"];
+                };
+            };
+        };
+    };
+    list_occurrences_api_v1_locations__location_id__field_occurrences_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldOccurrenceOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_occurrence_api_v1_locations__location_id__field_occurrences_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldOccurrenceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldOccurrenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_occurrence_api_v1_field_occurrences__occurrence_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                occurrence_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FieldOccurrenceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldOccurrenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_inspections_api_v1_locations__location_id__field_inspections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_inspection_api_v1_locations__location_id__field_inspections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_inspection_api_v1_field_inspections__inspection_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inspection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_inspection_photos_api_v1_field_inspections__inspection_id__photos_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inspection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_inspection_photo_api_v1_field_inspections__inspection_id__photos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                inspection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_inspection_photo_api_v1_field_inspections__inspection_id__photos_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tasks_api_v1_locations__location_id__field_tasks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_task_api_v1_locations__location_id__field_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_task_api_v1_field_tasks__task_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_field_timeline_api_v1_locations__location_id__field_timeline_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                location_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

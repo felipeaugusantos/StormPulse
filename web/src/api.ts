@@ -13,6 +13,13 @@ import type {
   ApiKeyCreated,
   ConvectiveWatch,
   CurrentConditions,
+  FieldInspection,
+  FieldOccurrence,
+  FieldOccurrenceStatus,
+  FieldPhoto,
+  FieldTask,
+  FieldTaskStatus,
+  FieldTimelineEntry,
   Forecast,
   ForecastComparison,
   LightningStrike,
@@ -139,7 +146,12 @@ export async function initSession(): Promise<boolean> {
 async function request<T>(path: string, init: RequestInit = {}, isRetry = false): Promise<T> {
   const token = getToken()
   const headers = new Headers(init.headers)
-  headers.set('Content-Type', 'application/json')
+  // A FormData body (photo upload, Fase 6/ADR-0090) must never get a
+  // hardcoded JSON content-type — fetch sets its own multipart boundary
+  // only when it computes the header itself.
+  if (!(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json')
+  }
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
   const res = await fetch(`${V1}${path}`, { ...init, headers, credentials: 'include' })
@@ -347,6 +359,86 @@ export const api = {
   // ADR-0089).
   recommendedActions: (locationId: string) =>
     request<RecommendedAction[]>(`/locations/${locationId}/recommended-actions`),
+  // Caderno de Campo (Fase 6, ADR-0090) — o dashboard web está sempre
+  // online, então cada create aqui não precisa da fila offline do
+  // mobile (mobile/src/fieldnotes/); os endpoints são os mesmos.
+  fieldOccurrences: (locationId: string) =>
+    request<FieldOccurrence[]>(`/locations/${locationId}/field-occurrences`),
+  createFieldOccurrence: (
+    locationId: string,
+    data: {
+      category: string
+      description: string
+      latitude: number
+      longitude: number
+      alert_id?: string | null
+      recommended_action_id?: string | null
+    },
+  ) =>
+    request<FieldOccurrence>(`/locations/${locationId}/field-occurrences`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateFieldOccurrence: (
+    occurrenceId: string,
+    data: { base_version: number; status?: FieldOccurrenceStatus; description?: string },
+  ) =>
+    request<FieldOccurrence>(`/field-occurrences/${occurrenceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  fieldInspections: (locationId: string) =>
+    request<FieldInspection[]>(`/locations/${locationId}/field-inspections`),
+  createFieldInspection: (
+    locationId: string,
+    data: { occurrence_id?: string | null; notes: string },
+  ) =>
+    request<FieldInspection>(`/locations/${locationId}/field-inspections`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  fieldInspectionPhotos: (inspectionId: string) =>
+    request<FieldPhoto[]>(`/field-inspections/${inspectionId}/photos`),
+  uploadFieldPhoto: (inspectionId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request<FieldPhoto>(`/field-inspections/${inspectionId}/photos`, {
+      method: 'POST',
+      body: form,
+    })
+  },
+  fieldTasks: (locationId: string) =>
+    request<FieldTask[]>(`/locations/${locationId}/field-tasks`),
+  createFieldTask: (
+    locationId: string,
+    data: {
+      title: string
+      description?: string | null
+      assigned_to?: string | null
+      due_at?: string | null
+    },
+  ) =>
+    request<FieldTask>(`/locations/${locationId}/field-tasks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateFieldTask: (
+    taskId: string,
+    data: {
+      base_version: number
+      title?: string
+      description?: string | null
+      assigned_to?: string | null
+      due_at?: string | null
+      status?: FieldTaskStatus
+    },
+  ) =>
+    request<FieldTask>(`/field-tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  fieldTimeline: (locationId: string) =>
+    request<FieldTimelineEntry[]>(`/locations/${locationId}/field-timeline`),
   forecast: (locationId: string) => request<Forecast>(`/locations/${locationId}/forecast`),
   // Always Open-Meteo, bypassing INMET/CPTEC — the only source with a real
   // numeric rain forecast (backend: get_numeric_rain_forecast_provider,

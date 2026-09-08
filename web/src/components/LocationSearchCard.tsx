@@ -5,6 +5,7 @@ import { reverseGeocodeCity, searchCity } from '../geocode'
 import type { CitySearchResult, LocationItem } from '../types'
 import { AlertRulesModal } from './AlertRulesModal'
 import { ForecastComparisonModal } from './ForecastComparisonModal'
+import { FieldNotebookModal } from './FieldNotebookModal'
 import { RiskDigestModal } from './RiskDigestModal'
 import { WeeklyReportModal } from './WeeklyReportModal'
 
@@ -93,6 +94,9 @@ export function LocationSearchCard({
   // Risco consolidado (Fase 3-A, ADR-0087) — qual talhão tem o painel
   // aberto, se algum.
   const [riskDigestFor, setRiskDigestFor] = useState<LocationItem | null>(null)
+  // Caderno de Campo (Fase 6, ADR-0090) — qual talhão tem o caderno
+  // aberto, se algum.
+  const [fieldNotebookFor, setFieldNotebookFor] = useState<LocationItem | null>(null)
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -429,6 +433,16 @@ export function LocationSearchCard({
                     </button>
                     <button
                       className="btn ghost small"
+                      title="Caderno de campo"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setFieldNotebookFor(plot)
+                      }}
+                    >
+                      📋
+                    </button>
+                    <button
+                      className="btn ghost small"
                       title="Editar talhão"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -608,6 +622,15 @@ export function LocationSearchCard({
           locationId={riskDigestFor.id}
           locationName={riskDigestFor.name}
           onClose={() => setRiskDigestFor(null)}
+        />
+      )}
+      {fieldNotebookFor && (
+        <FieldNotebookModal
+          locationId={fieldNotebookFor.id}
+          locationName={fieldNotebookFor.name}
+          latitude={fieldNotebookFor.latitude}
+          longitude={fieldNotebookFor.longitude}
+          onClose={() => setFieldNotebookFor(null)}
         />
       )}
     </section>
