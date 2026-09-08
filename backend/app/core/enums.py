@@ -170,3 +170,17 @@ class ReportStatus(StrEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
     REJECTED = "rejected"
+
+
+class FieldOccurrenceStatus(StrEnum):
+    """Caderno de Campo (Fase 6, ADR-0090)."""
+
+    OPEN = "open"
+    RESOLVED = "resolved"
+
+
+class FieldTaskStatus(StrEnum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+    CANCELLED = "cancelled"

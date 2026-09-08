@@ -16,6 +16,7 @@ from app.alerts.router import router as alerts_router
 from app.api import health
 from app.auth.router import router as auth_router
 from app.externalapi.router import router as external_api_router
+from app.fieldnotes.router import router as fieldnotes_router
 from app.lightning.router import router as lightning_router
 from app.locations.router import router as locations_router
 from app.organizations.router import router as organizations_router
@@ -40,6 +41,7 @@ v1_router.include_router(alert_channels_router, prefix="/alert-channels")
 v1_router.include_router(satellite_router, prefix="/satellite")
 v1_router.include_router(lightning_router, prefix="/lightning")
 v1_router.include_router(admin_router, prefix="/admin")
+v1_router.include_router(fieldnotes_router, prefix="")
 
 # Unauthenticated "visitor mode" endpoints (FASE 15) — mounted separately by
 # main.py under /public with its own (stricter) rate limit, not included

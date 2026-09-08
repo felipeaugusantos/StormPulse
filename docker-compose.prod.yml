@@ -54,6 +54,16 @@ services:
     networks:
       - stormpulse
 
+  # Field-photo object store (Fase 6, ADR-0090) — same "no port published"
+  # posture as db/redis above; only `api` (inside the Docker network)
+  # ever talks to it.
+  minio:
+    ports: !reset []
+    restart: unless-stopped
+    logging: *default-logging
+    networks:
+      - stormpulse
+
   api:
     build: !reset null
     image: ${STORMPULSE_IMAGE:-ghcr.io/felipeaugusantos/stormpulse:latest}

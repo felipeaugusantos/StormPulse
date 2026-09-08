@@ -26,6 +26,9 @@ _DEV_JWT_SECRET = "dev-insecure-change-me"
 # in dev/test) but are refused in production, same as _DEV_JWT_SECRET.
 _DEV_FIELD_ENCRYPTION_KEY = "ZGV2LWluc2VjdXJlLWVuY3J5cHRpb24ta2V5LTMyYmI="
 _DEV_FIELD_ENCRYPTION_INDEX_KEY = "ZGV2LWluc2VjdXJlLWJsaW5kLWluZGV4LWtleS0zMmI="
+# Sentinel dev credential for the field-photo object store (Fase 6,
+# ADR-0090). Refused in production, same pattern as the secrets above.
+_DEV_FIELDNOTES_STORAGE_SECRET_KEY = "dev-insecure-minio-secret-change-me"
 
 # Single source of truth for the RLS runtime role's *name* (migration
 # 0b7b9a5dbd11 creates it, imports this exact constant rather than a
@@ -448,6 +451,23 @@ class Settings(BaseSettings):
     soil_moisture_nasa_power_url: str = "https://power.larc.nasa.gov/api/temporal/daily/point"
     soil_moisture_http_timeout_seconds: float = Field(default=15.0, gt=0)
 
+    # --- Caderno de Campo — storage de fotos (MinIO/S3-compatível, Fase 6,
+    # ADR-0090) --- Always-on infrastructure (like Postgres/Redis above),
+    # not an opt-in external integration like soil moisture/SES below —
+    # the field notebook has no degraded mode without it. Never public:
+    # every read goes through a short-lived presigned URL
+    # (`app/fieldnotes/storage.py`), the bucket itself stays private.
+    fieldnotes_storage_endpoint: str = "localhost:9000"
+    fieldnotes_storage_access_key: str = "stormpulse"
+    fieldnotes_storage_secret_key: SecretStr = Field(
+        default=SecretStr(_DEV_FIELDNOTES_STORAGE_SECRET_KEY)
+    )
+    fieldnotes_storage_bucket: str = "field-photos"
+    # False for the local docker-compose network (plain HTTP between
+    # containers); true once MinIO sits behind real TLS in production.
+    fieldnotes_storage_secure: bool = False
+    fieldnotes_storage_presigned_url_expiry_seconds: int = Field(default=600, gt=0)
+
     # --- Notificação push real (Web Push / VAPID, FASE 22) ---
     # Sem serviço externo (FCM/APNs) — o navegador é o próprio serviço de
     # push, só a assinatura VAPID é local. `vapid_private_key`/
@@ -531,6 +551,14 @@ class Settings(BaseSettings):
                 "ab4b31a9059a actually encrypts users.email/full_name/google_sub under "
                 "(ADR-0055); the dev defaults are refused. Generate each with "
                 "`openssl rand -base64 32`."
+            )
+        if self.environment == "production" and (
+            self.fieldnotes_storage_secret_key.get_secret_value()
+            == _DEV_FIELDNOTES_STORAGE_SECRET_KEY
+        ):
+            raise ValueError(
+                "FIELDNOTES_STORAGE_SECRET_KEY must be set to a strong secret in production "
+                "— the dev default is refused."
             )
         if self.environment == "production" and not self.refresh_cookie_enabled:
             raise ValueError(

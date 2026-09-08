@@ -31,6 +31,26 @@ services:
       timeout: 3s
       retries: 10
 
+  # Private object store for Caderno de Campo field photos (Fase 6,
+  # ADR-0090) — S3-compatible, accessed via boto3 (already a dependency)
+  # pointed at this endpoint instead of a separate MinIO SDK.
+  minio:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z@sha256:9535594ad4122b7a78c6632788a989b96d9199b483d3bd71a5ceae73a922cdfa
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${FIELDNOTES_STORAGE_ACCESS_KEY:-stormpulse}
+      MINIO_ROOT_PASSWORD: ${FIELDNOTES_STORAGE_SECRET_KEY:-dev-insecure-minio-secret-change-me}
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: ./backend
@@ -58,12 +78,15 @@ services:
       POSTGRES_PORT: 5432
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      FIELDNOTES_STORAGE_ENDPOINT: minio:9000
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
 
   worker:
@@ -111,3 +134,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  miniodata:

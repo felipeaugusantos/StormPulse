@@ -83,6 +83,7 @@ def test_production_refuses_refresh_cookie_disabled() -> None:
             postgres_app_password="a-strong-production-db-password",
             field_encryption_key="dGhpcy1pcy1hLXN0cm9uZy1wcm9kLWtleS0zMmJieXRlcyE=",
             field_encryption_index_key="YW5vdGhlci1zdHJvbmctcHJvZC1pbmRleC1rZXktMzJiIQ==",
+            fieldnotes_storage_secret_key="a-strong-production-minio-secret-key",
             refresh_cookie_enabled=False,
         )
 
@@ -95,6 +96,7 @@ def test_production_requires_secure_cookie_when_cookie_enabled() -> None:
             postgres_app_password="a-strong-production-db-password",
             field_encryption_key="dGhpcy1pcy1hLXN0cm9uZy1wcm9kLWtleS0zMmJieXRlcyE=",
             field_encryption_index_key="YW5vdGhlci1zdHJvbmctcHJvZC1pbmRleC1rZXktMzJiIQ==",
+            fieldnotes_storage_secret_key="a-strong-production-minio-secret-key",
             refresh_cookie_enabled=True,
             refresh_cookie_secure=False,
         )
@@ -141,6 +143,7 @@ def _valid_production_settings(*, weather_provider: str) -> Settings:
         postgres_app_password="a-strong-production-db-password",
         field_encryption_key="dGhpcy1pcy1hLXN0cm9uZy1wcm9kLWtleS0zMmJieXRlcyE=",
         field_encryption_index_key="YW5vdGhlci1zdHJvbmctcHJvZC1pbmRleC1rZXktMzJiIQ==",
+        fieldnotes_storage_secret_key="a-strong-production-minio-secret-key",
         refresh_cookie_enabled=True,
         refresh_cookie_secure=True,
         weather_provider=weather_provider,

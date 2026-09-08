@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -21,6 +22,7 @@ from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.tracing import configure_tracing
 from app.db.redis import create_redis
 from app.db.session import create_engine, create_session_factory
+from app.fieldnotes.storage import FieldPhotoStorageError, ensure_bucket
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,19 @@ async def _bootstrap_platform_admin(app: FastAPI, settings: Settings) -> None:
             logger.info("promoted platform admin", extra={"email": user.email})
 
 
+async def _ensure_field_photo_storage(settings: Settings) -> None:
+    """Same fail-open-except-production shape as `verify_rls_safety` —
+    an unreachable object store in dev/CI shouldn't block the whole API
+    from starting (individual photo uploads just 503 until it's back),
+    but production must know immediately if the bucket can't be created."""
+    try:
+        await asyncio.to_thread(ensure_bucket, settings)
+    except FieldPhotoStorageError:
+        if settings.environment == "production":
+            raise
+        logger.warning("field-photo storage unavailable at startup", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Initialize and dispose shared resources (DB engine, Redis client)."""
@@ -67,6 +82,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # broken RLS setup); everywhere else just warns — see
     # verify_rls_safety's own docstring for why local/CI get the pass.
     await verify_rls_safety(app.state.engine, settings)
+    await _ensure_field_photo_storage(settings)
     # Gated only by PLATFORM_ADMIN_EMAIL being set (see the function's own
     # early return) — not by environment, so integration tests can exercise
     # the real startup path instead of a parallel test-only code path.

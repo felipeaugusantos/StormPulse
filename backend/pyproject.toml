@@ -39,6 +39,10 @@ dependencies = [
     # (the `satellite` extra, kept out of the base image for size), this
     # belongs in every image since the PDF endpoint is always on.
     "pillow>=11.0",
+    # Required by FastAPI/Starlette to parse multipart/form-data — the
+    # Caderno de Campo photo upload endpoint (Fase 6, ADR-0090) is the
+    # first `UploadFile` in the project.
+    "python-multipart>=0.0.12",
 ]
 
 [project.optional-dependencies]
