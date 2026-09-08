@@ -17,3 +17,15 @@ export function timeUntil(minutes: number): string {
   const days = Math.round(rounded / (60 * 24))
   return days === 1 ? 'em 1 dia' : `em ${days} dias`
 }
+
+/** "há 3 min" / "há 2 h" — the past-facing counterpart to `timeUntil`,
+ * same rounding convention, ported from web/src/format.ts (Fase 6,
+ * ADR-0090 — the Caderno de Campo timeline needed it on mobile too). */
+export function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const minutes = Math.max(0, Math.round(diffMs / 60_000))
+  if (minutes < 1) return 'agora'
+  if (minutes < 60) return `há ${minutes} min`
+  const hours = Math.round(minutes / 60)
+  return `há ${hours} h`
+}

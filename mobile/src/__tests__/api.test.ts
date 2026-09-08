@@ -305,6 +305,67 @@ describe('paridade mobile (item 5)', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/locations/loc-1/recommended-actions')
   })
 
+  test('createFieldOccurrence() posts to the location-scoped endpoint (Fase 6, ADR-0090)', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      jsonResponse(201, {
+        id: 'occ-1',
+        location_id: 'loc-1',
+        alert_id: null,
+        recommended_action_id: null,
+        category: 'praga',
+        description: 'x',
+        latitude: 0,
+        longitude: 0,
+        status: 'open',
+        reported_by: 'user-1',
+        reported_at: '2026-09-07T12:00:00Z',
+        version: 1,
+      }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await api.createFieldOccurrence('loc-1', {
+      id: 'occ-1',
+      category: 'praga',
+      description: 'x',
+      latitude: 0,
+      longitude: 0,
+    })
+
+    expect(result.id).toBe('occ-1')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/locations/loc-1/field-occurrences')
+    expect(init.method).toBe('POST')
+  })
+
+  test('updateFieldTask() sends base_version for conflict detection (Fase 6, ADR-0090)', async () => {
+    const fetchMock = jest.fn().mockResolvedValueOnce(
+      jsonResponse(200, {
+        id: 'task-1',
+        location_id: 'loc-1',
+        occurrence_id: null,
+        alert_id: null,
+        recommended_action_id: null,
+        title: 'x',
+        description: null,
+        assigned_to: null,
+        due_at: null,
+        status: 'done',
+        completed_by: 'user-1',
+        completed_at: '2026-09-07T12:00:00Z',
+        version: 2,
+      }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await api.updateFieldTask('task-1', { base_version: 1, status: 'done' })
+
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/field-tasks/task-1')
+    expect(init.method).toBe('PATCH')
+    expect(JSON.parse(init.body)).toEqual({ base_version: 1, status: 'done' })
+  })
+
   test('vegetationSeries() requests the selected spectral index and history', async () => {
     const fetchMock = jest.fn().mockResolvedValueOnce(
       jsonResponse(200, { location_id: 'plot-1', index_name: 'evi', current: null, series: [] }),

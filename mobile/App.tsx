@@ -4,6 +4,7 @@ import { ActivityIndicator } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { hasSession } from './src/api'
+import { startAutoSync } from './src/fieldnotes/sync'
 import { colors } from './src/theme'
 import { LoginScreen } from './src/screens/LoginScreen'
 import { HomeScreen } from './src/screens/HomeScreen'
@@ -58,6 +59,14 @@ export default function App() {
 
   useEffect(() => {
     hasSession().then(setAuthed)
+  }, [])
+
+  // Caderno de Campo (Fase 6, ADR-0090) — flush the offline queue whenever
+  // connectivity returns, app-wide, not just while a notebook screen is
+  // open (a Wi-Fi reconnect while browsing another tab must still sync).
+  useEffect(() => {
+    const unsubscribe = startAutoSync(() => {})
+    return unsubscribe
   }, [])
 
   return (

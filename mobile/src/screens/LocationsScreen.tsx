@@ -15,6 +15,7 @@ import { ApiError, api, logout } from '../api'
 import { isPushSupported, subscribeToExpoPush } from '../push'
 import { reverseGeocodeCity, searchCity } from '../geocode'
 import { COLOR_PALETTE, cropColor } from '../cropColors'
+import { FieldNotebookScreen } from './FieldNotebookScreen'
 import { PlotBoundaryMapScreen } from './PlotBoundaryMapScreen'
 import type { CitySearchResult, LocationItem } from '../types'
 import { colors } from '../theme'
@@ -47,6 +48,7 @@ export function LocationsScreen({ onLogout }: Props) {
   const [plotBoundaryGeojson, setPlotBoundaryGeojson] = useState<string | null>(null)
   const [creatingPlot, setCreatingPlot] = useState(false)
   const [drawingBoundaryFor, setDrawingBoundaryFor] = useState<LocationItem | null>(null)
+  const [fieldNotebookFor, setFieldNotebookFor] = useState<LocationItem | null>(null)
   const [pickingColorFor, setPickingColorFor] = useState<string | null>(null)
   const [updatingColorFor, setUpdatingColorFor] = useState<string | null>(null)
 
@@ -231,6 +233,12 @@ export function LocationsScreen({ onLogout }: Props) {
     )
   }
 
+  if (fieldNotebookFor) {
+    return (
+      <FieldNotebookScreen location={fieldNotebookFor} onClose={() => setFieldNotebookFor(null)} />
+    )
+  }
+
   return (
     <ScrollView
       style={styles.screen}
@@ -349,6 +357,9 @@ export function LocationsScreen({ onLogout }: Props) {
                         { backgroundColor: plot.color ?? cropColor(plot.crop) },
                       ]}
                     />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setFieldNotebookFor(plot)}>
+                    <Text style={styles.smallBtn}>📋 caderno</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => removeLocation(plot)}>
                     <Text style={styles.smallBtnDanger}>remover</Text>

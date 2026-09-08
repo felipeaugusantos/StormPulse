@@ -133,6 +133,74 @@ export interface RecommendedAction {
   created_at: string
 }
 
+// Caderno de Campo (Fase 6, ADR-0090). `version` is used for optimistic
+// concurrency — an update must send the `base_version` it last saw; the
+// backend 409s instead of overwriting silently when it's stale.
+export type FieldOccurrenceStatus = 'open' | 'resolved'
+export type FieldTaskStatus = 'pending' | 'in_progress' | 'done' | 'cancelled'
+
+export interface FieldOccurrence {
+  id: string
+  location_id: string
+  alert_id: string | null
+  recommended_action_id: string | null
+  category: string
+  description: string
+  latitude: number
+  longitude: number
+  status: FieldOccurrenceStatus
+  reported_by: string
+  reported_at: string
+  version: number
+}
+
+export interface Inspection {
+  id: string
+  location_id: string
+  occurrence_id: string | null
+  notes: string
+  latitude: number | null
+  longitude: number | null
+  inspected_by: string
+  inspected_at: string
+  version: number
+}
+
+export interface FieldPhoto {
+  id: string
+  inspection_id: string
+  content_type: string
+  size_bytes: number
+  uploaded_by: string
+  uploaded_at: string
+  // Short-lived signed URL — never public/permanent (ADR-0090).
+  url: string
+}
+
+export interface FieldTask {
+  id: string
+  location_id: string
+  occurrence_id: string | null
+  alert_id: string | null
+  recommended_action_id: string | null
+  title: string
+  description: string | null
+  assigned_to: string | null
+  due_at: string | null
+  status: FieldTaskStatus
+  completed_by: string | null
+  completed_at: string | null
+  version: number
+}
+
+export interface FieldTimelineEntry {
+  kind: 'occurrence' | 'inspection' | 'task' | 'alert'
+  ref_id: string
+  occurred_at: string
+  title: string
+  summary: string
+}
+
 export interface StormCell {
   id: string
   detected_at: string

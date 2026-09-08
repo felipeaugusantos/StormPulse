@@ -5,8 +5,13 @@ import type {
   ConvectiveWatch,
   CreateLocationInput,
   CurrentConditions,
+  FieldOccurrence,
+  FieldPhoto,
+  FieldTask,
+  FieldTimelineEntry,
   Forecast,
   ForecastComparison,
+  Inspection,
   LightningStrike,
   LocationItem,
   Me,
@@ -81,10 +86,20 @@ async function refreshAccessToken(): Promise<string> {
   }
 }
 
-async function request<T>(path: string, init: RequestInit = {}, isRetry = false): Promise<T> {
+// Exported (Fase 6, ADR-0090) so fieldnotes/sync.ts can replay a queued
+// offline operation through the exact same auth/refresh/error handling as
+// every other call in this file — never a second, parallel HTTP client.
+export async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  isRetry = false,
+): Promise<T> {
   const token = await authStorage.getAccessToken()
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    // A FormData body (photo upload, Fase 6/ADR-0090) must never get a
+    // hardcoded JSON content-type — fetch sets its own multipart boundary
+    // only when it computes the header itself.
+    ...(init.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
     // Backend hardening Fase 4 (ADR-0045): REFRESH_COOKIE_ENABLED defaults
     // to true now — without this header the backend can't tell mobile
     // apart from the web dashboard and would strip refresh_token from the
@@ -205,6 +220,58 @@ export const api = {
   // ADR-0089).
   recommendedActions: (locationId: string) =>
     request<RecommendedAction[]>(`/locations/${locationId}/recommended-actions`),
+  // Caderno de Campo (Fase 6, ADR-0090) — every create takes an optional
+  // client-supplied `id` (generated offline) for idempotent sync replay;
+  // every update takes `base_version` and 409s on a stale one.
+  fieldOccurrences: (locationId: string) =>
+    request<FieldOccurrence[]>(`/locations/${locationId}/field-occurrences`),
+  createFieldOccurrence: (locationId: string, data: Record<string, unknown>) =>
+    request<FieldOccurrence>(`/locations/${locationId}/field-occurrences`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateFieldOccurrence: (occurrenceId: string, data: Record<string, unknown>) =>
+    request<FieldOccurrence>(`/field-occurrences/${occurrenceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  fieldInspections: (locationId: string) =>
+    request<Inspection[]>(`/locations/${locationId}/field-inspections`),
+  createFieldInspection: (locationId: string, data: Record<string, unknown>) =>
+    request<Inspection>(`/locations/${locationId}/field-inspections`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  fieldInspectionPhotos: (inspectionId: string) =>
+    request<FieldPhoto[]>(`/field-inspections/${inspectionId}/photos`),
+  uploadFieldPhoto: (inspectionId: string, photo: { uri: string; name: string; type: string }) => {
+    const form = new FormData()
+    // React Native's fetch accepts this `{uri,name,type}` shape directly
+    // as a Blob-like value — the same convention expo-image-picker's own
+    // result already comes in.
+    form.append('file', {
+      uri: photo.uri,
+      name: photo.name,
+      type: photo.type,
+    } as unknown as Blob)
+    return request<FieldPhoto>(`/field-inspections/${inspectionId}/photos`, {
+      method: 'POST',
+      body: form,
+    })
+  },
+  fieldTasks: (locationId: string) => request<FieldTask[]>(`/locations/${locationId}/field-tasks`),
+  createFieldTask: (locationId: string, data: Record<string, unknown>) =>
+    request<FieldTask>(`/locations/${locationId}/field-tasks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateFieldTask: (taskId: string, data: Record<string, unknown>) =>
+    request<FieldTask>(`/field-tasks/${taskId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  fieldTimeline: (locationId: string) =>
+    request<FieldTimelineEntry[]>(`/locations/${locationId}/field-timeline`),
   storms: () => request<StormCell[]>('/storms?limit=200'),
   lightning: () => request<LightningStrike[]>('/lightning'),
   satelliteWatches: () => request<ConvectiveWatch[]>('/satellite'),
