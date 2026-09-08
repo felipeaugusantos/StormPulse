@@ -196,11 +196,42 @@ pipeline a cada 15 min, dedup por (local, regra, dia). Exposto em `GET
 a superfície do risco consolidado já existente. Decisões e achados
 detalhados em [ADR-0089](adr/0089-motor-recomendacao-acao.md).
 
-## Fase 6 — Registro de execução da ação (auditoria)
+## Fase 6 — Caderno de Campo (registro de execução da ação) ✅ concluída (2026-09-07)
 
-**O núcleo que fecha a pergunta do produto.** Não existe nenhuma forma
-disso hoje — `UserReport` é o mais próximo, mas está descrito como
-"arquitetura preparada, ainda sem UI".
+**O núcleo que fecha a pergunta do produto.** Escopo definido diretamente
+pelo dono do produto (substitui o rascunho original desta seção,
+renumerado abaixo como **Fase 6-A**) — relacionar alertas/recomendações
+com ações executadas no campo:
+
+- Ocorrências, inspeções, fotos, notas, tarefas, responsáveis, prazos,
+  status, recomendações, coordenada da inspeção.
+- Linha do tempo do talhão; relação entre tarefa, alerta, fazenda, talhão
+  e anomalia.
+- Funcionamento offline no mobile: fila local de sincronização,
+  resolução segura de conflitos.
+- Compressão e upload privado de fotos.
+
+Critérios de aceite: inspeções podem ser criadas sem internet;
+sincronização acontece ao recuperar a conexão; falhas são apresentadas ao
+usuário; confirmação registra autor e horário; fotos não ficam públicas;
+conflitos não sobrescrevem informações silenciosamente.
+
+**Implementado com:** armazenamento de fotos em MinIO local (novo
+serviço Docker, via `boto3` já usado para SES) — fotos nunca públicas,
+sempre servidas por URL pré-assinada de curta duração. Identidade
+offline-first via UUID gerado no cliente (mobile), tornando toda criação
+idempotente por construção (`GET` do id antes de inserir). Concorrência
+otimista via `version`/`base_version`/`409` em todo update — nunca
+sobrescrita silenciosa. 4 tabelas novas (`field_occurrences`,
+`inspections`, `photos`, `tasks`), tenant-scoped com RLS desde a
+migração. Mobile ganha sua primeira infraestrutura offline
+(`expo-sqlite` como fila local de sincronização, replay automático na
+reconexão via `@react-native-community/netinfo`, fotos comprimidas
+client-side antes do upload); web reutiliza os mesmos endpoints,
+sempre online, sem fila. Decisões e achados detalhados em
+[ADR-0090](adr/0090-caderno-de-campo-offline.md).
+
+## Fase 6-A — Registro de execução da ação (rascunho original, reduzido)
 
 - Novo modelo (`ActionExecution` ou reaproveitando/evoluindo
   `UserReport` — decidir na fase, comparando os dois caminhos) com:
