@@ -138,6 +138,32 @@ async def test_update_occurrence_with_stale_version_is_a_conflict(client: AsyncC
     assert get_resp.json()[0]["description"] == "Descrição original."
 
 
+async def test_update_occurrence_description_only(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+    occurrence_id = (
+        await client.post(
+            f"/api/v1/locations/{location_id}/field-occurrences",
+            json={
+                "category": "praga",
+                "description": "Descrição original.",
+                "latitude": -21.1775,
+                "longitude": -47.8103,
+            },
+            headers=headers,
+        )
+    ).json()["id"]
+
+    resp = await client.patch(
+        f"/api/v1/field-occurrences/{occurrence_id}",
+        json={"base_version": 1, "description": "Descrição revisada."},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["description"] == "Descrição revisada."
+    assert resp.json()["status"] == "open"
+
+
 async def test_another_tenants_occurrence_update_is_404(client: AsyncClient) -> None:
     owner_headers = await _auth_headers(client)
     location_id = await _create_location(client, owner_headers)
@@ -191,6 +217,102 @@ async def test_create_inspection_linked_to_an_occurrence(client: AsyncClient) ->
     assert resp.status_code == 201
     assert resp.json()["occurrence_id"] == occurrence_id
     assert resp.json()["version"] == 1
+
+
+async def test_list_inspections(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+    await client.post(
+        f"/api/v1/locations/{location_id}/field-inspections",
+        json={"notes": "Primeira inspeção."},
+        headers=headers,
+    )
+    await client.post(
+        f"/api/v1/locations/{location_id}/field-inspections",
+        json={"notes": "Segunda inspeção."},
+        headers=headers,
+    )
+
+    resp = await client.get(f"/api/v1/locations/{location_id}/field-inspections", headers=headers)
+    assert resp.status_code == 200
+    assert len(resp.json()) == 2
+
+
+async def test_update_inspection_notes_and_stale_version_conflict(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+    inspection_id = (
+        await client.post(
+            f"/api/v1/locations/{location_id}/field-inspections",
+            json={"notes": "Notas originais."},
+            headers=headers,
+        )
+    ).json()["id"]
+
+    update_resp = await client.patch(
+        f"/api/v1/field-inspections/{inspection_id}",
+        json={"base_version": 1, "notes": "Notas atualizadas."},
+        headers=headers,
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["notes"] == "Notas atualizadas."
+    assert update_resp.json()["version"] == 2
+
+    stale_resp = await client.patch(
+        f"/api/v1/field-inspections/{inspection_id}",
+        json={"base_version": 1, "notes": "Tentando sobrescrever."},
+        headers=headers,
+    )
+    assert stale_resp.status_code == 409
+
+
+async def test_update_nonexistent_inspection_and_task_are_404(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    fake_id = uuid.uuid4()
+
+    assert (
+        await client.patch(
+            f"/api/v1/field-inspections/{fake_id}",
+            json={"base_version": 1, "notes": "x"},
+            headers=headers,
+        )
+    ).status_code == 404
+    assert (
+        await client.patch(
+            f"/api/v1/field-tasks/{fake_id}",
+            json={"base_version": 1, "status": "done"},
+            headers=headers,
+        )
+    ).status_code == 404
+    assert (
+        await client.post(
+            f"/api/v1/field-inspections/{fake_id}/photos",
+            files={"file": ("x.jpg", b"data", "image/jpeg")},
+            headers=headers,
+        )
+    ).status_code == 404
+    assert (
+        await client.get(f"/api/v1/field-inspections/{fake_id}/photos", headers=headers)
+    ).status_code == 404
+
+
+async def test_create_inspection_with_client_supplied_id_is_idempotent_on_retry(
+    client: AsyncClient,
+) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+    client_id = str(uuid.uuid4())
+    payload = {"id": client_id, "notes": "Inspeção enfileirada offline."}
+
+    first = await client.post(
+        f"/api/v1/locations/{location_id}/field-inspections", json=payload, headers=headers
+    )
+    second = await client.post(
+        f"/api/v1/locations/{location_id}/field-inspections", json=payload, headers=headers
+    )
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] == second.json()["id"] == client_id
 
 
 async def test_upload_and_list_inspection_photo(client: AsyncClient) -> None:
@@ -255,6 +377,129 @@ async def test_create_task_and_complete_it(client: AsyncClient) -> None:
     assert completed["status"] == "done"
     assert completed["completed_by"] == me["id"]
     assert completed["completed_at"] is not None
+
+
+async def test_list_tasks(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+    await client.post(
+        f"/api/v1/locations/{location_id}/field-tasks",
+        json={"title": "Primeira tarefa."},
+        headers=headers,
+    )
+    await client.post(
+        f"/api/v1/locations/{location_id}/field-tasks",
+        json={"title": "Segunda tarefa."},
+        headers=headers,
+    )
+
+    resp = await client.get(f"/api/v1/locations/{location_id}/field-tasks", headers=headers)
+    assert resp.status_code == 200
+    assert len(resp.json()) == 2
+
+
+async def test_create_task_with_client_supplied_id_is_idempotent_on_retry(
+    client: AsyncClient,
+) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+    client_id = str(uuid.uuid4())
+    payload = {"id": client_id, "title": "Tarefa enfileirada offline."}
+
+    first = await client.post(
+        f"/api/v1/locations/{location_id}/field-tasks", json=payload, headers=headers
+    )
+    second = await client.post(
+        f"/api/v1/locations/{location_id}/field-tasks", json=payload, headers=headers
+    )
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] == second.json()["id"] == client_id
+
+
+async def test_update_task_stale_version_is_a_conflict(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+    task_id = (
+        await client.post(
+            f"/api/v1/locations/{location_id}/field-tasks",
+            json={"title": "Tarefa original."},
+            headers=headers,
+        )
+    ).json()["id"]
+
+    await client.patch(
+        f"/api/v1/field-tasks/{task_id}",
+        json={"base_version": 1, "title": "Primeira edição."},
+        headers=headers,
+    )
+    stale = await client.patch(
+        f"/api/v1/field-tasks/{task_id}",
+        json={"base_version": 1, "title": "Tentando sobrescrever."},
+        headers=headers,
+    )
+    assert stale.status_code == 409
+
+
+async def test_update_task_reassigns_to_another_user(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+    other_user_id = (await client.get("/api/v1/users/me", headers=headers)).json()["id"]
+    task_id = (
+        await client.post(
+            f"/api/v1/locations/{location_id}/field-tasks",
+            json={"title": "Tarefa sem responsável."},
+            headers=headers,
+        )
+    ).json()["id"]
+
+    resp = await client.patch(
+        f"/api/v1/field-tasks/{task_id}",
+        json={"base_version": 1, "assigned_to": other_user_id},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.json()["assigned_to"] == other_user_id
+
+
+async def test_task_linked_to_a_nonexistent_occurrence_is_404(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+
+    resp = await client.post(
+        f"/api/v1/locations/{location_id}/field-tasks",
+        json={"title": "Tarefa órfã.", "occurrence_id": str(uuid.uuid4())},
+        headers=headers,
+    )
+    assert resp.status_code == 404
+
+
+async def test_update_task_edits_title_description_and_due_date(client: AsyncClient) -> None:
+    headers = await _auth_headers(client)
+    location_id = await _create_location(client, headers)
+    task_id = (
+        await client.post(
+            f"/api/v1/locations/{location_id}/field-tasks",
+            json={"title": "Rascunho."},
+            headers=headers,
+        )
+    ).json()["id"]
+
+    resp = await client.patch(
+        f"/api/v1/field-tasks/{task_id}",
+        json={
+            "base_version": 1,
+            "title": "Aplicar defensivo até sexta.",
+            "description": "Foco na área norte.",
+            "due_at": "2026-09-15T12:00:00Z",
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["title"] == "Aplicar defensivo até sexta."
+    assert body["description"] == "Foco na área norte."
+    assert body["due_at"] is not None
 
 
 # ---------------------------------------------------------------------------
