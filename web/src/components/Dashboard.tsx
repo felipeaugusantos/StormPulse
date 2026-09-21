@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, api, publicApi, readiness, resendVerification } from '../api'
 import type {
   AlertItem,
@@ -43,7 +43,9 @@ import { SatelliteWatchRow } from './SatelliteWatchRow'
 import { StormMap, type PlotBoundary, type StormMapHandle } from './LazyStormMap'
 import { VegetationIntelligencePanel } from './VegetationIntelligencePanel'
 import { TeamPanel } from './TeamPanel'
-import { buildSatelliteTimeline, stormsForTimelineStep } from '../stormTimeline'
+import { stormsForTimelineStep } from '../stormTimeline'
+import { useSatelliteTimeline } from '../useSatelliteTimeline'
+import { SatelliteTimelineBar } from './SatelliteTimelineBar'
 
 interface Props {
   onLogout: () => void
@@ -67,8 +69,6 @@ export function Dashboard({ onLogout }: Props) {
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
   const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
   const [satelliteFrames, setSatelliteFrames] = useState<SatelliteImageMeta[]>([])
-  const [timelineIndex, setTimelineIndex] = useState<number | null>(null)
-  const [timelinePlaying, setTimelinePlaying] = useState(false)
   const [lightning, setLightning] = useState<LightningStrike[]>([])
   const [showSatelliteImage, setShowSatelliteImage] = useState(true)
   const [satelliteBasemap, setSatelliteBasemap] = useState(false)
@@ -258,26 +258,16 @@ export function Dashboard({ onLogout }: Props) {
   }
 
   const mock = storms.some((s) => s.is_mock)
-  const timelineSteps = useMemo(
-    () =>
-      buildSatelliteTimeline(
-        satelliteFrames,
-        storms.some(
-          (storm) =>
-            storm.projected_latitude_1h != null && storm.projected_longitude_1h != null,
-        ),
-      ),
-    [satelliteFrames, storms],
+  const timeline = useSatelliteTimeline(
+    satelliteFrames,
+    storms.some(
+      (storm) => storm.projected_latitude_1h != null && storm.projected_longitude_1h != null,
+    ),
   )
-  const activeTimelineStep = timelineIndex == null ? null : timelineSteps[timelineIndex] ?? null
-  const mapStorms = activeTimelineStep
-    ? stormsForTimelineStep(storms, activeTimelineStep)
+  const mapStorms = timeline.activeStep
+    ? stormsForTimelineStep(storms, timeline.activeStep)
     : storms
-  const mapSatelliteImage = activeTimelineStep?.image ?? satelliteImage
-  const currentTimelineIndex = timelineSteps.reduce(
-    (latestIndex, step, index) => (step.estimated ? latestIndex : index),
-    0,
-  )
+  const mapSatelliteImage = timeline.activeStep?.image ?? satelliteImage
   const selectedLocation = locations.find((l) => l.id === selectedLocationId) ?? null
   const { entries: agroEntries, activeLocations: agroActiveLocations } = useAgroEntries(locations)
   const plotBoundaries: PlotBoundary[] = locations.flatMap((l) => {
@@ -296,46 +286,6 @@ export function Dashboard({ onLogout }: Props) {
       return []
     }
   })
-
-  useEffect(() => {
-    if (!timelinePlaying || timelineSteps.length < 2) return
-    const timer = window.setInterval(() => {
-      setTimelineIndex((current) => {
-        const next = current == null ? 0 : current + 1
-        if (next >= timelineSteps.length) {
-          setTimelinePlaying(false)
-          return timelineSteps.length - 1
-        }
-        return next
-      })
-    }, 900)
-    return () => window.clearInterval(timer)
-  }, [timelinePlaying, timelineSteps.length])
-
-  useEffect(() => {
-    if (timelineIndex != null && timelineIndex >= timelineSteps.length) {
-      setTimelineIndex(null)
-      setTimelinePlaying(false)
-    }
-  }, [timelineIndex, timelineSteps.length])
-
-  function toggleTimelinePlayback() {
-    if (timelinePlaying) {
-      setTimelinePlaying(false)
-      return
-    }
-    if (timelineSteps.length === 0) return
-    if (timelineSteps.length === 1) {
-      // A fresh deployment may only have the first observed frame. Let the
-      // operator open it instead of presenting a mysteriously disabled play
-      // control; animation starts naturally once another real/projection
-      // step becomes available. No duplicate frame is invented here.
-      setTimelineIndex(0)
-      return
-    }
-    if (timelineIndex == null || timelineIndex >= timelineSteps.length - 1) setTimelineIndex(0)
-    setTimelinePlaying(true)
-  }
 
   if (showAdmin) {
     return <AdminPanel onBack={() => setShowAdmin(false)} meId={me?.id ?? null} />
@@ -539,77 +489,12 @@ export function Dashboard({ onLogout }: Props) {
             satelliteWatches={satelliteWatches}
             satelliteImage={showSatelliteImage ? mapSatelliteImage : null}
             lightning={lightning}
+            alerts={alerts}
             plotBoundaries={plotBoundaries}
             satelliteBasemap={satelliteBasemap}
           />
           {!drawingActive && !pickingLocation && (
-            <div className="map-timeline" aria-label="Linha do tempo meteorológica">
-              <button
-                type="button"
-                className="timeline-play"
-                onClick={toggleTimelinePlayback}
-                disabled={timelineSteps.length === 0}
-                aria-label={
-                  timelinePlaying
-                    ? 'Pausar animação'
-                    : timelineSteps.length === 1
-                      ? 'Exibir único quadro de satélite disponível'
-                      : 'Reproduzir última e próxima hora'
-                }
-                title={
-                  timelineSteps.length === 1
-                    ? 'Histórico em formação — o próximo ciclo adicionará outro quadro'
-                    : undefined
-                }
-              >
-                {timelinePlaying ? '⏸' : '▶'}
-              </button>
-              <div className="timeline-content">
-                <div className="timeline-heading">
-                  <strong>
-                    {activeTimelineStep?.estimated
-                      ? `Estimativa +${activeTimelineStep.offsetMinutes} min`
-                      : activeTimelineStep
-                        ? `Observado ${formatTimeBR(activeTimelineStep.image.captured_at)}`
-                        : 'Agora'}
-                  </strong>
-                  <span>
-                    {activeTimelineStep?.estimated
-                      ? 'trajetória linear das células; imagem é a última observação'
-                      : satelliteFrames.length === 1
-                        ? '1 quadro real · histórico em formação'
-                        : `${satelliteFrames.length} quadros reais · 1h até a última aquisição`}
-                  </span>
-                </div>
-                {timelineSteps.length > 0 ? (
-                  <input
-                    type="range"
-                    min={0}
-                    max={Math.max(0, timelineSteps.length - 1)}
-                    value={timelineIndex ?? currentTimelineIndex}
-                    onChange={(event) => {
-                      setTimelinePlaying(false)
-                      setTimelineIndex(Number(event.target.value))
-                    }}
-                    aria-label="Posição na linha do tempo"
-                  />
-                ) : (
-                  <span className="timeline-empty">Aguardando quadros de satélite válidos.</span>
-                )}
-              </div>
-              {timelineIndex != null && (
-                <button
-                  type="button"
-                  className="timeline-live"
-                  onClick={() => {
-                    setTimelinePlaying(false)
-                    setTimelineIndex(null)
-                  }}
-                >
-                  Ao vivo
-                </button>
-              )}
-            </div>
+            <SatelliteTimelineBar timeline={timeline} frameCount={satelliteFrames.length} />
           )}
           {drawingActive && (
             <div className="draw-mode-bar">

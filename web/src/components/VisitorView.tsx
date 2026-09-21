@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError, publicApi, VISITOR_SEARCH_RADIUS_KM } from '../api'
 import { timeAgo } from '../format'
 import { reverseGeocodeCity, searchCity } from '../geocode'
+import { stormsForTimelineStep } from '../stormTimeline'
+import { useSatelliteTimeline } from '../useSatelliteTimeline'
 import { SafetyDisclaimer } from './SafetyDisclaimer'
+import { SatelliteTimelineBar } from './SatelliteTimelineBar'
 import { SatelliteWatchRow } from './SatelliteWatchRow'
 import type {
   CitySearchResult,
@@ -32,6 +35,7 @@ export function VisitorView({ onBack }: Props) {
   const [warnings, setWarnings] = useState<WarningItem[]>([])
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
   const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
+  const [satelliteFrames, setSatelliteFrames] = useState<SatelliteImageMeta[]>([])
   const [showSatelliteImage, setShowSatelliteImage] = useState(true)
   const [lightning, setLightning] = useState<LightningStrike[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -92,18 +96,20 @@ export function VisitorView({ onBack }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const [stormsRes, warningsRes, satelliteRes, satelliteImageRes, lightningRes] =
+      const [stormsRes, warningsRes, satelliteRes, satelliteImageRes, satelliteFramesRes, lightningRes] =
         await Promise.all([
           publicApi.storms(reference.lat, reference.lon),
           publicApi.warnings(reference.lat, reference.lon),
           publicApi.satelliteWatches(reference.lat, reference.lon),
           publicApi.satelliteImage(),
+          publicApi.satelliteImages().catch(() => []),
           publicApi.lightning(reference.lat, reference.lon),
         ])
       setStorms(stormsRes)
       setWarnings(warningsRes)
       setSatelliteWatches(satelliteRes)
       setSatelliteImage(satelliteImageRes)
+      setSatelliteFrames(satelliteFramesRes)
       setLightning(lightningRes)
       setError(null)
     } catch (err) {
@@ -164,6 +170,16 @@ export function VisitorView({ onBack }: Props) {
   }
 
   const mock = storms.some((s) => s.is_mock)
+  const timeline = useSatelliteTimeline(
+    satelliteFrames,
+    storms.some(
+      (storm) => storm.projected_latitude_1h != null && storm.projected_longitude_1h != null,
+    ),
+  )
+  const mapStorms = timeline.activeStep
+    ? stormsForTimelineStep(storms, timeline.activeStep)
+    : storms
+  const mapSatelliteImage = timeline.activeStep?.image ?? satelliteImage
 
   return (
     <>
@@ -186,12 +202,13 @@ export function VisitorView({ onBack }: Props) {
         <div className="map-card">
           <StormMap
             ref={mapRef}
-            storms={storms}
+            storms={mapStorms}
             locations={[referenceMarker]}
             satelliteWatches={satelliteWatches}
-            satelliteImage={showSatelliteImage ? satelliteImage : null}
+            satelliteImage={showSatelliteImage ? mapSatelliteImage : null}
             lightning={lightning}
           />
+          <SatelliteTimelineBar timeline={timeline} frameCount={satelliteFrames.length} />
           {(satelliteImage || lightning.length > 0) && (
             <div className="map-legend">
               {lightning.length > 0 && (

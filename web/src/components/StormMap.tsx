@@ -8,6 +8,7 @@ import type {
 } from 'maplibre-gl'
 import { satelliteImagePngUrl } from '../api'
 import type {
+  AlertItem,
   ConvectiveWatch,
   LightningStrike,
   LocationItem,
@@ -30,6 +31,11 @@ interface Props {
   satelliteWatches?: ConvectiveWatch[]
   satelliteImage?: SatelliteImageMeta | null
   lightning?: LightningStrike[]
+  /** Locations with an active alert (Fase 8, ADR-0091) — drawn as a ring
+   * around the location dot, colored by the alert's `RiskLevel`. Joined
+   * against `locations` internally (an `Alert` only carries a
+   * `location_id`, no coordinates of its own). */
+  alerts?: AlertItem[]
   /** Talhão outlines (FASE 27, ADR-0024) — visual only, colored by crop. */
   plotBoundaries?: PlotBoundary[]
   /** Real satellite imagery basemap (Esri World Imagery) instead of the
@@ -63,6 +69,16 @@ const SEVERITY_COLOR: Record<string, string> = {
   moderate: '#f2c14e',
   strong: '#f59e5b',
   severe: '#ef6d6d',
+}
+
+// Same 4-tier palette as SEVERITY_COLOR, keyed by `RiskLevel` instead —
+// `Alert.level` and `StormCell.severity` are different vocabularies for
+// the same underlying scale.
+const RISK_LEVEL_COLOR: Record<string, string> = {
+  green: '#37d39b',
+  yellow: '#f2c14e',
+  orange: '#f59e5b',
+  red: '#ef6d6d',
 }
 
 const STYLE: StyleSpecification = {
@@ -169,6 +185,35 @@ function satelliteWatchesGeoJSON(watches: ConvectiveWatch[]) {
   }
 }
 
+/** An `Alert` only carries a `location_id` — joined here against the
+ * already-fetched `locations` for coordinates. Locations no longer in the
+ * list (deleted) are silently skipped, same spirit as every other layer
+ * here: draw what can be placed, never guess a coordinate. */
+function activeAlertsGeoJSON(alerts: AlertItem[], locations: LocationItem[]) {
+  const byId = new Map(locations.map((l) => [l.id, l]))
+  return {
+    type: 'FeatureCollection' as const,
+    features: alerts.flatMap((a) => {
+      const location = byId.get(a.location_id)
+      if (!location) return []
+      return [
+        {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: [location.longitude, location.latitude],
+          },
+          properties: {
+            id: a.id,
+            color: RISK_LEVEL_COLOR[a.level] ?? '#ef6d6d',
+            title: a.title,
+          },
+        },
+      ]
+    }),
+  }
+}
+
 function lightningGeoJSON(strikes: LightningStrike[]) {
   return {
     type: 'FeatureCollection' as const,
@@ -238,6 +283,7 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
     satelliteWatches = [],
     satelliteImage = null,
     lightning = [],
+    alerts = [],
     plotBoundaries = [],
     satelliteBasemap = false,
   },
@@ -447,6 +493,21 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
           'circle-stroke-color': '#78350f',
         },
       })
+      map.addSource('active-alerts', { type: 'geojson', data: activeAlertsGeoJSON([], []) })
+      // A hollow ring around the location dot (Fase 8, ADR-0091) — "this
+      // talhão needs attention", without hiding the dot underneath.
+      map.addLayer({
+        id: 'active-alerts',
+        type: 'circle',
+        source: 'active-alerts',
+        paint: {
+          'circle-radius': 14,
+          'circle-color': 'transparent',
+          'circle-stroke-width': 3,
+          'circle-stroke-color': ['get', 'color'],
+          'circle-opacity': 0.9,
+        },
+      })
       readyRef.current = true
     })
 
@@ -467,10 +528,20 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
       const locs = map.getSource('locations') as GeoJSONSource | undefined
       const watches = map.getSource('satellite-watches') as GeoJSONSource | undefined
       const strikes = map.getSource('lightning') as GeoJSONSource | undefined
+      const activeAlerts = map.getSource('active-alerts') as GeoJSONSource | undefined
       const plots = map.getSource('plot-boundaries') as GeoJSONSource | undefined
       const projectionLines = map.getSource('cell-projection-lines') as GeoJSONSource | undefined
       const projectionPoints = map.getSource('cell-projection-points') as GeoJSONSource | undefined
-      if (!cells || !locs || !watches || !strikes || !plots || !projectionLines || !projectionPoints)
+      if (
+        !cells ||
+        !locs ||
+        !watches ||
+        !strikes ||
+        !activeAlerts ||
+        !plots ||
+        !projectionLines ||
+        !projectionPoints
+      )
         return
       cells.setData(cellsGeoJSON(storms))
       locs.setData(locationsGeoJSON(locations))
@@ -478,6 +549,7 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
       projectionPoints.setData(cellProjectionPointsGeoJSON(storms))
       watches.setData(satelliteWatchesGeoJSON(satelliteWatches))
       strikes.setData(lightningGeoJSON(lightning))
+      activeAlerts.setData(activeAlertsGeoJSON(alerts, locations))
       plots.setData(plotBoundariesGeoJSON(plotBoundaries))
 
       if (satelliteImage) {
@@ -530,7 +602,7 @@ export const StormMap = forwardRef<StormMapHandle, Props>(function StormMap(
 
     if (readyRef.current) apply()
     else map.once('load', apply)
-  }, [storms, locations, satelliteWatches, satelliteImage, lightning, plotBoundaries])
+  }, [storms, locations, satelliteWatches, satelliteImage, lightning, alerts, plotBoundaries])
 
   // Toggle basemap: real satellite imagery vs. the OSM streets style.
   useEffect(() => {
