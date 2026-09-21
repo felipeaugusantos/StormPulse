@@ -90,18 +90,42 @@ desenhar.
   extraída sem mudar comportamento (mesmos testes de
   `stormTimeline.test.ts` continuam valendo; `useSatelliteTimeline.ts`
   ganhou testes próprios de estado/play-pause).
-- Verificação visual ao vivo no navegador não foi feita nesta fase — um
-  container de outro projeto do usuário já ocupava a porta 5432 local no
-  momento da implementação, impedindo subir o Postgres do StormPulse
-  sem mexer em infraestrutura de outro projeto. Cobertura por testes
-  automatizados (typecheck limpo, 100 testes web + 36 testes mobile,
-  incluindo os novos de `useSatelliteTimeline`/`stormTimeline`) e pela
-  própria CI (que sobe Postgres/Redis isolados) substituem essa
-  verificação — mas o próximo passo recomendado é abrir o Dashboard e o
-  app mobile uma vez, manualmente, pra conferir visualmente antes de
-  considerar a fase 100% fechada.
+- Verificação visual no navegador feita contra um backend local real
+  (Postgres/Redis próprios do projeto, depois que a porta 5432 ficou
+  livre) — `VisitorView` renderizou o `SatelliteTimelineBar` corretamente
+  no estado honesto de "nenhum quadro real" (`SATELLITE_ENABLED=false`
+  localmente), sem erros no console além dos 401/404 esperados de uma
+  sessão sem login; o canvas do MapLibre v6 montou normalmente,
+  confirmando que a mudança de import (`import * as maplibregl`) funciona
+  de verdade, não só no typecheck. Verificação equivalente do `Dashboard`
+  autenticado não foi feita manualmente (exigiria passar pelo hCaptcha do
+  cadastro) — mas reaproveita exatamente os mesmos `useSatelliteTimeline`/
+  `SatelliteTimelineBar`/`StormMap` já confirmados no visitante.
 - Camada de rodovias explicitamente adiada — fonte de dados real
   identificada (IBGE BC250, `geoftp.ibge.gov.br`) mas processá-la
   (filtrar rodovias federais de um ZIP de ~769MB, simplificar, converter
   pra GeoJSON) é trabalho de engenharia de dados que fica para uma fase
   futura, se o dono do produto decidir que vale a pena.
+
+## Addendum — 3 vulnerabilidades reais corrigidas no caminho (não
+relacionadas ao escopo original, achadas pela CI ao tentar fechar a fase)
+
+1. **`maplibre-gl` 4.7.1 → 6.10.0** — advisory CRÍTICO real (XSS
+   Sanitizer Bypass em `DOM.sanitize()`, GHSA-jrc7-96c5-q579), pego pelo
+   gate de `npm audit` do CI. v6 é ESM-only — `import maplibregl from
+   'maplibre-gl'` (`StormMap.tsx`) virou `import * as maplibregl from
+   'maplibre-gl'`; nenhuma outra API usada no projeto quebrou (conferido
+   contra o changelog real de breaking changes do v5 e do v6).
+   Verificado ao vivo no navegador depois (canvas do MapLibre montando
+   normalmente), não só no build.
+2. **Mobile: `npm audit fix`** — cadeia `xmldom`/`js-yaml` (severidade
+   alta) dentro de ferramental do Expo (`@expo/config-plugins` →
+   `plist`/`@istanbuljs`), resolvida sem mudança quebrada (`npm audit fix`
+   sem `--force`); o `uuid`/`expo-splash-screen` restante é só moderado,
+   não bloqueia o gate do CI (`--audit-level=high`).
+3. **`backend/Dockerfile`: `python:3.12-slim` re-pinado por digest** — a
+   imagem antiga carregava um `perl-base` com 3 CVEs CRÍTICOS já
+   corrigidos a montante (patch Debian 13.7). Novo digest baixado e
+   verificado ao vivo com Trivy antes de commitar (mesma disciplina de
+   nunca fabricar um digest — ver ADR-0090/Fase 6) — 0 vulnerabilidades
+   CRÍTICAS confirmadas na imagem nova.
