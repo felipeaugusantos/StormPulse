@@ -265,6 +265,27 @@ compartilhado é uma mudança de premissa, não um ajuste incremental).
 **Não iniciar sem alinhamento explícito do dono do produto sobre este
 modelo.**
 
+## Fase 8 — Visualização de satélite em tempo real ✅ concluída (2026-09-20)
+
+Pergunta direta: dava pra ter um visualizador de satélite tipo o do
+weathernerds.org (loop animado de IR + raios + avisos + rodovias no
+mesmo mapa)? Diagnóstico mostrou que a maior parte já existia (GOES-19
+IR, rampa de cor "enhanced IR", histórico retido) — inclusive um
+scrubber de animação já implementado, só que preso dentro do
+`Dashboard.tsx` autenticado, nunca reaproveitado.
+
+Escopo desta fase: extrair esse scrubber (`useSatelliteTimeline` +
+`SatelliteTimelineBar`) pra reaproveitar na visão pública (`VisitorView`)
+e portar pro mobile (nova dependência `@react-native-community/slider`);
+nova camada de avisos ativos no mapa (anel colorido por `RiskLevel` ao
+redor do talhão, junção client-side entre `Alert` e `Location` — sem
+endpoint novo). Camada de rodovias ficou **fora do escopo**: fonte oficial
+real existe (IBGE BC250) mas só como um ZIP de ~769MB do Brasil inteiro,
+sem GeoJSON pronto — processar isso é trabalho de engenharia de dados à
+parte, não coube nesta fase. Nenhuma migração, nenhum endpoint novo no
+backend. Decisões e achados detalhados em
+[ADR-0091](adr/0091-visualizacao-satelite-tempo-real.md).
+
 ---
 
 ## Ordem recomendada e dependências
