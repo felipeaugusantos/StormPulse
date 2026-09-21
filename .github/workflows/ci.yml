@@ -79,9 +79,13 @@ jobs:
       POSTGRES_PASSWORD: stormpulse
       POSTGRES_DB: stormpulse
       # Fase 6 (ADR-0090) — MinIO started as a plain `docker run` step
-      # below, not a `services:` entry: the minio/minio image needs a
-      # `server /data` command argument, which the `services:` stanza has
-      # no way to supply.
+      # below, not a `services:` entry: the image needs a `server /data`
+      # command argument, which the `services:` stanza has no way to
+      # supply. Pulled from quay.io, not Docker Hub — MinIO archived the
+      # OSS edition and removed minio/minio from Docker Hub entirely
+      # around 2026-09-16 (confirmed live: the old `minio/minio` pull
+      # returns "repository does not exist", quay.io/minio/minio serves
+      # the identical digest under the same tag).
       FIELDNOTES_STORAGE_ENDPOINT: localhost:9000
       FIELDNOTES_STORAGE_ACCESS_KEY: stormpulse
       FIELDNOTES_STORAGE_SECRET_KEY: ci-test-minio-secret
@@ -104,7 +108,7 @@ jobs:
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=stormpulse \
             -e MINIO_ROOT_PASSWORD=ci-test-minio-secret \
-            minio/minio:RELEASE.2024-10-13T13-34-11Z server /data
+            quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z server /data
           for i in $(seq 1 20); do
             curl -sf http://localhost:9000/minio/health/live && break
             sleep 1
