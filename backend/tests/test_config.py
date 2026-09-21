@@ -179,10 +179,12 @@ def test_blank_optional_secret_env_vars_become_none(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("HCAPTCHA_SECRET_KEY", "")
     monkeypatch.setenv("VAPID_PRIVATE_KEY", "")
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "")
+    monkeypatch.setenv("SMTP_PASSWORD", "")
     settings = Settings(environment="test")
     assert settings.hcaptcha_secret_key is None
     assert settings.vapid_private_key is None
     assert settings.google_client_id is None
+    assert settings.smtp_password is None
 
 
 def test_non_blank_optional_secret_env_vars_are_kept(monkeypatch: pytest.MonkeyPatch) -> None:

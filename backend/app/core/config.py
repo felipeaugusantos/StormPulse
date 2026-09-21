@@ -70,6 +70,10 @@ _OPTIONAL_FIELDS_EMPTY_MEANS_UNSET = (
     "vapid_private_key",
     "vapid_public_key",
     "ses_from_email",
+    "smtp_host",
+    "smtp_username",
+    "smtp_password",
+    "smtp_from_email",
     "hcaptcha_secret_key",
     "anthropic_api_key",
 )
@@ -491,6 +495,23 @@ class Settings(BaseSettings):
     # `vapid_private_key` acima.
     aws_region: str = "us-east-1"
     ses_from_email: str | None = None
+    # `email_provider="smtp"` (Fase 8 follow-up) — alternativa ao SES pra
+    # quem ainda não tem um domínio/remetente verificado na AWS. Sem
+    # verificação de domínio, sem sandbox — só uma conta de e-mail com
+    # senha de app (ex.: Gmail, `security.google.com/settings/security/
+    # apppasswords`, exige verificação em duas etapas). Ao contrário do
+    # SES (credenciais só via boto3/IAM, nunca um campo aqui), a senha de
+    # app não tem esse mecanismo — fica como `SecretStr` mesmo, mesmo
+    # padrão já usado por `redemet_api_key`/`hcaptcha_secret_key`.
+    email_provider: str = "ses"
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    # Geralmente igual a `smtp_username` (Gmail exige que sejam iguais),
+    # mas mantido separado do `ses_from_email` — um remetente SMTP nunca
+    # deveria ser confundido com um remetente SES verificado.
+    smtp_from_email: str | None = None
     # Base pública do frontend — usada só para montar os links de
     # verificação de e-mail/redefinição de senha enviados por e-mail
     # (ex.: "{frontend_base_url}/verificar-email?token=..."). Nunca usada

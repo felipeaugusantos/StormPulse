@@ -1,22 +1,33 @@
-"""Transactional email delivery via AWS SES (FASE 8, account cycle).
+"""Transactional email delivery via AWS SES or SMTP (FASE 8, account cycle;
+SMTP added as a Fase 8 follow-up for a sender who doesn't have a verified
+SES domain/identity yet).
 
-Same "credentials only ever come from the environment/IAM role, never a
-settings field" principle already used for the S3 backup upload
+SES: same "credentials only ever come from the environment/IAM role, never
+a settings field" principle already used for the S3 backup upload
 (``infra/backup-postgres.sh``) — ``boto3`` picks up
 ``AWS_ACCESS_KEY_ID``/``AWS_SECRET_ACCESS_KEY`` or the instance's IAM role
 on its own; this module never touches a credential directly.
 
-No ``ses_from_email`` configured means SES itself isn't set up yet (dev/test
-default) — sending is skipped and logged, never raised, mirroring how a
-missing VAPID key degrades push delivery (``notification_pipeline.py``)
-instead of crashing the cycle that triggered it.
+SMTP: no such env-only mechanism exists for an arbitrary mailbox, so the
+app-password lives in ``Settings.smtp_password`` (a ``SecretStr``, same
+pattern as ``redemet_api_key``/``hcaptcha_secret_key``) — sent over an
+implicit-TLS or STARTTLS connection, never in the clear.
+
+Neither provider being configured means email itself isn't set up yet
+(dev/test default) — sending is skipped and logged, never raised,
+mirroring how a missing VAPID key degrades push delivery
+(``notification_pipeline.py``) instead of crashing the cycle that
+triggered it.
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import smtplib
 from dataclasses import dataclass
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Literal
 
 import boto3
@@ -121,10 +132,18 @@ def render_alert_email(*, title: str, message: str, level: str) -> EmailContent:
 
 
 def send_email(to_email: str, content: EmailContent, settings: Settings) -> bool:
-    """Sends via SES. Returns whether it was actually sent — `False` for
-    "not configured" (logged, not raised) or a real SES failure (logged
-    with the actual error, also not raised: a bounced/misconfigured email
-    provider must never break the request/cycle that triggered it)."""
+    """Sends via whichever provider `settings.email_provider` selects
+    ("ses", the default, or "smtp"). Returns whether it was actually sent —
+    `False` for "not configured" (logged, not raised) or a real send
+    failure (logged with the actual error, also not raised: a bounced/
+    misconfigured email provider must never break the request/cycle that
+    triggered it)."""
+    if settings.email_provider == "smtp":
+        return _send_via_smtp(to_email, content, settings)
+    return _send_via_ses(to_email, content, settings)
+
+
+def _send_via_ses(to_email: str, content: EmailContent, settings: Settings) -> bool:
     if not settings.ses_from_email:
         logger.warning(
             "SES_FROM_EMAIL not configured — skipping email send",
@@ -148,6 +167,47 @@ def send_email(to_email: str, content: EmailContent, settings: Settings) -> bool
     except (BotoCoreError, ClientError):
         logger.exception(
             "Failed to send transactional email via SES",
+            extra={"to_hash": _correlation_hash(to_email)},
+        )
+        return False
+    return True
+
+
+def _send_via_smtp(to_email: str, content: EmailContent, settings: Settings) -> bool:
+    if not (settings.smtp_host and settings.smtp_username and settings.smtp_password):
+        logger.warning(
+            "EMAIL_PROVIDER=smtp but SMTP_HOST/SMTP_USERNAME/SMTP_PASSWORD "
+            "not fully configured — skipping email send",
+            extra={"to_hash": _correlation_hash(to_email), "subject": content.subject},
+        )
+        return False
+
+    from_email = settings.smtp_from_email or settings.smtp_username
+    message = MIMEMultipart("alternative")
+    message["Subject"] = content.subject
+    message["From"] = from_email
+    message["To"] = to_email
+    message.attach(MIMEText(content.text_body, "plain", "utf-8"))
+    message.attach(MIMEText(content.html_body, "html", "utf-8"))
+
+    try:
+        # Port 465 is implicit TLS from the first byte (SMTPS); anything
+        # else (587, the Gmail-recommended port) starts in the clear and
+        # upgrades via STARTTLS — mixing the two up silently sends
+        # credentials unencrypted, so the port picks the mode, not a
+        # separate setting.
+        if settings.smtp_port == 465:
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=10) as server:
+                server.login(settings.smtp_username, settings.smtp_password.get_secret_value())
+                server.sendmail(from_email, [to_email], message.as_string())
+        else:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:
+                server.starttls()
+                server.login(settings.smtp_username, settings.smtp_password.get_secret_value())
+                server.sendmail(from_email, [to_email], message.as_string())
+    except (smtplib.SMTPException, OSError):
+        logger.exception(
+            "Failed to send transactional email via SMTP",
             extra={"to_hash": _correlation_hash(to_email)},
         )
         return False
