@@ -1,5 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
-import maplibregl from 'maplibre-gl'
+// maplibre-gl v6 ships ESM-only, no default export — the namespace import
+// replaces `import maplibregl from 'maplibre-gl'` (ADR-0091 follow-up: the
+// v4→v6 bump was to close a critical XSS advisory in DOM.sanitize()).
+import * as maplibregl from 'maplibre-gl'
 import type {
   GeoJSONSource,
   ImageSource,
