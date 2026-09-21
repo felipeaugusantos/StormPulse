@@ -200,6 +200,18 @@ source = ["app", "engine", "workers"]
 # under the same Python 3.12 run) and is what's actually enforced in CI —
 # see ADR-0061.
 branch = false
+# Fase 8 follow-up to ADR-0061: even statement coverage had a *much*
+# bigger swing than the one above, isolated to app/fieldnotes/router.py
+# specifically — 98% on a Python 3.14 install, 36% under CI's real
+# python:3.12-slim image, reproduced locally inside an actual Python
+# 3.12.10 venv (not assumed): coverage.py's default legacy `ctrace`
+# tracer silently fails to record hits inside these async FastAPI route
+# handlers' bodies on 3.12, while `sys.monitoring` (PEP 669, native to
+# 3.12+) traces the exact same calls correctly — confirmed live by
+# forcing `COVERAGE_CORE=sysmon` and re-running the identical suite,
+# which reproduced the accurate 98%. Pinning it here (not just as CI env)
+# so a local `pytest --cov` on 3.12 is trustworthy too.
+core = "sysmon"
 
 [tool.coverage.report]
 exclude_lines = [
