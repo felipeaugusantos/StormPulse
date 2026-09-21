@@ -2,13 +2,14 @@ import { StyleSheet, Text, View } from 'react-native'
 import MapView, { Callout, Circle, Marker, Overlay } from 'react-native-maps'
 import { satelliteImagePngUrl } from '../api'
 import type {
+  AlertItem,
   ConvectiveWatch,
   LightningStrike,
   LocationItem,
   SatelliteImageMeta,
   StormCell,
 } from '../types'
-import { colors } from '../theme'
+import { colors, LEVEL_COLOR } from '../theme'
 
 // Same palette as web/src/components/StormMap.tsx's SEVERITY_COLOR — kept
 // in sync so a cell reads the same severity color on both platforms.
@@ -26,6 +27,10 @@ interface Props {
   satelliteWatches: ConvectiveWatch[]
   satelliteImage?: SatelliteImageMeta | null
   showSatelliteImage?: boolean
+  /** Locations with an active alert (Fase 8, ADR-0091) — same ring style as
+   * web's StormMap. An `Alert` only carries a `location_id`, joined here
+   * against `locations` for coordinates. */
+  alerts?: AlertItem[]
   height?: number
 }
 
@@ -41,9 +46,11 @@ export function StormMapView({
   satelliteWatches,
   satelliteImage = null,
   showSatelliteImage = true,
+  alerts = [],
   height = 260,
 }: Props) {
   const center = locations[0] ?? { latitude: -23.5, longitude: -46.6 }
+  const locationById = new Map(locations.map((l) => [l.id, l]))
 
   return (
     <View style={[styles.wrap, { height }]}>
@@ -67,7 +74,7 @@ export function StormMapView({
               [satelliteImage.bbox[3], satelliteImage.bbox[2]],
               [satelliteImage.bbox[1], satelliteImage.bbox[0]],
             ]}
-            image={{ uri: satelliteImagePngUrl(satelliteImage.captured_at) }}
+            image={{ uri: satelliteImagePngUrl(satelliteImage.captured_at, satelliteImage.id) }}
             opacity={0.55}
           />
         )}
@@ -139,6 +146,21 @@ export function StormMapView({
               lineDashPattern={[6, 4]}
             />
           ))}
+
+        {alerts.flatMap((alert) => {
+          const location = locationById.get(alert.location_id)
+          if (!location) return []
+          return [
+            <Circle
+              key={`alert-${alert.id}`}
+              center={location}
+              radius={2500}
+              strokeColor={LEVEL_COLOR[alert.level]}
+              fillColor="transparent"
+              strokeWidth={3}
+            />,
+          ]
+        })}
       </MapView>
     </View>
   )

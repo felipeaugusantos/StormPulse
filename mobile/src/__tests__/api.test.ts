@@ -430,4 +430,13 @@ describe('paridade mobile (item 5)', () => {
     expect(url).toContain('/public/satellite/image.png')
     expect(url).toContain(encodeURIComponent('2026-01-01T00:00:00Z'))
   })
+
+  // Fase 8 (ADR-0091): the timeline scrubber needs a specific historical
+  // frame, not always the latest — `imageId` switches to the by-id route.
+  test('satelliteImagePngUrl(capturedAt, imageId) fetches that exact historical frame', () => {
+    const url = satelliteImagePngUrl('2026-01-01T00:00:00Z', 'img-42')
+
+    expect(url).toContain('/public/satellite/images/img-42.png')
+    expect(url).not.toContain('image.png')
+  })
 })

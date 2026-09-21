@@ -321,7 +321,11 @@ export const api = {
 // react-native-maps' Overlay fetches this URL directly (no Authorization
 // header attached) — the endpoint must be, and is, public. `capturedAt`
 // in the query string busts the cache when a new frame is available.
-// Mirrors web/src/api.ts's satelliteImagePngUrl.
-export function satelliteImagePngUrl(capturedAt: string): string {
-  return `${V1}/public/satellite/image.png?t=${encodeURIComponent(capturedAt)}`
+// Mirrors web/src/api.ts's satelliteImagePngUrl. `imageId` (Fase 8,
+// ADR-0091) fetches that exact historical frame instead of always the
+// latest — needed for the timeline scrubber to actually show past frames.
+export function satelliteImagePngUrl(capturedAt: string, imageId?: string): string {
+  return imageId
+    ? `${V1}/public/satellite/images/${encodeURIComponent(imageId)}.png`
+    : `${V1}/public/satellite/image.png?t=${encodeURIComponent(capturedAt)}`
 }

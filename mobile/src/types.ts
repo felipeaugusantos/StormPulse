@@ -211,6 +211,14 @@ export interface StormCell {
   average_reflectivity: number | null
   area_km2: number | null
   is_mock: boolean
+  // Ported from web/src/types.ts (Fase 8, ADR-0091) — the backend already
+  // sends these on the same `/storms` endpoint, mobile just wasn't
+  // consuming them yet. Needed for the satellite-timeline's estimated
+  // future steps (`stormsForTimelineStep`).
+  speed_kmh: number | null
+  direction_deg: number | null
+  projected_latitude_1h: number | null
+  projected_longitude_1h: number | null
 }
 
 export interface LightningStrike {

@@ -9,8 +9,10 @@ import {
   View,
 } from 'react-native'
 import { ApiError, api, logout } from '../api'
+import { SatelliteTimelineBar } from '../components/SatelliteTimelineBar'
 import { StormMapView } from '../components/StormMapView'
 import { timeUntil } from '../format'
+import { stormsForTimelineStep } from '../stormTimeline'
 import type {
   AlertItem,
   ConvectiveWatch,
@@ -23,6 +25,7 @@ import type {
   StormRisk,
 } from '../types'
 import { LEVEL_COLOR, LEVEL_LABEL, colors } from '../theme'
+import { useSatelliteTimeline } from '../useSatelliteTimeline'
 
 interface Props {
   onLogout: () => void
@@ -52,6 +55,7 @@ export function HomeScreen({ onLogout }: Props) {
   const [lightning, setLightning] = useState<LightningStrike[]>([])
   const [satelliteWatches, setSatelliteWatches] = useState<ConvectiveWatch[]>([])
   const [satelliteImage, setSatelliteImage] = useState<SatelliteImageMeta | null>(null)
+  const [satelliteFrames, setSatelliteFrames] = useState<SatelliteImageMeta[]>([])
   const [showSatelliteImage, setShowSatelliteImage] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -60,16 +64,25 @@ export function HomeScreen({ onLogout }: Props) {
     setRefreshing(true)
     setError(null)
     try {
-      const [locations, alertList, meResult, stormList, lightningList, watchList, imageMeta] =
-        await Promise.all([
-          api.locations(),
-          api.alerts(),
-          api.me(),
-          api.storms(),
-          api.lightning(),
-          api.satelliteWatches(),
-          api.satelliteImage(),
-        ])
+      const [
+        locations,
+        alertList,
+        meResult,
+        stormList,
+        lightningList,
+        watchList,
+        imageMeta,
+        framesList,
+      ] = await Promise.all([
+        api.locations(),
+        api.alerts(),
+        api.me(),
+        api.storms(),
+        api.lightning(),
+        api.satelliteWatches(),
+        api.satelliteImage(),
+        api.satelliteImages().catch(() => []),
+      ])
       const withRisk = await Promise.all(
         locations.map(async (location) => {
           try {
@@ -86,6 +99,7 @@ export function HomeScreen({ onLogout }: Props) {
       setLightning(lightningList)
       setSatelliteWatches(watchList)
       setSatelliteImage(imageMeta)
+      setSatelliteFrames(framesList)
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         await logout()
@@ -142,6 +156,17 @@ export function HomeScreen({ onLogout }: Props) {
     )
   }
 
+  const timeline = useSatelliteTimeline(
+    satelliteFrames,
+    storms.some(
+      (storm) => storm.projected_latitude_1h != null && storm.projected_longitude_1h != null,
+    ),
+  )
+  const mapStorms = timeline.activeStep
+    ? stormsForTimelineStep(storms, timeline.activeStep)
+    : storms
+  const mapSatelliteImage = timeline.activeStep?.image ?? satelliteImage
+
   return (
     <ScrollView
       style={styles.screen}
@@ -189,12 +214,14 @@ export function HomeScreen({ onLogout }: Props) {
         <>
           <StormMapView
             locations={items.map((i) => i.location)}
-            storms={storms}
+            storms={mapStorms}
             lightning={lightning}
             satelliteWatches={satelliteWatches}
-            satelliteImage={satelliteImage}
+            satelliteImage={showSatelliteImage ? mapSatelliteImage : null}
             showSatelliteImage={showSatelliteImage}
+            alerts={alerts}
           />
+          <SatelliteTimelineBar timeline={timeline} frameCount={satelliteFrames.length} />
           {satelliteImage && (
             <TouchableOpacity onPress={() => setShowSatelliteImage((v) => !v)}>
               <Text style={styles.link}>
