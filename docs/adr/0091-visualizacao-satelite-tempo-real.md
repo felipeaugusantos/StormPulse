@@ -129,3 +129,35 @@ relacionadas ao escopo original, achadas pela CI ao tentar fechar a fase)
    verificado ao vivo com Trivy antes de commitar (mesma disciplina de
    nunca fabricar um digest — ver ADR-0090/Fase 6) — 0 vulnerabilidades
    CRÍTICAS confirmadas na imagem nova.
+4. **MinIO migrado do Docker Hub pro quay.io** — a MinIO arquivou a
+   edição open-source e removeu `minio/minio` do Docker Hub por volta de
+   2026-09-16 (`pull access denied`, confirmado ao vivo). `quay.io/minio/
+   minio` serve o mesmo digest sob a mesma tag — troca mínima em
+   `.github/workflows/ci.yml` e `docker-compose.yml`, sem mudar a versão.
+   Quebrava o job Backend (start do MinIO) e o smoke test Docker (`api`
+   depende de `minio` via `docker-compose.yml`).
+5. **`[tool.coverage.run] core = "sysmon"` (`backend/pyproject.toml`)** —
+   achado ao diagnosticar por que `app/fieldnotes/router.py` (Fase 6)
+   media 98% num install Python 3.14 mas só 36% na CI real (Python
+   3.12.14, Ubuntu), mesmo depois de já ter passado uma vez a 92% na
+   Fase 6 — reaberto porque um re-run do job, com o código idêntico,
+   voltou a falhar a 84%, provando que não era ruído aleatório. Instalei
+   Python 3.12.10 real localmente (via winget, já que o `uv python
+   install 3.12` está quebrado nesta máquina) e reproduzi ao vivo: mesmo
+   um único teste isolado (`test_create_and_list_occurrence`) deixava o
+   corpo inteiro de `create_occurrence` marcado como "não coberto",
+   apesar de passar e criar uma linha real no banco — não é interação
+   entre testes, é o tracer padrão do coverage.py (`ctrace`) falhando em
+   registrar execuções dentro desses handlers `async def` do FastAPI
+   especificamente sob Python 3.12. Forçar `COVERAGE_CORE=sysmon`
+   (o tracer via `sys.monitoring`, PEP 669, nativo do 3.12+) corrigiu na
+   hora — confirmado subindo de volta a 98% no arquivo e 91.72% no total,
+   rodando a suíte inteira dentro do Python 3.12 real, não só no
+   isolado. Fixado em `pyproject.toml` (não só como env var da CI) pra
+   um `pytest --cov` local também ficar confiável em qualquer instalação
+   Python 3.12. Estende o achado do ADR-0061 (que já documentava uma
+   instabilidade menor, de branch coverage, entre Python 3.14 e 3.12) —
+   esta é uma instabilidade bem maior e mais específica, isolada a esse
+   arquivo, com causa raiz agora identificada e corrigida de verdade
+   (não só contornada com mais testes, como a primeira tentativa na
+   Fase 6 tinha feito).
