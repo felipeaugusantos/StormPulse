@@ -2,7 +2,7 @@
 # Pinned by digest (not just tag) for reproducibility — "python:3.12-slim"
 # is a moving pointer, this SHA is not. Re-pin deliberately (Dependabot
 # tracks base images too) rather than letting it drift silently.
-FROM python:3.12-slim@sha256:2c941e860699f878900b0edc2403613c234d4b32eda3cc9fa7036991a2a63c4a AS base
+FROM python:3.12-slim@sha256:2f17fc044b579bab302c2e8054d3a686e2cb9a83de48e70534b94cd8ebbe06a9 AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
