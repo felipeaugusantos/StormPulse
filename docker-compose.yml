@@ -105,6 +105,18 @@ services:
       - path: .env
         required: false
     environment: *service_env_overrides
+    # The image's own HEALTHCHECK (backend/Dockerfile) curls :8000/health —
+    # right for `api`, meaningless here (this container runs Celery, never
+    # an HTTP server, so that port never listens and Docker marked this
+    # "unhealthy" forever even when genuinely fine — a real incident,
+    # 2026-09-22). `inspect ping` round-trips through the broker (Redis)
+    # to confirm the worker process is actually alive and responsive.
+    healthcheck:
+      test: ["CMD", "celery", "-A", "workers.celery_app", "inspect", "ping", "--timeout=10"]
+      interval: 30s
+      timeout: 15s
+      start_period: 20s
+      retries: 3
     depends_on:
       db:
         condition: service_healthy
@@ -128,6 +140,24 @@ services:
       - path: .env
         required: false
     environment: *service_env_overrides
+    # Same story as `worker` above — beat isn't an HTTP server either, the
+    # image's baked-in :8000/health check always failed here. Beat has no
+    # `inspect ping` equivalent (it schedules, it doesn't consume tasks),
+    # so liveness is inferred from its own schedule file being touched
+    # recently — celery beat rewrites it every time a due entry's
+    # last-run-time changes, which happens at least once a minute given
+    # this project's tightest schedule (celery_app.py's
+    # deliver-notifications-every-minute/alert-delivery-every-minute).
+    # 150s is a generous multiple of that, not a tight deadline.
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >-
+          test $(($(date +%s) - $(stat -c %Y /tmp/celerybeat-schedule 2>/dev/null || echo 0))) -lt 150
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     depends_on:
       db:
         condition: service_healthy
