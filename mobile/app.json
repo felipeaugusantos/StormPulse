@@ -45,7 +45,8 @@
           "backgroundColor": "#0b1120"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@sentry/react-native"
     ]
   }
 }

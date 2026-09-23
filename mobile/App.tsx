@@ -4,6 +4,7 @@ import { ActivityIndicator } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
 import { hasSession } from './src/api'
+import { initErrorTracking } from './src/errorTracking'
 import { startAutoSync } from './src/fieldnotes/sync'
 import { colors } from './src/theme'
 import { LoginScreen } from './src/screens/LoginScreen'
@@ -11,6 +12,8 @@ import { HomeScreen } from './src/screens/HomeScreen'
 import { AgroScreen } from './src/screens/AgroScreen'
 import { LocationsScreen } from './src/screens/LocationsScreen'
 import { TeamScreen } from './src/screens/TeamScreen'
+
+initErrorTracking()
 
 type Tab = 'storm' | 'agro' | 'locations' | 'team'
 
