@@ -70,6 +70,7 @@ _OPTIONAL_FIELDS_EMPTY_MEANS_UNSET = (
     "vapid_private_key",
     "vapid_public_key",
     "ses_from_email",
+    "sentry_dsn",
     "smtp_host",
     "smtp_username",
     "smtp_password",
@@ -197,6 +198,19 @@ class Settings(BaseSettings):
     otel_enabled: bool = True
     otel_service_name: str = "stormpulse-backend"
     otel_exporter_otlp_endpoint: str | None = None
+
+    # --- Error tracking (Sentry) — real gap found live 2026-09-22: nenhum
+    # incidente do dia (502 do nginx, healthcheck de worker/beat, MinIO
+    # fora do Docker Hub) foi descoberto por alerta automático, só
+    # investigando manualmente. Sem `sentry_dsn` configurado, o SDK nunca
+    # é inicializado — nenhuma chamada de rede, nenhum comportamento
+    # diferente (mesmo espírito de `otel_exporter_otlp_endpoint` acima e
+    # de `ses_from_email`). Um DSN do Sentry não é um segredo no sentido
+    # de controle de acesso — ele só permite *enviar* eventos, os SDKs de
+    # cliente (web/mobile) o expõem publicamente no bundle por design —
+    # mas mantido como qualquer outro campo de credencial de terceiro
+    # aqui, por consistência.
+    sentry_dsn: SecretStr | None = None
 
     # --- CORS (dashboard web / app mobile) ---
     cors_allowed_origins: str = "http://localhost:5173"

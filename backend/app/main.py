@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.api.router import external_api_v1_router, public_v1_router, root_router, v1_router
 from app.core.config import Settings, get_settings
+from app.core.error_tracking import configure_error_tracking
 from app.core.logging import configure_logging
 from app.core.metrics import configure_metrics
 from app.core.middleware import RequestContextMiddleware
@@ -100,6 +101,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     """Application factory."""
     settings = settings or get_settings()
     configure_logging(level=settings.log_level, json_logs=settings.log_json)
+    if settings.environment != "test":
+        configure_error_tracking(settings)
 
     app = FastAPI(
         title=settings.app_name,

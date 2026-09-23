@@ -43,6 +43,9 @@ dependencies = [
     # Caderno de Campo photo upload endpoint (Fase 6, ADR-0090) is the
     # first `UploadFile` in the project.
     "python-multipart>=0.0.12",
+    # Error tracking (app/core/error_tracking.py) — no-op without
+    # SENTRY_DSN configured, see that module's docstring.
+    "sentry-sdk[fastapi,celery]>=2.0",
 ]
 
 [project.optional-dependencies]

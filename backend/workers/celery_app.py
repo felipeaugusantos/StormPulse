@@ -9,6 +9,7 @@ from __future__ import annotations
 from celery import Celery
 
 from app.core.config import get_settings
+from app.core.error_tracking import configure_error_tracking
 from app.core.metrics import configure_metrics
 
 _settings = get_settings()
@@ -19,6 +20,13 @@ if _settings.otel_enabled and _settings.environment != "test":
     # ADR-0035). Pipeline cycle duration/failure counts (workers/tasks.py)
     # only actually export anywhere once this has run.
     configure_metrics(_settings)
+
+if _settings.environment != "test":
+    # Same module (app/core/error_tracking.py) as the API — sentry-sdk's
+    # CeleryIntegration auto-enables here since `celery` is importable in
+    # this process, capturing task failures the same way FastAPI request
+    # exceptions get captured in app.main.create_app().
+    configure_error_tracking(_settings)
 
 celery_app = Celery(
     "stormpulse",
