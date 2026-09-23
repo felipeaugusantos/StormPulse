@@ -733,6 +733,7 @@ jobs:
           build-args: |
             VITE_VAPID_PUBLIC_KEY=${{ vars.VITE_VAPID_PUBLIC_KEY }}
             VITE_HCAPTCHA_SITE_KEY=${{ vars.VITE_HCAPTCHA_SITE_KEY }}
+            VITE_SENTRY_DSN=${{ vars.VITE_SENTRY_DSN }}
 
   # -----------------------------------------------------------------------
   # Deploy: only reachable once both publish jobs succeeded (which in turn

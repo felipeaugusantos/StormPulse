@@ -29,6 +29,10 @@ ENV VITE_VAPID_PUBLIC_KEY=$VITE_VAPID_PUBLIC_KEY
 # when HCAPTCHA_SECRET_KEY is unset.
 ARG VITE_HCAPTCHA_SITE_KEY=""
 ENV VITE_HCAPTCHA_SITE_KEY=$VITE_HCAPTCHA_SITE_KEY
+# Sentry DSN (src/errorTracking.ts) — same "public build arg, empty means
+# the SDK never initializes" reasoning as the two above.
+ARG VITE_SENTRY_DSN=""
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 RUN npm run build
 
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
